@@ -1,30 +1,25 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pandas as pd
-import numpy as np
-import xarray as xr
+# Import utils and data downloading functions
+# TODO: Get this to run without needing to call the exact root path
+exec(open("/Users/rws/RiOMar/code/0_data_management.py").read())
 
-from myRIOMAR.utils import (add_array_to_dict, path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,
-                            create_arborescence, find_sat_data_files,merge_dicts, get_empty_paths,
-                            return_the_parameter_name_based_on_file_name, get_non_empty_paths,
-                            extract_the_time_from_the_satellite_file, access_item_in_a_dictionnary, 
-                            extract_dataframes_iterative)
-import re, datetime, os, pickle, multiprocessing
-
+# Additional packages
+# import pickle # unused
 from joblib import dump, load
 
-import gc
-
-from myRIOMAR._1_data_validation.utils import MU_database_processing
-
-from myRIOMAR.utils import (store_arguments, get_all_cases_to_process)
+# Static directory addresses
+# TODO: Change these static pathways once this issue has been resolved
+path_to_SOMLIT_insitu_data = '/Users/rws/RiOMar/data/IN_SITU/Somlit.csv'
+path_to_REPHY_insitu_data = '/Users/rws/RiOMar/data/REPHY/Table1_REPHY_hydro_RIOMAR.csv'
 
 
 # =============================================================================
 #### Functions
 # =============================================================================
-    
+
+
 def get_insitu_measurements(path_to_SOMLIT_insitu_data = None, path_to_REPHY_insitu_data = None) : 
     
     SOMLIT_data_filtered = None; REPHY_data_filtered = None
@@ -124,8 +119,7 @@ def find_indices_of_the_grid(lat_station, lon_station, lat_map, lon_map, grid_si
 
 
 def do_the_match_up_for_one_date(satellite_date, satellite_files, MU_data, MU_database_of_the_case, 
-                                 MU_stations, info,
-                                  grid_size, where_are_saved_sat_files) : 
+                                 MU_stations, info, grid_size, where_are_saved_sat_files) : 
 
     date_pattern = re.compile(satellite_date)
     
@@ -444,7 +438,7 @@ class MU_database_processing :
 ## Main functions
 
 def Match_up_with_insitu_measurements(core_arguments, redo_the_MU_database, nb_of_cores_to_use,
-                                      where_to_save_Match_Up_data) : 
+                                      where_to_save_satellite_data, where_to_save_Match_Up_data) : 
              
     cases_to_process = get_all_cases_to_process(core_arguments)
                
@@ -454,7 +448,9 @@ def Match_up_with_insitu_measurements(core_arguments, redo_the_MU_database, nb_o
                               nb_of_cores_to_use = nb_of_cores_to_use)
     
     if len(MU_database.MU_database) == 0 :
-        MU_database.Create_the_MU_database(path_to_SOMLIT_insitu_data, path_to_REPHY_insitu_data, where_to_save_satellite_data)
+
+        # MU_database.Create_the_MU_database(path_to_SOMLIT_insitu_data, path_to_REPHY_insitu_data, where_to_save_satellite_data)
+        MU_database.Create_the_MU_database(where_to_save_satellite_data)
     else : 
         MU_database.Complete_the_MU_database(where_to_save_satellite_data)
                 

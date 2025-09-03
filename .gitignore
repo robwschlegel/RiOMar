@@ -4,8 +4,10 @@ __pycache__/
 *$py.class
 
 # Downloaded data
-Data/SEXTANT
-DATA/DOWNLOAD_REPORTS
+data/SEXTANT
+data/DOWNLOAD_REPORTS
+data/IN_SITU
+data/REPHY
 
 # C extensions
 *.so

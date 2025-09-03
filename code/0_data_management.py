@@ -1403,31 +1403,48 @@ def Download_satellite_data(core_arguments, nb_of_cores_to_use, overwrite_existi
     
     merge_and_save_the_download_report(download_report, where_to_save_satellite_data)
     
+# def Plot_and_Save_the_map(core_arguments,
+#                           nb_of_cores_to_use,
+#                           where_are_saved_satellite_data,
+#                           start_day_of_maps_to_plot,
+#                           end_day_of_maps_to_plot) : 
+        
+#     cases_to_process = get_all_cases_to_process(core_arguments)
+
+#     with multiprocessing.Pool(nb_of_cores_to_use) as pool:
+
+#         for i in range(cases_to_process.shape[0]) : 
+                    
+#             info = cases_to_process.iloc[i].copy()
+            
+#             init = download_satellite_data(info, start_day_of_maps_to_plot, end_day_of_maps_to_plot, 
+#                                            where_are_saved_satellite_data, nb_of_cores_to_use) 
+    
+#             paths_to_sat_data = fill_the_sat_paths(info, init.destination_path_to_fill, 
+#                                                    local_path = True, 
+#                                                    dates = pd.date_range(start=init.start_day, end=init.end_day, freq="D"))
+            
+#             pool.map(plot_the_maps_in_the_folder, paths_to_sat_data)
+    
 def Plot_and_Save_the_map(core_arguments,
                           nb_of_cores_to_use,
                           where_are_saved_satellite_data,
                           start_day_of_maps_to_plot,
-                          end_day_of_maps_to_plot) : 
-        
+                          end_day_of_maps_to_plot):
+
     cases_to_process = get_all_cases_to_process(core_arguments)
 
-    # with multiprocessing.Pool(nb_of_cores_to_use) as pool:
-
-    for i in range(cases_to_process.shape[0]) : 
-                   
+    # Prepare all tasks
+    tasks = []
+    for i in range(cases_to_process.shape[0]):
         info = cases_to_process.iloc[i].copy()
-         
-        init = download_satellite_data(info, start_day_of_maps_to_plot, end_day_of_maps_to_plot, 
-                                       where_are_saved_satellite_data, nb_of_cores_to_use) 
-    
-        paths_to_sat_data = fill_the_sat_paths(info, init.destination_path_to_fill, 
-                                               local_path = True, 
-                                               dates = pd.date_range(start=init.start_day, end=init.end_day, freq="D"))
+        init = download_satellite_data(info, start_day_of_maps_to_plot, end_day_of_maps_to_plot,
+                                       where_are_saved_satellite_data, nb_of_cores_to_use)
+        paths_to_sat_data = fill_the_sat_paths(info, init.destination_path_to_fill,
+                                               local_path=True,
+                                               dates=pd.date_range(start=init.start_day, end=init.end_day, freq="D"))
+        tasks.append(paths_to_sat_data)
 
-        for j in range(len(paths_to_sat_data)) :
-
-            plot_the_maps_in_the_folder(paths_to_sat_data[j])
-    
-    # NB: Having issues with this on MacOS, diabled in favour of a simple for loop
-    # pool.map(plot_the_maps_in_the_folder, paths_to_sat_data)
-
+    # Parallelize the plotting
+    with multiprocessing.Pool(nb_of_cores_to_use) as pool:
+        pool.map(plot_the_maps_in_the_folder, tasks)
