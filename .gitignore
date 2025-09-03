@@ -9,6 +9,10 @@ Data/SEXTANT
 # C extensions
 *.so
 
+# R project files
+.Rproj.user
+.Rhistory
+
 # Distribution / packaging
 .Python
 build/
