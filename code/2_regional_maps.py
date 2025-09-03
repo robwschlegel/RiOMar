@@ -1,26 +1,21 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import pandas as pd
-import xarray as xr
-import numpy as np
+# Import utils and data downloading functions
+# TODO: Get this to run without needing to call the exact root path
+exec(open("/Users/rws/RiOMar/code/1_data_validation.py").read())
+
+# Additional modules
+import pickle # Not sure if this causes issues without multiprocessing
+import calendar
+import math
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import multiprocessing
-from multiprocessing import Pool
+from multiprocess import Pool
 from scipy.ndimage import binary_dilation
 from scipy.stats import lognorm, kstest
 
-import os, re, gc, pickle, datetime, glob, calendar, math, sys
-
-from myRIOMAR.utils import (load_file, align_bathymetry_to_resolution, degrees_to_km, find_sat_data_files, expand_grid,
-                            path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,
-                            extract_and_format_date_from_path)
-
-from myRIOMAR._2_regional_maps.utils import Create_and_save_the_maps, QC_maps, get_all_possibilities
-
-from myRIOMAR.utils import (store_arguments, unique_years_between_two_dates)
 
 # =============================================================================
 #### Functions
@@ -972,7 +967,7 @@ def load_the_climatological_files(where_to_save_data_extended, month_nb = '', re
     
     else : 
         
-        # Get file paths and load them using multiprocessing
+        # Get file paths and load them using multiprocess
         with Pool() as pool:
             data = pool.map(load_file, file_paths)
         
@@ -1197,9 +1192,9 @@ class Create_and_save_the_maps :
         os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), exist_ok=True)
         os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), exist_ok=True)
                  
-        # Use multiprocessing to process each week
-        # pool = multiprocessing.Pool(nb_of_cores_to_use)
-        with multiprocessing.Pool(nb_of_cores_to_use) as pool:
+        # Use multiprocess to process each week
+        # pool = multiprocess.Pool(nb_of_cores_to_use)
+        with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
             results = pool.starmap(Process_each_week, [(   Year_month_week_pattern, 
                                                            self.where_to_save_data_extended, self.all_days_of_the_year, 
@@ -1255,9 +1250,9 @@ class Create_and_save_the_maps :
         folder_where_to_save_maps = self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'MONTHLY')
         os.makedirs(folder_where_to_save_maps, exist_ok=True)
 
-        # Use multiprocessing to process each month
-        # pool = multiprocessing.Pool(nb_of_cores_to_use)
-        with multiprocessing.Pool(nb_of_cores_to_use) as pool:
+        # Use multiprocess to process each month
+        # pool = multiprocess.Pool(nb_of_cores_to_use)
+        with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
             pool.starmap(get_the_mean_map_and_save_it, 
                         [( folder_where_to_save_maps, 
@@ -1393,9 +1388,9 @@ class QC_maps :
         
     def compute_QC_metrics(self, nb_of_cores_to_use, exclude_coastal_areas = False) : 
         
-        # Use multiprocessing to process each week
-        # pool = multiprocessing.Pool(nb_of_cores_to_use)
-        with multiprocessing.Pool(nb_of_cores_to_use) as pool:
+        # Use multiprocess to process each week
+        # pool = multiprocess.Pool(nb_of_cores_to_use)
+        with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
             QC_metrics = pool.starmap(Compute_the_metrics_of_one_map, 
                                    [( file_name, exclude_coastal_areas, self.coastal_waters_mask) 
@@ -1495,7 +1490,6 @@ def create_regional_maps(arguments) :
         maps_creation = Create_and_save_the_maps(working_directory, where_to_save_satellite_data, info) 
         
         maps_creation._4_create_the_multiyear_map()
-        
 
         
 def QC_of_regional_maps(arguments) : 

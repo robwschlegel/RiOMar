@@ -12,6 +12,7 @@
 
 exec(open("code/0_data_management.py").read())
 exec(open("code/1_data_validation.py").read())
+exec(open("code/2_regional_maps.py").read())
 
 
 # =============================================================================
@@ -56,8 +57,22 @@ Plot_and_Save_the_map(core_arguments,
 
 # Test 3
 ## Match up in situ and satellite data
-Match_up_with_insitu_measurements(core_arguments,
-                                  redo_the_MU_database = True, 
+Match_up_with_insitu_measurements(core_arguments, 
+                                  # zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+                                  zones = ['FRANCE'],
+                                  redo_the_MU_database = False, 
                                   nb_of_cores_to_use = 6,
-                                  where_to_save_satellite_data = 'data',
-                                  where_to_save_Match_Up_data = 'output/MATCH_UP_DATA')
+                                  where_are_saved_satellite_data = "data",
+                                  where_to_save_Match_Up_data = "output/MATCH_UP_DATA")
+
+## 2 Regional Maps
+
+# Test 4
+## Make regional map
+create_regional_maps(core_arguments,
+                     Zones = ['SOUTHERN_BRITTANY'],
+                     overwrite_existing_regional_maps = True,
+                     save_map_plots_of_which_time_frequency = {'DAILY' : False, 'WEEKLY' : False, 'MONTHLY' : True, 'ANNUAL' : True},
+                     nb_of_cores_to_use = 4,
+                     where_are_saved_satellite_data = "data",
+                     where_to_save_regional_maps = "figures")

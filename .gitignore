@@ -6,8 +6,11 @@ __pycache__/
 # Downloaded data
 data/SEXTANT
 data/DOWNLOAD_REPORTS
-data/IN_SITU
-data/REPHY
+data/INSITU_data
+data/RIVER_FLOW
+
+# Large outputs
+output/MATCH_UP_DATA
 
 # C extensions
 *.so
