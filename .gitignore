@@ -5,6 +5,7 @@ __pycache__/
 
 # Downloaded data
 Data/SEXTANT
+DATA/DOWNLOAD_REPORTS
 
 # C extensions
 *.so
