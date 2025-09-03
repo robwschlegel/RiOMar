@@ -362,6 +362,7 @@ class MU_database_processing :
                 print(f'{i} over {self.cases_to_process.shape[0]-1} ({info.Data_source} / {info.sensor_name} / {info.atmospheric_correction} / {info.Satellite_variable})')
                 
                 satellite_files = find_sat_data_files(info, path_to_sat_data = filled_destination_paths[i])
+                
                 if not satellite_files : 
                     continue     
                 

@@ -4,7 +4,9 @@
 import xarray as xr
 import numpy as np
 import pandas as pd
-import os, pickle, gc
+import os
+import pickle
+import gc
 from scipy.ndimage import label, binary_dilation, center_of_mass, distance_transform_edt
 from scipy.spatial import ConvexHull
 import matplotlib.pyplot as plt
@@ -13,13 +15,10 @@ from matplotlib.path import Path
 from collections import deque
 from scipy.spatial.distance import cdist
 from concave_hull import concave_hull
-from myRIOMAR.utils import load_file
 from shapely.geometry import Polygon
 from shapely.vectorized import contains
 from skimage import morphology
 from functools import reduce
-
-from myRIOMAR.utils import (expand_grid)
 
 import os, pickle, glob, multiprocessing, imageio, re
 

@@ -11,6 +11,7 @@ import pygadm
 import subprocess
 import re
 import multiprocessing
+import pickle
 import time
 import bz2
 import gzip
@@ -1122,8 +1123,8 @@ def split_consecutive_dates(dates):
 
 def plot_the_maps_in_the_folder(path) : 
     
-    # mpl.use('module://matplotlib_inline.backend_inline') # To show plots on the Plot panel (be careful as it consumes RAM memory !)
-    mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM memory)
+    # mpl.use('module://matplotlib_inline.backend_inline') # To show plots on the Plot panel (be careful as it consumes RAM!)
+    mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
     
     nc_files = [f for f in os.listdir(path) if f.endswith(".nc")]
     
@@ -1434,17 +1435,22 @@ def Plot_and_Save_the_map(core_arguments,
 
     cases_to_process = get_all_cases_to_process(core_arguments)
 
-    # Prepare all tasks
-    tasks = []
+    # Prepare all paths
+    all_paths = []
     for i in range(cases_to_process.shape[0]):
         info = cases_to_process.iloc[i].copy()
         init = download_satellite_data(info, start_day_of_maps_to_plot, end_day_of_maps_to_plot,
                                        where_are_saved_satellite_data, nb_of_cores_to_use)
-        paths_to_sat_data = fill_the_sat_paths(info, init.destination_path_to_fill,
-                                               local_path=True,
-                                               dates=pd.date_range(start=init.start_day, end=init.end_day, freq="D"))
-        tasks.append(paths_to_sat_data)
+        paths = fill_the_sat_paths(info, init.destination_path_to_fill,
+                                local_path=True,
+                                   dates=pd.date_range(start=init.start_day, end=init.end_day, freq="D"))
+        all_paths.extend(paths)  # Use extend if paths is a list
 
-    # Parallelize the plotting
-    with multiprocessing.Pool(nb_of_cores_to_use) as pool:
-        pool.map(plot_the_maps_in_the_folder, tasks)
+    for i in list(range(len(all_paths))) :
+        plot_the_maps_in_the_folder(all_paths[i])
+
+    # NB: Major struggle bus getting multithreading to work
+        # I can't rule out that it isn't my local MacOS not having Boost installed/accessed correctly...
+    # if __name__ == '__main__':
+    #     with multiprocessing.Pool(nb_of_cores_to_use) as pool:
+    #         pool.map(plot_the_maps_in_the_folder, all_paths)
