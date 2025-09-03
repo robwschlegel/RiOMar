@@ -2,7 +2,7 @@
 
 A collection of code used to process and analyse data relating to the [RiOMar project](https://riomar.lsce.ipsl.fr/).
 
-Note that the majority of this code was originally written by [Louis Terrats](https://github.com/louis-terrats) under an MIT license and may be found on [GitHub](https://github.com/louis-terrats/myRIOMAR_dev).
+Note that the majority of this code was originally written by [Louis Terrats](https://github.com/louis-terrats) under an MIT license and may be found on [GitHub](https://github.com/louis-terrats/myRIOMAR_dev) where it may be installed and used as a standalone module.
 
 The code is being repurposed in this repository as a continuation of the work previously performed, and with an eye towards the next two years of development. Terminating with the completion of the RiOMar project itself.
 

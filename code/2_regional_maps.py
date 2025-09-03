@@ -6,9 +6,9 @@
 exec(open("/Users/rws/RiOMar/code/1_data_validation.py").read())
 
 # Additional modules
-import pickle # Not sure if this causes issues without multiprocessing
-import calendar
-import math
+import pandas as pd
+import xarray as xr
+import numpy as np
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
@@ -16,6 +16,11 @@ from multiprocess import Pool
 from scipy.ndimage import binary_dilation
 from scipy.stats import lognorm, kstest
 
+import os, re, gc, pickle, datetime, glob, calendar, math, sys
+
+# from utils import (load_file, align_bathymetry_to_resolution, degrees_to_km, find_sat_data_files, expand_grid,
+#                             path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,
+#                             extract_and_format_date_from_path)
 
 # =============================================================================
 #### Functions
@@ -24,7 +29,7 @@ from scipy.stats import lognorm, kstest
 def Process_each_week(Year_month_week_pattern, 
                       where_to_save_data_extended, all_days_of_the_year, suffix_ranges, info, 
                       map_files, files_have_been_processed,
-                      plot_the_daily_maps) :
+                      save_map_plots_of_which_time_frequency) :
 
     """
     Process satellite data files for each week and generate summary outputs.
@@ -73,7 +78,8 @@ def Process_each_week(Year_month_week_pattern,
     map_files_of_the_week = sorted( [x for x in map_files if any([pattern in x for pattern in Year_month_week_days])] )
         
     # Load files and extract key data
-    weekly_results = [load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), plot_the_daily_maps) 
+    weekly_results = [load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), 
+                                                     save_map_plots_of_which_time_frequency['DAILY']) 
                       for nc_file in map_files_of_the_week]
 
     # # Handle SEXTANT merged data specific computations
@@ -87,8 +93,8 @@ def Process_each_week(Year_month_week_pattern,
     #         weekly_results = weekly_results[1:]
         
     # Save daily maps to pickle files
-    [pickle.dump(x[1], open(f"{where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY')}/{x[0].day[0]}.pkl", 'wb')) for x in weekly_results if isinstance(x, list)]
-           
+    [pickle.dump({'Basin_map' : x[1]}, open(f"{where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY')}/{x[0].day[0]}.pkl", 'wb')) for x in weekly_results if isinstance(x, list)]
+               
     # Index the files for the current week                 
     map_files_of_the_week_index = [ all_days_of_the_year.index(date) for date in [extract_and_format_date_from_path(x) for x in map_files_of_the_week ] ]
 
@@ -116,7 +122,7 @@ def Process_each_week(Year_month_week_pattern,
                                 [{'Basin_map' : x[1], 'Embouchure_map' : x[2],'Bloom_map' : x[3]} for x in weekly_results],
                                 info,
                                 Year_month_week_pattern[4:], Year_month_week_pattern[4:],
-                                "WEEKLY", False, date_of_the_weekly_map) 
+                                "WEEKLY", save_map_plots_of_which_time_frequency['WEEKLY'], date_of_the_weekly_map) 
     
     del weekly_results
     gc.collect()
@@ -174,16 +180,17 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
     info['year'] = pd.to_datetime(date).strftime("%Y") 
     nb_of_day = pd.to_datetime(date).strftime("%d")     
     info['week'] = f'{info.month}_{determine_the_week_based_on_the_day(nb_of_day)}'
+    info['date_for_plot'] = info.day
     
     # Sort data by latitude and longitude
     map_ini = map_ini.sortby('lat')
     map_ini = map_ini.sortby('lon')
     
     # Get coordinates for the site
-    coordinates = get_coordinates_of_the_site(info.Zone)
+    # coordinates = get_coordinates_of_the_site(info.Zone)
 
     # Extract data for the Basin zone
-    Basin_data = extract_key_data(map_ini, info, zone_limits = coordinates['Basin_limits'])
+    Basin_data = extract_key_data(map_ini, info, zone_limits = basin_coordinates)
              
     if Basin_data['n'] == 0 : 
         return "All Basin data are NAN"
@@ -334,6 +341,8 @@ def extract_key_data(map_ini, info,
     n_of_the_zone = np.isfinite(map_of_the_zone_log_scale.values).sum()
     n_tot_of_the_zone = map_of_the_zone_log_scale.shape[0] * map_of_the_zone_log_scale.shape[1]
     
+    map_values_of_the_zone = map_values_of_the_zone.assign_coords(date_for_plot = info.date_for_plot )
+    
     return {'map_data' : map_values_of_the_zone,
             'mean' : float(mean_of_the_zone),
             'median' : float(median_of_the_zone),
@@ -344,21 +353,6 @@ def extract_key_data(map_ini, info,
                                               np.max(map_values_of_the_zone.lat), 
                                               np.min(map_values_of_the_zone.lon), 
                                               np.max(map_values_of_the_zone.lon)]]}
-
-def get_all_possibilities(Zones, Data_sources, Satellite_sensors, Atmospheric_corrections, Years, Satellite_variables) : 
-
-    all_possibilities = expand_grid( Zone = Zones,
-                                    Data_source = Data_sources, 
-                                    sensor_name = Satellite_sensors, 
-                                    atmospheric_correction = Atmospheric_corrections,
-                                    Year = Years,
-                                    Satellite_variable = Satellite_variables)
-    all_possibilities['atmospheric_correction'] = all_possibilities.apply(lambda row: 'Standard' 
-                                                                        if row['Data_source'] == 'SEXTANT' 
-                                                                        else row['atmospheric_correction'], axis=1)
-    all_possibilities = all_possibilities.drop_duplicates()
-    
-    return all_possibilities
         
 def get_file_patterns(pattern, suffix_ranges):
     
@@ -464,120 +458,120 @@ def determine_the_week_based_on_the_day(num_of_day) :
     return week
 
 
-def get_coordinates_of_the_site(Study_area) : 
+# def get_coordinates_of_the_site(Study_area) : 
         
-    """
-    Get geographic coordinates and spatial extents for a given study area.
+#     """
+#     Get geographic coordinates and spatial extents for a given study area.
 
-    Parameters
-    ----------
-    Study_area : str
-        Name of the study area (e.g., "GULF_OF_LION", "BAY_OF_BISCAY").
+#     Parameters
+#     ----------
+#     Study_area : str
+#         Name of the study area (e.g., "GULF_OF_LION", "BAY_OF_BISCAY").
 
-    Returns
-    -------
-    dict
-        A dictionary containing basin limits, embouchure, and bloom coordinates and extents.
-    """
+#     Returns
+#     -------
+#     dict
+#         A dictionary containing basin limits, embouchure, and bloom coordinates and extents.
+#     """
     
-    # Define spatial parameters based on the study area.
-    if Study_area == "GULF_OF_LION" : 
+#     # Define spatial parameters based on the study area.
+#     if Study_area == "GULF_OF_LION" : 
 
-        Basin_limits = [41.2, 43.6, 2.75, 9] # (Lat min , Lat max, Lon min, Lon max)
+#         Basin_limits = [41.2, 43.6, 2.75, 9] # (Lat min , Lat max, Lon min, Lon max)
         
-        Embouchure_central_point = [43.2, 4.6] # (Lat, Lon) # [43.24, 4.75] 
-        Embouchure_lat_extend = 0.5 # 0.55
-        Embouchure_lon_extend = 0.75 # 0.75
+#         Embouchure_central_point = [43.2, 4.6] # (Lat, Lon) # [43.24, 4.75] 
+#         Embouchure_lat_extend = 0.5 # 0.55
+#         Embouchure_lon_extend = 0.75 # 0.75
         
-        Bloom_central_point = [42.05, 5.2] # (Lat, Lon)
-        Bloom_lat_extend = 1.7 # 1.25
-        Bloom_lon_extend = 3.25 # 2.25
+#         Bloom_central_point = [42.05, 5.2] # (Lat, Lon)
+#         Bloom_lat_extend = 1.7 # 1.25
+#         Bloom_lon_extend = 3.25 # 2.25
         
-    if Study_area == "BAY_OF_BISCAY" : 
+#     if Study_area == "BAY_OF_BISCAY" : 
 
-        Basin_limits = [43, 49, -7, -0.5] # (Lat min , Lat max, Lon min, Lon max)
+#         Basin_limits = [43, 49, -7, -0.5] # (Lat min , Lat max, Lon min, Lon max)
         
-        Embouchure_central_point = [45.6, -1.5] # (Lat, Lon) # [43.24, 4.75] 
-        Embouchure_lat_extend = 1 # 0.55
-        Embouchure_lon_extend = 1 # 0.75
+#         Embouchure_central_point = [45.6, -1.5] # (Lat, Lon) # [43.24, 4.75] 
+#         Embouchure_lat_extend = 1 # 0.55
+#         Embouchure_lon_extend = 1 # 0.75
         
-        # Bloom_central_point = [45.5, -2.5] # (Lat, Lon)
-        # Bloom_lat_extend = 2 # 1.25
-        # Bloom_lon_extend = 1 # 2.25
+#         # Bloom_central_point = [45.5, -2.5] # (Lat, Lon)
+#         # Bloom_lat_extend = 2 # 1.25
+#         # Bloom_lon_extend = 1 # 2.25
         
-        Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
-        Bloom_lat_extend = 0 # 1.25
-        Bloom_lon_extend = 0 # 2.25
+#         Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
+#         Bloom_lat_extend = 0 # 1.25
+#         Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "SOUTHERN_BRITTANY" : 
+#     if Study_area == "SOUTHERN_BRITTANY" : 
 
-         Basin_limits = [46, 48.5, -5, -1.5] # (Lat min , Lat max, Lon min, Lon max)
+#          Basin_limits = [46, 48.5, -5, -1.5] # (Lat min , Lat max, Lon min, Lon max)
          
-         Embouchure_central_point = [47.125, -2.75] # (Lat, Lon) # [43.24, 4.75] 
-         Embouchure_lat_extend = 1.25 # 0.55
-         Embouchure_lon_extend = 1.5 # 0.75
+#          Embouchure_central_point = [47.125, -2.75] # (Lat, Lon) # [43.24, 4.75] 
+#          Embouchure_lat_extend = 1.25 # 0.55
+#          Embouchure_lon_extend = 1.5 # 0.75
          
-         Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
-         Bloom_lat_extend = 0 # 1.25
-         Bloom_lon_extend = 0 # 2.25
+#          Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
+#          Bloom_lat_extend = 0 # 1.25
+#          Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "FRANCE" : 
+#     if Study_area == "FRANCE" : 
 
-        Basin_limits = [41, 52, -8, 11] # (Lat min , Lat max, Lon min, Lon max)
+#         Basin_limits = [41, 52, -8, 11] # (Lat min , Lat max, Lon min, Lon max)
         
-        Embouchure_central_point = [np.nan, np.nan] # (Lat, Lon) # [43.24, 4.75] 
-        Embouchure_lat_extend = 0 # 0.55
-        Embouchure_lon_extend = 0 # 0.75
+#         Embouchure_central_point = [np.nan, np.nan] # (Lat, Lon) # [43.24, 4.75] 
+#         Embouchure_lat_extend = 0 # 0.55
+#         Embouchure_lon_extend = 0 # 0.75
         
-        Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
-        Bloom_lat_extend = 0 # 1.25
-        Bloom_lon_extend = 0 # 2.25
+#         Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
+#         Bloom_lat_extend = 0 # 1.25
+#         Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "BAY_OF_SEINE" : 
+#     if Study_area == "BAY_OF_SEINE" : 
 
-        Basin_limits = [49.16, 51.38, -1.61, 2.6] # (Lat min , Lat max, Lon min, Lon max)
+#         Basin_limits = [49.16, 51.38, -1.61, 2.6] # (Lat min , Lat max, Lon min, Lon max)
         
-        Embouchure_central_point = [49.5, 0] # (Lat, Lon) # [43.24, 4.75] 
-        Embouchure_lat_extend = 0.3 # 0.55
-        Embouchure_lon_extend = 0.5 # 0.75
+#         Embouchure_central_point = [49.5, 0] # (Lat, Lon) # [43.24, 4.75] 
+#         Embouchure_lat_extend = 0.3 # 0.55
+#         Embouchure_lon_extend = 0.5 # 0.75
         
-        Bloom_central_point = [49.8, 0.15] # (Lat, Lon)
-        Bloom_lat_extend = 1 # 1.25
-        Bloom_lon_extend = 1.5 # 2.25
+#         Bloom_central_point = [49.8, 0.15] # (Lat, Lon)
+#         Bloom_lat_extend = 1 # 1.25
+#         Bloom_lon_extend = 1.5 # 2.25
         
-    if Study_area == "EASTERN_CHANNEL" : 
+#     if Study_area == "EASTERN_CHANNEL" : 
 
-        Basin_limits = [49.16, 51.5, -1.61, 3] # (Lat min , Lat max, Lon min, Lon max)
+#         Basin_limits = [49.16, 51.5, -1.61, 3] # (Lat min , Lat max, Lon min, Lon max)
         
-        Embouchure_central_point = [50.45, 1.5] # (Lat, Lon) # [43.24, 4.75] 
-        Embouchure_lat_extend = 0.9 # 0.55
-        Embouchure_lon_extend = 0.5 # 0.75
+#         Embouchure_central_point = [50.45, 1.5] # (Lat, Lon) # [43.24, 4.75] 
+#         Embouchure_lat_extend = 0.9 # 0.55
+#         Embouchure_lon_extend = 0.5 # 0.75
         
-        Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
-        Bloom_lat_extend = 0 # 1.25
-        Bloom_lon_extend = 0 # 2.25
+#         Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
+#         Bloom_lat_extend = 0 # 1.25
+#         Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "ETANG_DE_BERRE" : 
+#     if Study_area == "ETANG_DE_BERRE" : 
 
-        Basin_limits = [43.37, 43.57, 4.97, 5.26] # (Lat min , Lat max, Lon min, Lon max)
+#         Basin_limits = [43.37, 43.57, 4.97, 5.26] # (Lat min , Lat max, Lon min, Lon max)
         
-        Embouchure_central_point = [np.nan, np.nan] # (Lat, Lon) # [43.24, 4.75] 
-        Embouchure_lat_extend = 0 # 0.55
-        Embouchure_lon_extend = 0 # 0.75
+#         Embouchure_central_point = [np.nan, np.nan] # (Lat, Lon) # [43.24, 4.75] 
+#         Embouchure_lat_extend = 0 # 0.55
+#         Embouchure_lon_extend = 0 # 0.75
         
-        Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
-        Bloom_lat_extend = 0 # 1.25
-        Bloom_lon_extend = 0 # 2.25
+#         Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
+#         Bloom_lat_extend = 0 # 1.25
+#         Bloom_lon_extend = 0 # 2.25
         
-    return {'Basin_limits' : Basin_limits,
+#     return {'Basin_limits' : Basin_limits,
             
-            'Embouchure_central_point' : Embouchure_central_point,
-            'Embouchure_lat_extend' : Embouchure_lat_extend,
-            'Embouchure_lon_extend' : Embouchure_lon_extend,
+#             'Embouchure_central_point' : Embouchure_central_point,
+#             'Embouchure_lat_extend' : Embouchure_lat_extend,
+#             'Embouchure_lon_extend' : Embouchure_lon_extend,
             
-            'Bloom_central_point' : Bloom_central_point,
-            'Bloom_lat_extend' : Bloom_lat_extend,
-            'Bloom_lon_extend' : Bloom_lon_extend}
+#             'Bloom_central_point' : Bloom_central_point,
+#             'Bloom_lat_extend' : Bloom_lat_extend,
+#             'Bloom_lon_extend' : Bloom_lon_extend}
 
 
 def do_and_save_the_plot(info, Basin_data, Embouchure_data, Bloom_data, 
@@ -1089,7 +1083,7 @@ class Create_and_save_the_maps :
     A class for creating and saving satellite maps at different temporal resolutions (weekly, monthly, annual).
     """
         
-    def __init__(self, working_directory, where_to_save_satellite_data, info) :
+    def __init__(self, where_to_save_regional_maps, where_are_saved_satellite_data, info) :
         
         """
         Initialize the Create_and_save_the_maps object.
@@ -1098,7 +1092,7 @@ class Create_and_save_the_maps :
         ----------
         working_directory : str
             Working directory where data will be saved.
-        where_to_save_satellite_data : str
+        where_are_saved_satellite_data : str
             Path to the satellite data files.
         info : object
             Metadata about the satellite data (e.g., zone, data source, sensor name, year).
@@ -1106,7 +1100,7 @@ class Create_and_save_the_maps :
                 
         # Define where to save processed data and time series data
         where_to_save_data = fill_the_sat_paths(info, 
-                                               path_to_fill_to_where_to_save_satellite_files(working_directory + 'RESULTS/' + info.Zone).replace('[TIME_FREQUENCY]', ''),
+                                               path_to_fill_to_where_to_save_satellite_files(where_to_save_regional_maps + '/' + info.Zone).replace('[TIME_FREQUENCY]', ''),
                                                local_path = True).replace('/*/*/*', '')
         
         where_to_save_timeseries_data = f'{where_to_save_data}/TIME_SERIES/'
@@ -1115,11 +1109,11 @@ class Create_and_save_the_maps :
         # Find satellite data files for the current and previous years
         if isinstance(info['Year'], str) and (info['Year'] == 'MULTIYEAR') : 
             
-            all_days_of_the_year = pd.date_range(start=info.date_min, end=info.date_max, freq="Y").strftime("%Y%m%d").tolist()
+            all_days_of_the_year = pd.date_range(start=info.date_min, end=info.date_max, freq="YE").strftime("%Y%m%d").tolist()
 
             map_files = find_sat_data_files(info, 
-                                            fill_the_sat_paths(info, 
-                                                               (path_to_fill_to_where_to_save_satellite_files(f'{working_directory}/RESULTS/{info.Zone}').replace('/[MONTH]/[DAY]', '').replace('[TIME_FREQUENCY]', 'MAPS/[TIME_FREQUENCY]')), 
+                                            fill_the_sat_paths(info.replace({info.Temporal_resolution : "DAILY"}),
+                                                               (path_to_fill_to_where_to_save_satellite_files(f'{where_to_save_regional_maps}/{info.Zone}').replace('/[MONTH]/[DAY]', '').replace('[TIME_FREQUENCY]', 'MAPS/[TIME_FREQUENCY]')), 
                                                                local_path=True, 
                                                                dates= all_days_of_the_year))
             
@@ -1135,14 +1129,14 @@ class Create_and_save_the_maps :
         all_days_of_the_year = pd.date_range(start=info.date_min, end=info.date_max, freq="D").strftime("%Y%m%d").tolist()
         
         map_files = find_sat_data_files(info, 
-                                        fill_the_sat_paths(info, 
-                                                           path_to_fill_to_where_to_save_satellite_files(where_to_save_satellite_data), 
+                                        fill_the_sat_paths(info.replace({info.Temporal_resolution : "DAILY"}), 
+                                                           path_to_fill_to_where_to_save_satellite_files(where_are_saved_satellite_data), 
                                                            local_path=True, 
                                                            dates= all_days_of_the_year))            
             
         # Check if satellite files are available
         if not map_files : 
-            print("Error on searching the satellite data files - No satellite file")
+            print("No satellite file found")
             return
         
         # Extract days from filenames and generate all days of the year
@@ -1176,7 +1170,7 @@ class Create_and_save_the_maps :
         
         
         
-    def _1_create_weekly_maps(self, nb_of_cores_to_use, plot_the_daily_maps) :
+    def _1_create_weekly_maps(self, nb_of_cores_to_use, save_map_plots_of_which_time_frequency) :
         
         """
         Create weekly maps by processing daily satellite files.
@@ -1192,6 +1186,14 @@ class Create_and_save_the_maps :
         os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), exist_ok=True)
         os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), exist_ok=True)
                  
+        # where_to_save_data_extended = self.where_to_save_data_extended
+        # all_days_of_the_year = self.all_days_of_the_year 
+        # suffix_ranges = self.suffix_ranges
+        # info = self.info
+        # map_files = self.map_files
+        # files_have_been_processed = self.files_have_been_processed
+        # Year_month_week_patterns = self.Year_month_week_patterns
+        
         # Use multiprocess to process each week
         # pool = multiprocess.Pool(nb_of_cores_to_use)
         with multiprocess.Pool(nb_of_cores_to_use) as pool:
@@ -1201,7 +1203,7 @@ class Create_and_save_the_maps :
                                                            self.suffix_ranges, self.info, 
                                                            self.map_files, 
                                                            self.files_have_been_processed,
-                                                           plot_the_daily_maps) 
+                                                           save_map_plots_of_which_time_frequency) 
                                                        for Year_month_week_pattern in self.Year_month_week_patterns ])
                 
         # to_remove = []
@@ -1236,7 +1238,7 @@ class Create_and_save_the_maps :
         del results_ts, files_have_been_processed_results, results
         gc.collect()
 
-    def _2_create_monthly_maps(self, nb_of_cores_to_use) :
+    def _2_create_monthly_maps(self, nb_of_cores_to_use, save_map_plots_of_which_time_frequency) :
 
         """
         Create monthly maps by averaging weekly maps.
@@ -1258,11 +1260,11 @@ class Create_and_save_the_maps :
                         [( folder_where_to_save_maps, 
                            load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "WEEKLY"), month_nb),
                            self.info,
-                           f'{month_nb:02d}', f'{month_nb:02d}', 'MONTHLY', True,
+                           f'{month_nb:02d}', f'{month_nb:02d}', 'MONTHLY', save_map_plots_of_which_time_frequency['MONTHLY'],
                            f'{self.info.Year}{month_nb:02d}15') for month_nb in (np.arange(12)+1) ])
         
         
-    def _3_create_annual_maps(self) :
+    def _3_create_annual_maps(self, save_map_plots_of_which_time_frequency) :
         
         """
         Create an annual map by averaging monthly maps.
@@ -1275,7 +1277,7 @@ class Create_and_save_the_maps :
                                       load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "MONTHLY")),
                                         self.info,
                                         period_name = 'the year', climatological_subfolder = 'ANNUAL', 
-                                        do_the_plot = True,
+                                        do_the_plot = save_map_plots_of_which_time_frequency['ANNUAL'],
                                         date_for_plot = f'{self.info.Year}0701') 
         
     def _4_create_the_multiyear_map(self) :
@@ -1299,10 +1301,10 @@ class Create_and_save_the_maps :
 
 class QC_maps :
     
-    def __init__(self, info, working_directory) :
+    def __init__(self, info, where_are_saved_regional_maps) :
         
         were_are_data_stored = fill_the_sat_paths(info, 
-                                               path_to_fill_to_where_to_save_satellite_files(working_directory + 'RESULTS/' + info.Zone).replace('[TIME_FREQUENCY]', ''),
+                                               path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + '/' + info.Zone).replace('[TIME_FREQUENCY]', ''),
                                                local_path = True).replace('/*/*/*', 'MAPS')
                 
         # Find satellite data files for the current year
@@ -1312,18 +1314,24 @@ class QC_maps :
         multiannual_file = load_the_climatological_files(where_to_save_data_extended = were_are_data_stored + '/MULTIYEAR/', 
                                                          return_file_names = True)
         
+        where_to_save_QC_data = fill_the_sat_paths(info, 
+                                               path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + '/' + info.Zone).replace('[TIME_FREQUENCY]', 'QC'),
+                                               local_path = True).replace('/*/*/*', '')
+        os.makedirs(where_to_save_QC_data, exist_ok=True)
+        
         self.QC_data = None
         self.QC_plot = None
         self.coastal_waters_mask = None
         self.info = info
-        self.working_directory = working_directory
+        self.where_are_saved_regional_maps = where_are_saved_regional_maps
         self.map_files = map_files
         self.multiannual_file = multiannual_file
         self.were_are_data_stored = were_are_data_stored
+        self.where_to_save_QC_data = where_to_save_QC_data
         
     def compute_mask_for_coastal_waters(self, minimal_bathymetry_in_m = 0, minimal_distance_from_land_in_km = 0) : 
         
-        path_to_the_mask = f'{self.were_are_data_stored.split(self.info.Data_source)[0]}/self.info.Data_source/Coastal_mask_min_bathy_is_{minimal_bathymetry_in_m}m_min_dist_from_land_is_{minimal_distance_from_land_in_km}km_for_{self.info.atmospheric_correction}.nc'
+        path_to_the_mask = f'{self.were_are_data_stored.split(self.info.Data_source)[0]}/{self.info.Data_source}/Coastal_mask_min_bathy_is_{minimal_bathymetry_in_m}m_min_dist_from_land_is_{minimal_distance_from_land_in_km}km_for_{self.info.atmospheric_correction}.nc'
         
         if os.path.isfile( path_to_the_mask ) :
             
@@ -1340,7 +1348,7 @@ class QC_maps :
         the_annual_map = load_file(self.multiannual_file[0])['Basin_map']['map_data']
                 
         bathymetry_data_aligned_to_map_resolution = align_bathymetry_to_resolution(the_annual_map, 
-                                                                                f'{self.working_directory}/RESULTS/{self.info.Zone}/Bathy_data.pkl')
+                                                                                f'{self.where_are_saved_regional_maps}/{self.info.Zone}/Bathy_data.pkl')
         
         bathymetric_mask = bathymetry_data_aligned_to_map_resolution > -minimal_bathymetry_in_m
 
@@ -1408,13 +1416,13 @@ class QC_maps :
         
         self.QC_plot = plot_and_save_the_QC_metrics(QC_df = QC_metrics_df, 
                                                      metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
-                                                     path_to_save_QC_files = f'{self.working_directory}/RESULTS/{self.info.Zone}/{self.info.Data_source}/{self.info.sensor_name}/{self.info.atmospheric_correction}/{self.info.Year}/MAPS/{self.info.Satellite_variable}/',
+                                                     path_to_save_QC_files = self.where_to_save_QC_data,
                                                      info = self.info,
                                                      max_cloud_cover = 80)
         
     def combine_QC_metrics(self) : 
                 
-        QC_files = glob.glob(f'{self.working_directory}/RESULTS/{self.info.Zone}/{self.info.Data_source}/{self.info.sensor_name}/{self.info.atmospheric_correction}/{self.info.Year}/MAPS/{self.info.Satellite_variable}/QC_daily_maps.csv')
+        QC_files = glob.glob(f'{self.where_are_saved_regional_maps}/{self.info.Zone}/{self.info.Data_source}/{self.info.sensor_name}/{self.info.atmospheric_correction}/{self.info.Year}/MAPS/{self.info.Satellite_variable}/QC_daily_maps.csv')
         
         Global_QC_metrics = pd.concat( [pd.read_csv(file_name) for file_name in QC_files] )
         
@@ -1424,60 +1432,44 @@ class QC_maps :
         
         self.Global_QC_plot = plot_and_save_the_QC_metrics(QC_df = Global_QC_metrics, 
                                                      metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
-                                                     path_to_save_QC_files = f'{self.working_directory}/RESULTS/{self.info.Zone}/{self.info.Data_source}/{self.info.sensor_name}/{self.info.atmospheric_correction}/',
+                                                     path_to_save_QC_files = self.where_to_save_QC_data,
                                                      info = self.info,
                                                      max_cloud_cover = 80)
-
-
+            
 ## Main functions
 
-def create_regional_maps(arguments) :
-        
-    (Data_sources, 
-     Sensor_names, 
-     Satellite_variables, 
-     Atmospheric_corrections,
-     Temporal_resolution, 
-     start_day, end_day, 
-     working_directory, 
-     where_to_save_satellite_data, 
-     overwrite_existing_satellite_files,
-     redo_the_MU_database,
-     path_to_SOMLIT_insitu_data,
-     path_to_REPHY_insitu_data,
-     Zones,
-     overwrite_existing_regional_maps,
-     plot_the_daily_regional_maps,
-     nb_of_cores_to_use) = store_arguments(arguments, return_arguments = True)
+def create_regional_maps(core_arguments, Zones, overwrite_existing_regional_maps, save_map_plots_of_which_time_frequency, nb_of_cores_to_use,
+                         where_are_saved_satellite_data, where_to_save_regional_maps) :
+            
+    core_arguments.update({'Years' : unique_years_between_two_dates(core_arguments['start_day'], core_arguments['end_day']),
+                           'Zones' : Zones})
     
-    Years = unique_years_between_two_dates(start_day, end_day)
-    
-    cases_to_process = get_all_possibilities(Zones, Data_sources, Sensor_names, Atmospheric_corrections, Years, Satellite_variables)
+    cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)
     
     for i, info in cases_to_process.iterrows() : 
                 
         # info = cases_to_process.iloc[i]
-        info = pd.concat([info, pd.Series([start_day if info.Year == Years[0] else f'{info.Year}/01/01',
-                                           end_day if info.Year == Years[-1] else f'{info.Year}/12/31'],
+        info = pd.concat([info, pd.Series([core_arguments['start_day'] if info.Year == core_arguments['Years'][0] else f'{info.Year}/01/01',
+                                           core_arguments['end_day'] if info.Year == core_arguments['Years'][-1] else f'{info.Year}/12/31'],
                                           index = ['date_min', 'date_max'])])
         
         print(f'{i} over {cases_to_process.shape[0]-1} ({info.Zone} / {info.Data_source} / {info.sensor_name} / {info.atmospheric_correction} / {info.Year} / {info.Satellite_variable})')
         
-        maps_creation = Create_and_save_the_maps(working_directory, where_to_save_satellite_data, info) 
+        maps_creation = Create_and_save_the_maps(where_to_save_regional_maps, where_are_saved_satellite_data, info) 
         
         if ('map_files' not in vars(maps_creation)) or len(maps_creation.map_files) == 0 : 
-            print(f"No satellite file here : {where_to_save_satellite_data}/{info.Data_source}/' - Switch to the next iterate")
+            print("Switch to the next iterate")
             continue
         
         if maps_creation.are_the_maps_already_produced and (overwrite_existing_regional_maps == False) : 
             print("Maps already exist - Switch to the next iterate")
             continue       
         
-        maps_creation._1_create_weekly_maps(nb_of_cores_to_use, plot_the_daily_regional_maps)
+        maps_creation._1_create_weekly_maps(nb_of_cores_to_use, save_map_plots_of_which_time_frequency)
         
-        maps_creation._2_create_monthly_maps(nb_of_cores_to_use)
+        maps_creation._2_create_monthly_maps(nb_of_cores_to_use, save_map_plots_of_which_time_frequency)
         
-        maps_creation._3_create_annual_maps()
+        maps_creation._3_create_annual_maps(save_map_plots_of_which_time_frequency)
         
     global_cases_to_process = cases_to_process.drop(['Year'], axis = 1).drop_duplicates()
         
@@ -1485,36 +1477,20 @@ def create_regional_maps(arguments) :
         
         # info = global_cases_to_process.iloc[i].copy()
         info['Year'] = 'MULTIYEAR'
-        info = pd.concat([info, pd.Series([start_day, end_day], index = ['date_min', 'date_max'])])
+        info = pd.concat([info, pd.Series([core_arguments['start_day'], core_arguments['end_day']], index = ['date_min', 'date_max'])])
         
-        maps_creation = Create_and_save_the_maps(working_directory, where_to_save_satellite_data, info) 
+        maps_creation = Create_and_save_the_maps(where_to_save_regional_maps, where_are_saved_satellite_data, info) 
         
         maps_creation._4_create_the_multiyear_map()
+        
 
         
-def QC_of_regional_maps(arguments) : 
+def QC_of_regional_maps(core_arguments, Zones, nb_of_cores_to_use, where_are_saved_regional_maps) : 
     
-    (Data_sources, 
-     Sensor_names, 
-     Satellite_variables, 
-     Atmospheric_corrections,
-     Temporal_resolution, 
-     start_day, end_day, 
-     working_directory, 
-     where_to_save_satellite_data, 
-     overwrite_existing_satellite_files,
-     redo_the_MU_database,
-     path_to_SOMLIT_insitu_data,
-     path_to_REPHY_insitu_data,
-     Zones,
-     overwrite_existing_regional_maps,
-     plot_the_daily_regional_maps,
-     nb_of_cores_to_use) = store_arguments(arguments, return_arguments = True)
+    core_arguments.update({'Years' : unique_years_between_two_dates(core_arguments['start_day'], core_arguments['end_day']),
+                           'Zones' : Zones})
     
-    Years = unique_years_between_two_dates(start_day, end_day)
-                                            
-    cases_to_process = get_all_possibilities(Zones, Data_sources, Sensor_names, Atmospheric_corrections, 
-                                             Years, Satellite_variables)
+    cases_to_process = get_all_possibilities(core_arguments)
     
     for i, info in cases_to_process.iterrows() :  
                 
@@ -1522,7 +1498,7 @@ def QC_of_regional_maps(arguments) :
         
         print(f'{i} over {cases_to_process.shape[0]-1} ({info.Zone} / {info.Data_source} / {info.sensor_name} / {info.atmospheric_correction} / {info.Year} / {info.Satellite_variable})')
         
-        QC_data_and_plots = QC_maps(info, working_directory)
+        QC_data_and_plots = QC_maps(info, where_are_saved_regional_maps)
         
         if len(QC_data_and_plots.map_files) == 0 : 
             print("No satellite regional maps - Switch to the next iterate")
@@ -1548,7 +1524,7 @@ def QC_of_regional_maps(arguments) :
         
         # print(f'{i} over {global_cases_to_process.shape[0]-1} ({info.Zone} / {info.Data_source} / {info.sensor_name} / {info.atmospheric_correction} / {info.Satellite_variable})')
        
-        QC_data_and_plots = QC_maps(info, working_directory)
+        QC_data_and_plots = QC_maps(info, where_are_saved_regional_maps)
                
         if len(QC_data_and_plots.map_files) == 0 : 
             continue
