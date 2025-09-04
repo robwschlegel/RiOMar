@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+
 # =============================================================================
 #### Modules
 # =============================================================================
 
-import sys, pickle, os, bathyreq, glob, datetime, importlib.resources, tempfile, shutil
-from itertools import product, chain
+
+import sys, pickle, os, bathyreq, glob, datetime, importlib.resources, tempfile, shutil, re
 import pandas as pd
 import xarray as xr
 import numpy as np
 import geopandas as gpd
-import re
+from itertools import product, chain
 from functools import reduce
 from collections.abc import Mapping, Iterable
 from concave_hull import concave_hull

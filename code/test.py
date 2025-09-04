@@ -10,9 +10,19 @@
 # import runpy
 # runpy.run_path(path_name='../code/0_data_management.py')
 
-exec(open("code/0_data_management.py").read())
-exec(open("code/1_data_validation.py").read())
-exec(open("code/2_regional_maps.py").read())
+import os, sys
+import matplotlib as mpl
+
+script_dir = os.path.dirname( os.path.abspath('__file__') )
+func_dir = os.path.join( script_dir, 'func' )
+sys.path.append( func_dir )
+
+import dl
+from dl import (Download_satellite_data, Plot_and_Save_the_map)
+
+# exec(open("code/0_data_management.py").read())
+# exec(open("code/1_data_validation.py").read())
+# exec(open("code/2_regional_maps.py").read())
 
 
 # =============================================================================

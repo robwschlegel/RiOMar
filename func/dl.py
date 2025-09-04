@@ -1,34 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+
 # =============================================================================
 #### Modules
 # =============================================================================
-import os
-import sys
 
-for p in sys.path : 
-    print( p )
-
-script_dir = os.path.dirname( os.path.abspath('__file__') )
-func_dir = os.path.join( script_dir, 'func' )
-
-sys.path.append( func_dir )
-
-for p in sys.path : 
-    print( p )
 
 import os, sys, subprocess, re, multiprocess, time, bz2, os, gzip, glob, pyinterp, gc, shutil
 import numpy as np
-from datetime import datetime, timedelta
 import pandas as pd
-from ftplib import FTP
 import xarray as xr
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from ftplib import FTP
 
+script_dir = os.path.dirname( os.path.abspath('__file__') )
+func_dir = os.path.join( script_dir, 'func' )
+sys.path.append( func_dir )
+
+# Check directories
+# for p in sys.path : 
+#     print( p )
+
+import util
 from util import (find_sat_data_files, km_to_degrees, path_to_fill_to_where_to_save_satellite_files,
-                            fill_the_sat_paths, extract_the_time_from_the_satellite_file)
+                  fill_the_sat_paths, extract_the_time_from_the_satellite_file, get_all_cases_to_process)
+
+
+# =============================================================================
+#### Functions
+# =============================================================================
 
 
 def get_connexion_parameters(info) : 
@@ -61,6 +64,7 @@ def get_connexion_parameters(info) :
         }
     
     return all_ftp_connexion_parameters[info.Data_source]
+
 
 def download_files_from_ftp(self):
     """
@@ -167,10 +171,8 @@ def download_files_from_ftp(self):
     ftp.quit()
     
     return None
-        
-        
 
-        
+
 def convert_dates_to_file_path_format(dates, destination_path_to_fill) : 
     
     file_path_format = ""
@@ -240,7 +242,8 @@ def unzip_bz2_file(local_file):
         shutil.copyfileobj(f_in, f_out)
         
     os.remove(local_file)
-    
+
+
 def unzip_gz_file(local_file):
                 
     # Extract the filename without .bz2 extension
@@ -287,9 +290,8 @@ def remove_empty_folders(root_folder):
             pass  # Ignore errors if the folder is not empty
     
     # shutil.rmtree(root_folder + "SEXTANT/ALL", ignore_errors=True)
-            
-            
-            
+
+
 def download_L2_maps_from_EUMDAC(info, where_to_save_satellite_data, min_lon, max_lon, min_lat, max_lat, dates_to_download) : 
         
     # =============================================================================
@@ -396,9 +398,8 @@ def download_L2_maps_from_EUMDAC(info, where_to_save_satellite_data, min_lon, ma
     for the_command in the_merged_command.split(' && ') :
         # print(the_command)
         subprocess.run(the_command.replace('"', '').split(' '), stdout=subprocess.DEVNULL)
-                
-    
-    
+
+
 def adjust_collection_names_to_start_and_end_dates(collection_names, start_date, end_date) : 
     
     if end_date <= collection_names["Re-Processed"]['Dates'][1] :
@@ -460,7 +461,7 @@ def regrid_L2_sat_data_to_regular_grid(L2_files,
         regridded_map_files[var_name] = ds_regular
         
     return regridded_map_files
-    
+
 
 def regrid_and_save_EUMDAC_maps_of_one_day(info, where_to_save_satellite_data, destination_path_to_fill, 
                                            the_day, new_grid, min_lon, max_lon, min_lat, max_lat) :
@@ -587,7 +588,6 @@ def download_EUMDAC_maps(self, min_lon, max_lon, min_lat, max_lat, new_map_resol
         
         self.download_report.loc[self.download_report.index == date, 'Message'] = download_message
 
-            
 
 def define_the_new_grid_for_map_regridding(resolution_in_m_of_the_new_grid, 
                                            mean_latitude_of_the_area,
@@ -612,7 +612,8 @@ def define_the_new_grid_for_map_regridding(resolution_in_m_of_the_new_grid,
         pyinterp.Axis(new_lats))
     
     return binning
-    
+
+
 def test_if_satellite_data_DOES_NOT_exist_in_the_Data_source(info) : 
                 
     test = (
@@ -744,9 +745,8 @@ def extract_values_from_the_global_file(self) :
     #                                       where_to_save_values) 
         
     self.download_report = pd.concat(download_reports, axis = 1).T.sort_index()
-    
-    
-    
+
+
 def extract_values_from_one_global_file(formatted_dates, report_index, date_to_extract,
                                         global_files_already_downloaded,
                                         download_report,var_name,
@@ -783,8 +783,6 @@ def extract_values_from_one_global_file(formatted_dates, report_index, date_to_e
     except Exception : 
         download_report.loc[date_to_extract,'Message'] = '❌ Error while saving the file : {e}'
         return download_report.loc[date_to_extract]
-
-
 
 
 # =============================================================================
@@ -874,9 +872,8 @@ class download_satellite_data :
         if (info.Data_source == 'SEXTANT') and (info.sensor_name != 'merged') :
             self.global_files_already_downloaded = global_files_in_the_time_range
             self.dates_to_extract = dates_to_extract
-            
 
-        
+
     def download_missing_satellite_data(self)  :
         
         ### Create path for each file to download. 
@@ -906,4 +903,72 @@ class download_satellite_data :
                 extract_values_from_the_global_file(self)
                                 
         return None
+
+
+# =============================================================================
+#### Main functions
+# =============================================================================
+
+def Download_satellite_data(core_arguments, nb_of_cores_to_use, overwrite_existing_satellite_files, where_to_save_satellite_data) : 
     
+    """
+    Function to download satellite data from the ODATIS FTP server using rsync.
+    """
+            
+    cases_to_process = get_all_cases_to_process(core_arguments)
+
+    download_report = {}
+    
+    for i in range(cases_to_process.shape[0]) : 
+                
+        info = cases_to_process.iloc[i].copy()
+        
+        progress = f'{i} over {cases_to_process.shape[0]-1} ({info.Data_source} / {info.sensor_name} / {info.atmospheric_correction} / {info.Satellite_variable} / {info.Temporal_resolution})'
+        
+        print(progress)
+                            
+        satellite_data = download_satellite_data(info, 
+                                                 core_arguments['start_day'], 
+                                                 core_arguments['end_day'], 
+                                                 where_to_save_satellite_data, 
+                                                 nb_of_cores_to_use,
+                                                 overwrite_existing_satellite_files) 
+        
+        if satellite_data.to_process == False : 
+            download_report[progress] = satellite_data.download_report    
+            continue
+        
+        satellite_data.download_missing_satellite_data()
+        
+        download_report[progress] = satellite_data.download_report
+                
+    remove_empty_folders(where_to_save_satellite_data)
+    
+    merge_and_save_the_download_report(download_report, where_to_save_satellite_data)
+    
+def Plot_and_Save_the_map(core_arguments,
+                          nb_of_cores_to_use,
+                          where_are_saved_satellite_data,
+                          start_day_of_maps_to_plot,
+                          end_day_of_maps_to_plot) : 
+        
+    cases_to_process = get_all_cases_to_process(core_arguments)
+
+    dates_to_plot = pd.date_range(start=start_day_of_maps_to_plot, end=end_day_of_maps_to_plot, freq="D")
+
+    # pool = multiprocess.Pool(nb_of_cores_to_use)
+    with multiprocess.Pool(nb_of_cores_to_use) as pool:
+
+        for i, info in cases_to_process.iterrows() : 
+                    
+            # info = cases_to_process.iloc[i]
+            
+            init = download_satellite_data(info, start_day_of_maps_to_plot, end_day_of_maps_to_plot, 
+                                           where_are_saved_satellite_data, nb_of_cores_to_use) 
+    
+            paths_to_sat_data = fill_the_sat_paths(info.replace({info.Temporal_resolution : "DAILY"}), init.destination_path_to_fill, 
+                                                   local_path = True, 
+                                                   dates = dates_to_plot)
+            
+            pool.map(plot_the_maps_in_the_folder, paths_to_sat_data)
+
