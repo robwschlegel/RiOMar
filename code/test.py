@@ -91,3 +91,4 @@ create_regional_maps(core_arguments,
                      nb_of_cores_to_use = 4,
                      where_are_saved_satellite_data = "data",
                      where_to_save_regional_maps = "figures")
+

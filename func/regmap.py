@@ -1258,7 +1258,7 @@ class Create_and_save_the_maps :
         ----------
         nb_of_cores_to_use : int
             Number of processor cores to use for parallel processing.
-        """        
+        """
         
         folder_where_to_save_maps = self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'MONTHLY')
         os.makedirs(folder_where_to_save_maps, exist_ok = True)
@@ -1272,7 +1272,7 @@ class Create_and_save_the_maps :
                            load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "WEEKLY"), month_nb),
                            self.info,
                            f'{month_nb:02d}', f'{month_nb:02d}', 'MONTHLY', save_map_plots_of_which_time_frequency['MONTHLY'],
-                           f'{self.info.Year}{month_nb:02d}15') for month_nb in (np.arange(12)+1) ])
+                           f'{self.info.Year}{month_nb:02d}15') for month_nb in (np.arange(12)+1 )])
         
         
     def _3_create_annual_maps(self, save_map_plots_of_which_time_frequency) :
