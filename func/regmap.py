@@ -700,7 +700,6 @@ def do_and_save_the_plot(info, Basin_data, Embouchure_data, Bloom_data,
     plt.close(fig)  
 
 
-
 def compute_diff_maps_and_save_them(weekly_results, where_to_save_data_extended, satellite_variable):
         
     """
@@ -978,6 +977,7 @@ def load_the_climatological_files(where_to_save_data_extended, month_nb = '', re
         
         return data
 
+
 def Compute_the_metrics_of_one_map(file, exclude_coastal_areas, coastal_waters_mask) : 
     
     map_data = load_file(file)['map_data']
@@ -1050,6 +1050,7 @@ def Compute_the_metrics_of_one_map(file, exclude_coastal_areas, coastal_waters_m
     }
 
     return metrics
+
 
 def plot_and_save_the_QC_metrics(QC_df, metrics_to_plot, path_to_save_QC_files, info, max_cloud_cover = 100) : 
 
@@ -1307,7 +1308,6 @@ class Create_and_save_the_maps :
                                         period_name = 'multi-years', 
                                         climatological_subfolder = 'MULTIYEAR', 
                                         do_the_plot = True) 
-
 
 
 class QC_maps :

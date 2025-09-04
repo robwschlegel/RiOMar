@@ -21,11 +21,13 @@ sys.path.append( func_dir )
 # for p in sys.path :
 #     print( p )
 
-import util, dl, validate, regmap, plume
+import util, dl, validate, regmap, plume, X11, figure
 from dl import Download_satellite_data, Plot_and_Save_the_map  # noqa: E402
 from validate import Match_up_with_insitu_measurements  # noqa: E402
 from regmap import create_regional_maps, QC_of_regional_maps
 from plume import apply_plume_mask, make_and_plot_time_series_of_plume_areas
+from X11 import Apply_X11_method_on_time_series
+from figure import Figure_1, Figure_2, Figure_4, Figure_5, Figure_6_7, Figure_8_9_10
 
 
 # =============================================================================
@@ -118,11 +120,15 @@ make_and_plot_time_series_of_plume_areas(core_arguments,
                                          # Zones = ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
                                          nb_of_cores_to_use = 4,
                                          on_which_temporal_resolution_the_plumes_have_been_detected = 'WEEKLY',
-                                         where_are_saved_plume_results = "output/FIXED_THRESHOLD/",
-                                         where_to_save_plume_time_series = "output/FIXED_THRESHOLD/")
+                                         where_are_saved_plume_results = "output/DYNAMIC_THRESHOLD",
+                                         where_to_save_plume_time_series = "output/DYNAMIC_THRESHOLD")
 
 
-#%% Do X11 analysis on plume time-series
+# =============================================================================
+# ### Test 5: X11 analyses
+# =============================================================================
+
+# Do X11 analysis on plume time-series
 Apply_X11_method_on_time_series(core_arguments,
                                 Zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
                                 # Zones = ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
@@ -133,26 +139,26 @@ Apply_X11_method_on_time_series(core_arguments,
                                 include_river_flow = True)
 
 
-#%% Figures_for_the_article
+# =============================================================================
+# ### Test 6: figures for the article
+# =============================================================================
 
-#%% Figure 1
 
-myRIOMAR._5_Figures_for_article.Figure_1(where_are_saved_satellite_data = "/media/terrats/My Book/LOUIS_TERRATS/RIOMAR/DATA/OCEAN_COLOR/",
-                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+Figure_1(where_are_saved_satellite_data = "data/OCEAN_COLOR",
+         where_to_save_the_figure = "figures")
 
-myRIOMAR._5_Figures_for_article.Figure_2(where_are_saved_regional_maps = "/home/terrats/Desktop/RIOMAR/TEST/",
-                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+Figure_2(where_are_saved_regional_maps = "output",
+         where_to_save_the_figure = "figures")
 
-myRIOMAR._5_Figures_for_article.Figure_4(where_are_saved_regional_maps = "/home/terrats/Desktop/RIOMAR/TEST/",
-                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+Figure_4(where_are_saved_regional_maps = "output",
+         where_to_save_the_figure = "figures")
 
-myRIOMAR._5_Figures_for_article.Figure_5(where_are_saved_regional_maps = "/home/terrats/Desktop/RIOMAR/TEST/",
-                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+Figure_5(where_are_saved_regional_maps = "output",
+         where_to_save_the_figure = "figures")
 
-myRIOMAR._5_Figures_for_article.Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold = "/home/terrats/Desktop/RIOMAR/TEST/RESULTS/DYNAMIC_THRESHOLD/",
-                                           where_are_saved_plume_results_with_fixed_threshold = "/home/terrats/Desktop/RIOMAR/TEST/RESULTS/FIXED_THRESHOLD/",
-                                           where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold = "output/DYNAMIC_THRESHOLD",
+           where_are_saved_plume_results_with_fixed_threshold = "output/FIXED_THRESHOLD",
+           where_to_save_the_figure = "figures")
 
-myRIOMAR._5_Figures_for_article.Figure_8_9_10(
-                                           where_are_saved_X11_results = "/home/terrats/Desktop/RIOMAR/TEST/RESULTS/DYNAMIC_THRESHOLD/",
-                                           where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+Figure_8_9_10(where_are_saved_X11_results = "output/DYNAMIC_THRESHOLD",
+              where_to_save_the_figure = "figures")
