@@ -22,10 +22,6 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-# Check directories
-# for p in sys.path : 
-#     print( p )
-
 import util
 from util import (find_sat_data_files, km_to_degrees, path_to_fill_to_where_to_save_satellite_files,
                   fill_the_sat_paths, extract_the_time_from_the_satellite_file, get_all_cases_to_process)

@@ -573,9 +573,12 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Extract all necessary shapefile components
             for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
-                shp_file = shp_folder / f'gadm41_FRA_0{ext}'
-                if shp_file.exists():  # Ensure the file exists before copying
+                # shp_file = shp_folder / f'gadm41_FRA_0{ext}'
+                shp_file = os.path.join(shp_folder, f'gadm41_FRA_0{ext}')
+                if os.path.exists(shp_file): # Ensure the file exists before copying
                     shutil.copy(shp_file, os.path.join(tmp_dir, f'gadm41_FRA_0{ext}'))
+                # if shp_file.exists():  # Ensure the file exists before copying
+                #     shutil.copy(shp_file, os.path.join(tmp_dir, f'gadm41_FRA_0{ext}'))
     
             # Read the shapefile from the temporary directory
             shapefile_path = os.path.join(tmp_dir, 'gadm41_FRA_0.shp')

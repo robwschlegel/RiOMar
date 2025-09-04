@@ -13,18 +13,19 @@
 import os, sys  # noqa: E401
 import matplotlib as mpl
 
-script_dir = os.path.dirname( os.path.abspath('__file__') )
-func_dir = os.path.join( script_dir, 'func' )
+proj_dir = os.path.dirname( os.path.abspath('__file__') )
+func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-import util, dl, validate, regmap
-from dl import (Download_satellite_data, Plot_and_Save_the_map)  # noqa: E402
-from validate import Match_up_with_insitu_measurements  # noqa: E402
-from regmap import create_regional_maps
+# Check directories
+# for p in sys.path :
+#     print( p )
 
-# exec(open("code/0_data_management.py").read())
-# exec(open("code/1_data_validation.py").read())
-# exec(open("code/2_regional_maps.py").read())
+import util, dl, validate, regmap, plume
+from dl import Download_satellite_data, Plot_and_Save_the_map  # noqa: E402
+from validate import Match_up_with_insitu_measurements  # noqa: E402
+from regmap import create_regional_maps, QC_of_regional_maps
+from plume import apply_plume_mask, make_and_plot_time_series_of_plume_areas
 
 
 # =============================================================================
@@ -45,21 +46,16 @@ core_arguments = {'Data_sources':['SEXTANT'],
 
 
 # =============================================================================
-# ### Import libraries and functions
+# ### Test 1: data downloading
 # =============================================================================
 
-
-## 1 Data downloading
-
-# Test 1
-## Download some target data
+# Download some target data
 Download_satellite_data(core_arguments,
                         nb_of_cores_to_use = 1,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = 'data')
 
-# Test 2
-## Create and save maps of the downloaded data
+# Create and save maps of the downloaded data
 Plot_and_Save_the_map(core_arguments,
                       nb_of_cores_to_use = 6,
                       where_are_saved_satellite_data = 'data',
@@ -67,10 +63,11 @@ Plot_and_Save_the_map(core_arguments,
                       end_day_of_maps_to_plot = '2018/08/06')
 
 
-## 2 Data validation
+# =============================================================================
+# ### Test 2: data validation
+# =============================================================================
 
-# Test 3
-## Match up in situ and satellite data
+# Match up in situ and satellite data
 Match_up_with_insitu_measurements(core_arguments,
                                   # zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
                                   zones = ['FRANCE'],
@@ -80,10 +77,11 @@ Match_up_with_insitu_measurements(core_arguments,
                                   where_to_save_Match_Up_data = "output")
 
 
-## 3 Regional Maps
+# =============================================================================
+# ### Test 3: regional Maps
+# =============================================================================
 
-# Test 4
-## Make regional map
+# Make regional map
 create_regional_maps(core_arguments,
                      Zones = ['SOUTHERN_BRITTANY'],
                      overwrite_existing_regional_maps = True,
@@ -92,3 +90,69 @@ create_regional_maps(core_arguments,
                      where_are_saved_satellite_data = "data",
                      where_to_save_regional_maps = "figures")
 
+# QC of these regional maps
+QC_of_regional_maps(core_arguments,
+                    Zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY'],
+                    nb_of_cores_to_use = 4,
+                    where_are_saved_regional_maps = "output")
+
+
+# =============================================================================
+# ### Test 4: detection of plumes
+# =============================================================================
+
+# Basic plume detection
+apply_plume_mask(core_arguments,
+                 # Zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+                 Zones = ['SOUTHERN_BRITTANY'],
+                 detect_plumes_on_which_temporal_resolution_data = 'WEEKLY',
+                 nb_of_cores_to_use = 4,
+                 use_dynamic_threshold = True,
+                 where_are_saved_regional_maps = "figures",
+                 where_to_save_plume_results = "output/DYNAMIC_THRESHOLD")
+
+
+# Plot time-series of plume surface
+make_and_plot_time_series_of_plume_areas(core_arguments,
+                                         Zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+                                         # Zones = ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+                                         nb_of_cores_to_use = 4,
+                                         on_which_temporal_resolution_the_plumes_have_been_detected = 'WEEKLY',
+                                         where_are_saved_plume_results = "output/FIXED_THRESHOLD/",
+                                         where_to_save_plume_time_series = "output/FIXED_THRESHOLD/")
+
+
+#%% Do X11 analysis on plume time-series
+Apply_X11_method_on_time_series(core_arguments,
+                                Zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+                                # Zones = ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+                                nb_of_cores_to_use = 4,
+                                on_which_temporal_resolution_the_plumes_have_been_detected = 'WEEKLY',
+                                where_are_saved_plume_time_series = "output/DYNAMIC_THRESHOLD",
+                                where_to_save_X11_results = "output/DYNAMIC_THRESHOLD",
+                                include_river_flow = True)
+
+
+#%% Figures_for_the_article
+
+#%% Figure 1
+
+myRIOMAR._5_Figures_for_article.Figure_1(where_are_saved_satellite_data = "/media/terrats/My Book/LOUIS_TERRATS/RIOMAR/DATA/OCEAN_COLOR/",
+                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+
+myRIOMAR._5_Figures_for_article.Figure_2(where_are_saved_regional_maps = "/home/terrats/Desktop/RIOMAR/TEST/",
+                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+
+myRIOMAR._5_Figures_for_article.Figure_4(where_are_saved_regional_maps = "/home/terrats/Desktop/RIOMAR/TEST/",
+                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+
+myRIOMAR._5_Figures_for_article.Figure_5(where_are_saved_regional_maps = "/home/terrats/Desktop/RIOMAR/TEST/",
+                                         where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+
+myRIOMAR._5_Figures_for_article.Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold = "/home/terrats/Desktop/RIOMAR/TEST/RESULTS/DYNAMIC_THRESHOLD/",
+                                           where_are_saved_plume_results_with_fixed_threshold = "/home/terrats/Desktop/RIOMAR/TEST/RESULTS/FIXED_THRESHOLD/",
+                                           where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
+
+myRIOMAR._5_Figures_for_article.Figure_8_9_10(
+                                           where_are_saved_X11_results = "/home/terrats/Desktop/RIOMAR/TEST/RESULTS/DYNAMIC_THRESHOLD/",
+                                           where_to_save_the_figure = "/home/terrats/Desktop/RIOMAR/TEST/")
