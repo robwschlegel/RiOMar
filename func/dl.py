@@ -16,8 +16,10 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from ftplib import FTP
 
-script_dir = os.path.dirname( os.path.abspath('__file__') )
-func_dir = os.path.join( script_dir, 'func' )
+multiprocess.set_start_method('spawn', force = True) # MacOS friendly multiprocessing
+
+proj_dir = os.path.dirname( os.path.abspath('__file__') )
+func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 # Check directories
@@ -30,7 +32,7 @@ from util import (find_sat_data_files, km_to_degrees, path_to_fill_to_where_to_s
 
 
 # =============================================================================
-#### Functions
+#### Utility functions
 # =============================================================================
 
 

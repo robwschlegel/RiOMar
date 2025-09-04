@@ -12,6 +12,9 @@ data/RIVER_FLOW
 # Large outputs
 output/MATCH_UP_DATA
 
+# Figures
+figures/SOUTHERN_BRITTANY
+
 # C extensions
 *.so
 

@@ -17,9 +17,11 @@ from functools import reduce
 from collections.abc import Mapping, Iterable
 from concave_hull import concave_hull
 
+proj_dir = os.path.dirname( os.path.abspath('__file__') )
+
 
 # =============================================================================
-#### Functions
+#### Utility functions
 # =============================================================================
 
 
@@ -543,19 +545,30 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
                                          RIVER_FLOW_time_resolution = ''):
     
     if SOMLIT : 
-        with importlib.resources.open_text('myRIOMAR_dev.DATA.INSITU_data.SOMLIT', 'Somlit.csv') as f:
-            return (pd.read_csv(f, sep = ";", header = 2).iloc[1:]
+        SOMLIT_dir = os.path.join( proj_dir, 'data', 'INSITU_data', 'SOMLIT' )
+        SOMLIT_data = os.path.join( SOMLIT_dir, 'Somlit.csv' )
+        return (pd.read_csv(SOMLIT_data, sep = ";", header = 2).iloc[1:]
                                 .rename(columns = {'gpsLat*':'LATITUDE', 
                                                    'gpsLong*':'LONGITUDE',
                                                    'nomSite*':"Site"}))
+
+        # with importlib.resources.open_text('myRIOMAR_dev.DATA.INSITU_data.SOMLIT', 'Somlit.csv') as f:
+            # return (pd.read_csv(f, sep = ";", header = 2).iloc[1:]
+            #                     .rename(columns = {'gpsLat*':'LATITUDE', 
+            #                                        'gpsLong*':'LONGITUDE',
+            #                                        'nomSite*':"Site"}))
         
     if REPHY : 
-        with importlib.resources.open_binary('myRIOMAR_dev.DATA.INSITU_data.REPHY', 'Table1_REPHY_hydro_RIOMAR.csv.gz') as f:
-            return pd.read_csv(f, sep = ";", header = 0, encoding="ISO-8859-1", compression = {'method' : 'gzip'})
+        REPHY_dir = os.path.join( proj_dir, 'data', 'INSITU_data', 'REPHY' )
+        REPHY_data = os.path.join( REPHY_dir, 'Table1_REPHY_hydro_RIOMAR.csv.gz' )
+        return pd.read_csv(REPHY_data, sep = ";", header = 0, encoding = "ISO-8859-1", compression = {'method' : 'gzip'})
+        # with importlib.resources.open_binary('myRIOMAR_dev.DATA.INSITU_data.REPHY', 'Table1_REPHY_hydro_RIOMAR.csv.gz') as f:
+        #     return pd.read_csv(f, sep = ";", header = 0, encoding="ISO-8859-1", compression = {'method' : 'gzip'})
         
     if FRANCE_shapefile : 
         
-        shp_folder = importlib.resources.files('myRIOMAR_dev.DATA.FRANCE_shapefile')  # Directly get the package folder path
+        shp_folder = os.path.join( proj_dir, 'data', 'FRANCE_shapefile' )  # Directly get the package folder path
+        # shp_folder = importlib.resources.files('myRIOMAR_dev.DATA.FRANCE_shapefile')  # Directly get the package folder path
     
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Extract all necessary shapefile components
@@ -570,7 +583,8 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
 
     if RIVER_FLOW : 
         
-        where_are_river_data = 'myRIOMAR_dev.DATA.RIVER_FLOW.' + Zone_of_river_flow
+        where_are_river_data = os.path.join( proj_dir, 'data', 'RIVER_FLOW', Zone_of_river_flow)
+        # where_are_river_data = 'myRIOMAR_dev.DATA.RIVER_FLOW.' + Zone_of_river_flow
         
         files_to_load = importlib.resources.files( where_are_river_data )
         
@@ -606,7 +620,6 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
     
         final_df = pd.concat(data_dict.values()).groupby("Date", as_index=False).agg(Values=('Flow', 'sum'), n_rivers=('Flow', 'count'))
         final_df = final_df[ final_df.n_rivers == len(files_to_read) ]
-        
         
         bin_centers = [4, 12, 20, 28]
         def assign_bin(day):
