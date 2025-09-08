@@ -10,7 +10,7 @@
 # import runpy
 # runpy.run_path(path_name='../code/0_data_management.py')
 
-import os, sys  # noqa: E401
+import os, sys
 import matplotlib as mpl
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
