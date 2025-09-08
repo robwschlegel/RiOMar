@@ -5,8 +5,8 @@
 
 library("plyr")
 library("tidyverse")
-library("scales")
 library("viridis")
+library("scales")
 library("ggExtra")
 library("Metrics")
 library("gt")

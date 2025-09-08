@@ -1,3 +1,4 @@
+# Consistent theme for project
 ggplot_theme <-   function() {
   theme(text = element_text(size=35, colour = "black"), #25
         plot.title = element_text(hjust = 0.5, size = 55),
@@ -11,6 +12,7 @@ ggplot_theme <-   function() {
         axis.text.x=element_text(angle=0),
         axis.ticks.length=unit(.25, "cm"))}
 
+# Convenience wrapper for saving png files
 save_plot_as_png <- function(plot, name = c(), width = 14, height = 8.27, path, res = 150) {
   
   graphics.off()
@@ -29,3 +31,4 @@ save_plot_as_png <- function(plot, name = c(), width = 14, height = 8.27, path, 
   dev.off()
   
 }
+

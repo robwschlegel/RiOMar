@@ -1,7 +1,17 @@
-list_of_packages <- c("plyr", "tidyverse", "ggpubr", "viridis", "doParallel", "zoo", "ggnewscale", "ggpubr", "scales")
-new.packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
-lapply(list_of_packages, require, character.only = TRUE)
+# list_of_packages <- c("plyr", "tidyverse", "ggpubr", "viridis", "doParallel", "zoo", "ggnewscale", "scales")
+# new.packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
+# if(length(new.packages)) install.packages(new.packages)
+# lapply(list_of_packages, require, character.only = TRUE)
+
+library("plyr")
+library("tidyverse")
+library("viridis")
+library("ggpubr")
+library("scales")
+library("ggnewscale")
+library("zoo")
+library("doParalell")
+
 
 # where_are_saved_X11_results = '/home/terrats/Desktop/RIOMAR/TEST/RESULTS/TEST4'
 # Zone= "BAY_OF_SEINE"

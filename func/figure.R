@@ -1,7 +1,13 @@
-list_of_packages <- c("plyr", "tidyverse", "maps", "scales", "ggpubr")
-new.packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) install.packages(new.packages)
-lapply(list_of_packages, require, character.only = TRUE)
+# list_of_packages <- c("plyr", "tidyverse", "maps", "scales", "ggpubr")
+# new.packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
+# if(length(new.packages)) install.packages(new.packages)
+# lapply(list_of_packages, require, character.only = TRUE)
+
+library("plyr")
+library("tidyverse")
+library("scales")
+library("maps")
+library("ggpubr")
 
 #### Main ####
 # where_to_save_the_figure <- "/home/terrats/Desktop/RIOMAR/TEST"

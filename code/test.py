@@ -22,8 +22,8 @@ sys.path.append( func_dir )
 #     print( p )
 
 import util, dl, validate, regmap, plume, X11, figure
-from dl import Download_satellite_data, Plot_and_Save_the_map  # noqa: E402
-from validate import Match_up_with_insitu_measurements  # noqa: E402
+from dl import Download_satellite_data, Plot_and_Save_the_map
+from validate import Match_up_with_insitu_measurements
 from regmap import create_regional_maps, QC_of_regional_maps
 from plume import apply_plume_mask, make_and_plot_time_series_of_plume_areas
 from X11 import Apply_X11_method_on_time_series
