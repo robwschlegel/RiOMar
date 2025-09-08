@@ -6,10 +6,6 @@
 # ### Import libraries and functions
 # =============================================================================
 
-# NB: This method does not appear to add the functions etc. to the environment
-# import runpy
-# runpy.run_path(path_name='../code/0_data_management.py')
-
 import os, sys
 import matplotlib as mpl
 
