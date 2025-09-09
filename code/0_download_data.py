@@ -28,15 +28,16 @@ mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
 #### Download Chl a data
 # =============================================================================
 
-# First test at downloading one year in a single go
-sextant_1998 = {'Data_sources':['SEXTANT'],
-                'Sensor_names':["merged"],
-                'Satellite_variables':['CHLA'],
-                'Atmospheric_corrections':['polymer'],
-                'Temporal_resolution':['DAILY'],
-                'start_day':'1998/01/01',
-                'end_day':'1998/12/31'}
-Download_satellite_data(sextant_1998,
+# Download all CHl A data from 1998 to 2025
+# NB: This takes a few hours and usesd ~280 GB of disk spaces
+sextant_chla_all = {'Data_sources':['SEXTANT'],
+                    'Sensor_names':["merged"],
+                    'Satellite_variables':['CHLA'],
+                    'Atmospheric_corrections':['polymer'],
+                    'Temporal_resolution':['DAILY'],
+                    'start_day':'1998/01/01',
+                    'end_day':'2025/12/31'}
+Download_satellite_data(sextant_chla_all,
                         nb_of_cores_to_use = 14,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = 'data')
@@ -52,8 +53,9 @@ sextant_wind_1999 = {'Data_sources':['SEXTANT'],
                      'Atmospheric_corrections':['polymer'],
                      'Temporal_resolution':['DAILY'],
                      'start_day':'1999/01/01',
-                     'end_day':'1999/12/31'} 
+                     'end_day':'1999/01/31'} 
 Download_satellite_data(sextant_wind_1999,
                         nb_of_cores_to_use = 14,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = 'data')
+

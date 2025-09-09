@@ -411,7 +411,6 @@ def scatterplot_and_save_statistics(MU_summary_df, info, where_are_saved_Match_U
         
         # Call the R function
         r_function(
-            
             satellite_median = robjects.FloatVector(MU_summary_df_of_the_sat_algo[f'{MU_criteria["grid_size"]}x{MU_criteria["grid_size"]}_mean'].to_list()),
             satellite_n = robjects.IntVector(MU_summary_df_of_the_sat_algo[f'{MU_criteria["grid_size"]}x{MU_criteria["grid_size"]}_n'].to_list()),
             satellite_sd = robjects.FloatVector(MU_summary_df_of_the_sat_algo[f'{MU_criteria["grid_size"]}x{MU_criteria["grid_size"]}_std'].to_list()),
@@ -433,7 +432,6 @@ def scatterplot_and_save_statistics(MU_summary_df, info, where_are_saved_Match_U
             satellite_atm_corr = robjects.StrVector([info.atmospheric_correction]),
             satellite_algorithm = robjects.StrVector([satellite_algorithm]),
             where_to_save_MU_results = robjects.StrVector([where_are_saved_Match_Up_data])
-            
         )
         
     r_function = robjects.r['Save_validation_scatterplots_and_stats']
