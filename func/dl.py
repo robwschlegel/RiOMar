@@ -669,30 +669,41 @@ def plot_the_maps_in_the_folder(path) :
     # mpl.use('module://matplotlib_inline.backend_inline') # To show plots on the Plot panel (be careful as it consumes RAM memory !)
     mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM memory)
     
-    nc_files = [f for f in os.listdir(path) if f.endswith(".nc")]
-    
-    for nc_file in nc_files:
+
+    if not os.path.exists(path) : 
+           print(f"No folder at {path}")
+           return
+      
+    else :
+
+        nc_files = [f for f in os.listdir(path) if f.endswith(".nc")]
+
+        for nc_file in nc_files:
         
-        file_path = os.path.join(path, nc_file)
-        
-        with xr.open_dataset(file_path, chunks={}) as ds:
-        
-            var_name = list(ds.data_vars)[0]
-            
-            min_limit = ds.quantile(0.1, skipna=True)[var_name].values
-            max_limit = ds.quantile(0.9, skipna=True)[var_name].values
-            
-            plt.figure(figsize=(12, 9))
-            ds[var_name].plot(vmin = min_limit, vmax = max_limit)
-            plt.title(var_name)
-            
+            file_path = os.path.join(path, nc_file)
             output_file = os.path.join(path, f"{nc_file.replace('.nc', '.png')}")
-            plt.savefig(output_file, dpi=150)
-            plt.close()
+
+            if os.path.exists(output_file) :
+                print(f"Plot already exists here : {output_file}")
+                return
         
-            print(f"Plot saved here : {output_file}")
+            with xr.open_dataset(file_path, chunks={}) as ds:
+        
+                var_name = list(ds.data_vars)[0]
             
-        gc.collect()
+                min_limit = ds.quantile(0.1, skipna=True)[var_name].values
+                max_limit = ds.quantile(0.9, skipna=True)[var_name].values
+            
+                plt.figure(figsize=(12, 9))
+                ds[var_name].plot(vmin = min_limit, vmax = max_limit)
+                plt.title(var_name)
+                
+                plt.savefig(output_file, dpi=150)
+                plt.close()
+            
+                print(f"Plot saved here : {output_file}")
+                
+            gc.collect()
 
 
 def find_files_in_the_time_range(info, destination_path_to_fill, all_dates) : 

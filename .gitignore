@@ -11,6 +11,7 @@ data/RIVER_FLOW
 
 # Large outputs
 output/MATCH_UP_DATA
+output/REGIONAL_MAPS
 
 # Figures
 figures/SOUTHERN_BRITTANY
