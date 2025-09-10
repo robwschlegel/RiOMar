@@ -42,6 +42,7 @@ Download_satellite_data(sextant_chla_all,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = 'data')
 
+
 # =============================================================================
 #### Download wind data
 # =============================================================================
@@ -58,4 +59,20 @@ Download_satellite_data(sextant_wind_1999,
                         nb_of_cores_to_use = 14,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = 'data')
+
+
+# =============================================================================
+#### Create and save maps of the downloaded data
+# =============================================================================
+
+# Plot everything in one go (this takes a while)
+for year in range(1998, 2026):
+    Plot_and_Save_the_map(
+        sextant_chla_all,
+        nb_of_cores_to_use = 14,
+        where_are_saved_satellite_data = 'data',
+        start_day_of_maps_to_plot = f'{year}/01/01',
+        end_day_of_maps_to_plot = f'{year}/12/31'
+    )
+    print(f'Year {year} done!')
 
