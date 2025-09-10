@@ -1578,7 +1578,9 @@ def Apply_X11_method_on_time_series(core_arguments, Zones, nb_of_cores_to_use,
                                               where_to_save_X11_results=where_to_save_X11_results)
 
             # Source the R script
-            robjects.r['source']("myRIOMAR_dev/_4_X11_analysis/utils.R")
+            X11_R_path = os.path.join(func_dir, 'X11.R')
+            robjects.r['source'](X11_R_path)
+            # robjects.r['source']("myRIOMAR_dev/_4_X11_analysis/utils.R")
 
             r_function = robjects.r['plot_time_series_of_plume_area_and_river_flow']
 
