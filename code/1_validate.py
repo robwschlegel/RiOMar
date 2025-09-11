@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# This script is meant to house all of the code needed to validate the full dataset
-# used in the RiOMar project. It can be designed to be called by the Makefile.
+# The code needed to validate the full dataset used in the RiOMar project.
+# It can be designed to be called by the Makefile.
 
 
 # =============================================================================
@@ -20,8 +20,7 @@ import util, validate
 from validate import Match_up_with_insitu_measurements
 
 # Set matplotlib backend to prevent plots from displaying
-# mpl.use('module://matplotlib_inline.backend_inline') # To show plots on the Plot panel (be careful as it consumes RAM!)
-mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
+mpl.use('agg')
 
 
 # =============================================================================

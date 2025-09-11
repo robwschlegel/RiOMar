@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# This script is meant to house all of the code needed to create the regional maps
-# used in the RiOMar project. It can be designed to be called by the Makefile.
+# The code needed to create the regional maps used in the RiOMar project. 
+# It can be designed to be called by the Makefile.
 
 
 # =============================================================================
@@ -20,11 +20,11 @@ import util, regmap
 from regmap import create_regional_maps, QC_of_regional_maps
 
 # Set matplotlib backend to prevent plots from displaying
-# mpl.use('module://matplotlib_inline.backend_inline') # To show plots on the Plot panel (be careful as it consumes RAM!)
-mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
+mpl.use('agg')
 
 # The zones for mapping
 zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY']
+
 
 # =============================================================================
 # ### Make regional maps
