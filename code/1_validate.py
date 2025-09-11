@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# This script is meant to house all of the code needed to download the full dataset
+# This script is meant to house all of the code needed to validate the full dataset
 # used in the RiOMar project. It can be designed to be called by the Makefile.
 
 
@@ -39,7 +39,7 @@ sextant_chla_all = {'Data_sources':['SEXTANT'],
 Match_up_with_insitu_measurements(sextant_chla_all,
                                   zones = ['FRANCE'],
                                   # zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
-                                  redo_the_MU_database = True, 
+                                  redo_the_MU_database = False, # Change to True is running for the first time 
                                   nb_of_cores_to_use = 14,
                                   where_are_saved_satellite_data = 'data',
                                   where_to_save_Match_Up_data = 'output')

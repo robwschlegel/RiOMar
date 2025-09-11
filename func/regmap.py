@@ -980,8 +980,9 @@ def load_the_climatological_files(where_to_save_data_extended, month_nb = '', re
 
 def Compute_the_metrics_of_one_map(file, exclude_coastal_areas, coastal_waters_mask) : 
     
-    map_data = load_file(file)['map_data']
-    
+    # map_data = load_file(file)['map_data']
+    map_data = load_file(file)['Basin_map']['map_data']
+
     # 0. Mask out coastal pixels 
     if exclude_coastal_areas : 
         # map_data.values[ coastal_waters_mask.values ] = float('NaN')
@@ -1178,9 +1179,6 @@ class Create_and_save_the_maps :
         self.Year_month_week_patterns = Year_month_week_patterns
         self.suffix_ranges = suffix_ranges        
         self.are_the_maps_already_produced = are_the_maps_already_produced
-        
-        
-        
         
     def _1_create_weekly_maps(self, nb_of_cores_to_use, save_map_plots_of_which_time_frequency) :
         
