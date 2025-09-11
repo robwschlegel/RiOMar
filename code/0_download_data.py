@@ -28,7 +28,7 @@ mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
 #### Download Chl a data
 # =============================================================================
 
-# Download all CHl A data from 1998 to 2025
+# Download all Chl a data from 1998 to 2025
 # NB: This takes a few hours and usesd ~280 GB of disk spaces
 # NB: Several days of data are missing
 sextant_chla_all = {'Data_sources':['SEXTANT'],
@@ -39,6 +39,25 @@ sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
 Download_satellite_data(sextant_chla_all,
+                        nb_of_cores_to_use = 14,
+                        overwrite_existing_satellite_files = False,
+                        where_to_save_satellite_data = 'data')
+
+# =============================================================================
+#### Download SPIM data
+# =============================================================================
+
+# Download all SPIM data from 1998 to 2025
+# NB: This takes a few hours and usesd ~280 GB of disk spaces
+# NB: Several days of data are missing
+sextant_spim_all = {'Data_sources':['SEXTANT'],
+                    'Sensor_names':["merged"],
+                    'Satellite_variables':['SPM'],
+                    'Atmospheric_corrections':['polymer'],
+                    'Temporal_resolution':['DAILY'],
+                    'start_day':'1998/01/01',
+                    'end_day':'2025/12/31'}
+Download_satellite_data(sextant_spim_all,
                         nb_of_cores_to_use = 14,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = 'data')
