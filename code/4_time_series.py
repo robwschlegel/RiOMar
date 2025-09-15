@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# The code needed to run the X11 analyses used in the RiOMar project. 
+# The code needed to run the time series analyses used in the RiOMar project. 
 # It can be designed to be called by the Makefile.
 
 
