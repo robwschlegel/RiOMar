@@ -13,6 +13,7 @@ import pandas as pd
 import xarray as xr
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import copernicusmarine as cmems
 from datetime import datetime, timedelta
 from ftplib import FTP
 
@@ -24,7 +25,8 @@ sys.path.append( func_dir )
 
 import util
 from util import (find_sat_data_files, km_to_degrees, path_to_fill_to_where_to_save_satellite_files,
-                  fill_the_sat_paths, extract_the_time_from_the_satellite_file, get_all_cases_to_process)
+                  fill_the_sat_paths, extract_the_time_from_the_satellite_file, get_all_cases_to_process,
+                  define_parameters)
 
 
 # =============================================================================
@@ -981,3 +983,81 @@ def Plot_and_Save_the_map(core_arguments,
             
             pool.map(plot_the_maps_in_the_folder, paths_to_sat_data)
 
+def download_cmems_subset(
+    zone,
+    dataset_id,
+    variables,
+    start_datetime,
+    end_datetime,
+    output_directory
+):
+    """
+    Download a subset of CMEMS data using the copernicusmarine module.
+    Based on the provided zone, the function sets the geographical boundaries.
+
+    Args:
+        dataset_id (str): CMEMS dataset ID.
+        variables (list): List of variable names to download.
+        minimum_longitude (float): Minimum longitude.
+        maximum_longitude (float): Maximum longitude.
+        minimum_latitude (float): Minimum latitude.
+        maximum_latitude (float): Maximum latitude.
+        minimum_depth (float): Minimum depth.
+        maximum_depth (float): Maximum depth.
+        start_datetime (str): Start date/time in ISO format.
+        end_datetime (str): End date/time in ISO format.
+        output_filename (str): Output file name (without extension).
+        output_directory (str): Directory to save the output file.
+
+    Returns:
+        None
+    """
+
+    # Check/create dir
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory, exist_ok=True)
+
+    # Create output filename based on dataset_id and date range
+    if "cmems_mod_glo_phy" in dataset_id:
+        dataset_label = 'glorys'
+    elif "cmems_obs-wind_glo" in dataset_id:
+        dataset_label = 'wind'
+    else:
+        dataset_label = dataset_id.split('_')[2].upper()
+    
+    start_str = pd.to_datetime(start_datetime).strftime('%Y%m')
+    end_str = pd.to_datetime(end_datetime).strftime('%Y%m')
+    output_filename = f"{dataset_label}_{start_str}_{end_str}.nc"
+
+    # Get zone boundaries
+    zone_boundaries = define_parameters(zone)
+    minimum_longitude = zone_boundaries['lon_range_of_the_map_to_plot'][0]
+    maximum_longitude = zone_boundaries['lon_range_of_the_map_to_plot'][1]
+    minimum_latitude = zone_boundaries['lat_range_of_the_map_to_plot'][0]
+    maximum_latitude = zone_boundaries['lat_range_of_the_map_to_plot'][1]
+
+    # Set default depth values for specific dataset
+    if "cmems_mod_glo_phy" in dataset_id:
+        minimum_depth = 0.5
+        maximum_depth = 0.5
+    else:
+        minimum_depth = None
+        maximum_depth = None
+
+    try:
+        cmems.subset(
+            dataset_id=dataset_id,
+            variables=variables,
+            minimum_longitude=minimum_longitude,
+            maximum_longitude=maximum_longitude,
+            minimum_latitude=minimum_latitude,
+            maximum_latitude=maximum_latitude,
+            minimum_depth=minimum_depth,
+            maximum_depth=maximum_depth,
+            start_datetime=start_datetime,
+            end_datetime=end_datetime,
+            output_filename=output_filename,
+            output_directory=output_directory
+        )
+    except ImportError:
+        raise ImportError("copernicusmarine package is required. Install with 'conda install copernicusmarine'.")
