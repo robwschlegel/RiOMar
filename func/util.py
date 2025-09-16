@@ -12,12 +12,14 @@ import pandas as pd
 import xarray as xr
 import numpy as np
 import geopandas as gpd
+# from cdo import Cdo
 from itertools import product, chain
 from functools import reduce
 from collections.abc import Mapping, Iterable
 from concave_hull import concave_hull
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
+# cdo = Cdo()  # Initialize the CDO object
 
 
 # =============================================================================
@@ -902,6 +904,9 @@ def define_parameters(Zone) :
         quantile_to_use = { 'Loire' : 0.2, 'Vilaine' : 0.2}
         fixed_threshold = {'Loire' : 5.4, 'Vilaine' : 5.0} 
         river_mouth_to_exclude = {}
+
+    else :
+        return
     
     searching_strategy_directions = coordinates_of_pixels_to_inspect( searching_strategies )
     
@@ -992,15 +997,58 @@ def coordinates_of_pixels_to_inspect(searching_strategies) :
         # If distances are not in a good order, reorder them
         if any( distance_list_in_good_order == False ) : 
             index_start_element = np.where( distance_list_in_good_order == False )[0] +1
-            distance_list = [distance_list[ index_start_element[0] ], 
-                             distance_list[ index_start_element[0]: ],
-                             distance_list[ :index_start_element[0] ]]
+            # Reorder the distance list by concatenating segments
+            distance_list = [distance_list[index_start_element[0]], 
+                           distance_list[index_start_element[0]:],
+                           distance_list[:index_start_element[0]]]
             distance_list = flatten_a_list(distance_list)  # Flatten the reordered list
             distance_list = list(dict.fromkeys(distance_list))  # Remove duplicates while preserving order
         
         # Store the computed list of distances in the dictionary
         to_return[f'{index}'] = distance_list
            
-    # Return the dictionary containing the distances for all search strategies
+    # Return the dictionary containing the distances for all search strategies 
     return to_return
+
+def daily_integral(file_dir, overwrite=False):
+    
+    """
+    Creates daily integral NetCDF files from their hourly versions.
+    Remember that this requires the first hour of the next day to compute the daily integral.
+    file_dir : str
+        Directory where the input files are located.
+    overwrite : bool, optional
+        Whether to overwrite existing output files. Default is False.    
+    """
+
+    # Get list of files in the directory
+    dir_files = os.listdir(file_dir)
+
+    # Split out files with 'daily' in their names
+    daily_files = [f for f in dir_files if 'daily' in f]
+    hourly_files = [f for f in dir_files if 'daily' not in f]
+
+    # Remove all_files with the existing daily files if overwrite is False
+    if not overwrite :
+        hourly_files_check = [f for f in hourly_files if f.split('_')[0] + '_daily_' + f.split('_')[1] + '_' + f.split('_')[2] not in daily_files]
+    else : 
+        hourly_files_check = hourly_files
+        # Remove any existing daily files if overwrite is True
+        for f in daily_files:
+            os.remove(os.path.join(file_dir, f))
+
+    # Stop if no hourly files need to be processed
+    if len(hourly_files_check) == 0:
+        print("No new hourly files to process.")
+        return
+
+    # Process each file to create daily integral versions
+    for hourly_file in hourly_files_check:
+            
+        daily_file = hourly_file.split('_')[0] + '_daily_' + hourly_file.split('_')[1] + '_' + hourly_file.split('_')[2]
+
+        # Calculate daily means
+        # Replace this with a system call. But need CDO to work first...
+        # cdo.daymean(input = os.path.join(file_dir, hourly_file), 
+        #             output = os.path.join(file_dir, daily_file))
 

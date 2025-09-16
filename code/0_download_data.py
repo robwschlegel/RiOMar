@@ -17,6 +17,7 @@ func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 import util, dl
+from util import daily_integral
 from dl import Download_satellite_data, Plot_and_Save_the_map, download_cmems_subset
 
 # Set matplotlib backend to prevent plots from displaying
@@ -128,7 +129,10 @@ for zone in zones_list:
 #### Create daily integrals of hourly wind data
 # =============================================================================
 
-
+for zone in zones_list:
+    daily_integral(f'/home/calanus/pCloudDrive/data/WIND/{zone}',
+                   overwrite = False) # Change to True if running for the first time
+    
 
 # =============================================================================
 #### Create maps of the Chla and SPIM data
