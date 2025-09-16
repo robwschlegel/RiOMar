@@ -7,19 +7,17 @@
 # =============================================================================
 
 
-import sys, pickle, os, bathyreq, glob, datetime, importlib.resources, tempfile, shutil, re
+import os, sys, subprocess, pickle, bathyreq, glob, datetime, importlib.resources, tempfile, shutil, re
 import pandas as pd
 import xarray as xr
 import numpy as np
 import geopandas as gpd
-# from cdo import Cdo
 from itertools import product, chain
 from functools import reduce
 from collections.abc import Mapping, Iterable
 from concave_hull import concave_hull
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
-# cdo = Cdo()  # Initialize the CDO object
 
 
 # =============================================================================
@@ -1048,7 +1046,6 @@ def daily_integral(file_dir, overwrite=False):
         daily_file = hourly_file.split('_')[0] + '_daily_' + hourly_file.split('_')[1] + '_' + hourly_file.split('_')[2]
 
         # Calculate daily means
-        # Replace this with a system call. But need CDO to work first...
-        # cdo.daymean(input = os.path.join(file_dir, hourly_file), 
-        #             output = os.path.join(file_dir, daily_file))
+        subprocess.run(['cdo', 'daymean', os.path.join(file_dir, hourly_file), 
+                        os.path.join(file_dir, daily_file)], check=True)
 
