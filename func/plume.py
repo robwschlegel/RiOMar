@@ -1824,7 +1824,10 @@ def Check_if_the_area_is_too_cloudy(dataset, map_wo_clouds, parameters) :
     
     # Calculate the cloud coverage percentage and compare it to the threshold.
     # If the percentage of cloudy pixels exceeds the threshold, return True.
-    test = (100 * n_cloudy_pixels / n_total_pixel) > parameters['threshold_of_cloud_coverage_in_percentage']
+    if n_total_pixel == 0 :
+        test = True
+    else :
+        test = (100 * n_cloudy_pixels / n_total_pixel) > parameters['threshold_of_cloud_coverage_in_percentage']
     
     # Return the result indicating whether the area is too cloudy.
     return test
@@ -2726,9 +2729,8 @@ def Pipeline_to_delineate_the_plume(ds_reduced,
 # =============================================================================
 
 
-def apply_plume_mask(core_arguments, Zones, time_step,
-                     nb_cores, dynamic_thresh,
-                     regional_map_dir, plume_dir):
+def apply_plume_mask(core_arguments, Zones, time_step, nb_cores, 
+                     dynamic_thresh, regional_map_dir, plume_dir):
     """
     Apply a plume mask to satellite data.
 
@@ -2860,7 +2862,7 @@ def apply_plume_mask(core_arguments, Zones, time_step,
         del results, ds_reduced, bathymetry_data_aligned_to_reduced_map, inside_polygon_mask, map_wo_clouds, land_mask
         gc.collect()
 
-        # # For debugging
+        # For debugging
         # for file_name in file_names :
         #     print(file_name)
         #     main_process( file_name,
