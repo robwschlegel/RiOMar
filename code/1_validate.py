@@ -24,10 +24,10 @@ mpl.use('agg')
 
 
 # =============================================================================
-# ### Data validation
+# ### Satellite - in situ Match up for Chl a and SPM data
 # =============================================================================
 
-# Match up in situ and satellite data
+# Match up in situ and satellite Chl a data
 sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['CHLA'],
@@ -42,4 +42,28 @@ Match_up_with_insitu_measurements(sextant_chla_all,
                                   nb_of_cores_to_use = 14,
                                   where_are_saved_satellite_data = 'data',
                                   where_to_save_Match_Up_data = 'output')
+
+# Match up in situ and satellite SPM data
+sextant_spim_all = {'Data_sources':['SEXTANT'],
+                    'Sensor_names':["merged"],
+                    'Satellite_variables':['SPM'],
+                    'Atmospheric_corrections':['polymer'],
+                    'Temporal_resolution':['DAILY'],
+                    'start_day':'1998/01/01',
+                    'end_day':'2025/12/31'}
+Match_up_with_insitu_measurements(sextant_spim_all,
+                                  zones = ['FRANCE'],
+                                  # zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+                                  redo_the_MU_database = True, # Change to True is running for the first time 
+                                  nb_of_cores_to_use = 14,
+                                  where_are_saved_satellite_data = 'data',
+                                  where_to_save_Match_Up_data = 'output')
+
+# =============================================================================
+# ### Satellite - in situ Match up for drivers
+# =============================================================================
+
+# I'm imafining to put here some sort of initial comparison of the driver data against some
+# measurement of the rivers and their plumes. But this may be better to leave until 
+# step 4) time series analysis.
 

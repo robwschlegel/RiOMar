@@ -30,7 +30,7 @@ zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTAN
 # ### Make regional maps
 # =============================================================================
 
-# All years of data
+# All years of Chl a data
 sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['CHLA'],
@@ -47,14 +47,36 @@ for zone in zones_list:
                          where_are_saved_satellite_data = "data",
                          where_to_save_regional_maps = "output/REGIONAL_MAPS")
 
+# All years of SPM data
+sextant_spim_all = {'Data_sources':['SEXTANT'],
+                    'Sensor_names':["merged"],
+                    'Satellite_variables':['SPM'],
+                    'Atmospheric_corrections':['polymer'],
+                    'Temporal_resolution':['DAILY'],
+                    'start_day':'1998/01/01',
+                    'end_day':'2025/12/31'}
+for zone in zones_list:
+    create_regional_maps(sextant_spim_all,
+                         Zones = [zone],
+                         overwrite_existing_regional_maps = False,
+                         save_map_plots_of_which_time_frequency = {'DAILY' : False, 'WEEKLY' : False, 'MONTHLY' : True, 'ANNUAL' : True},
+                         nb_of_cores_to_use = 14,
+                         where_are_saved_satellite_data = "data",
+                         where_to_save_regional_maps = "output/REGIONAL_MAPS")
+    
 
 # =============================================================================
 # ### QC of created maps
 # =============================================================================
 
-# All years and zones at once
+# All years and zones for Chl a at once
 QC_of_regional_maps(sextant_chla_all,
-                    # Zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY'],
+                    Zones = zones_list,
+                    nb_of_cores_to_use = 14,
+                    where_are_saved_regional_maps = "output/REGIONAL_MAPS")
+
+# All years and zones for Chl a at once
+QC_of_regional_maps(sextant_spim_all,
                     Zones = zones_list,
                     nb_of_cores_to_use = 14,
                     where_are_saved_regional_maps = "output/REGIONAL_MAPS")

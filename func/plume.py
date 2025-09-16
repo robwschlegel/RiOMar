@@ -1971,9 +1971,9 @@ def main_process(file_name, file_names_pattern,
                  france_shapefile,
                  map_wo_clouds, land_mask,
                  inside_polygon_mask,
-                 where_to_save_plume_results,
-                 where_are_saved_regional_maps,
-                 use_dynamic_threshold):
+                 plume_dir,
+                 regional_map_dir,
+                 dynamic_thresh):
     """
     Process a single satellite data file for plume detection.
 
@@ -2010,7 +2010,7 @@ def main_process(file_name, file_names_pattern,
     # print(file_name)
 
     # Define path to save the figure generated during processing
-    path_to_the_figure_file_to_save = f'{os.path.dirname(file_name).replace("MAPS", "PLUME_DETECTION").replace(where_are_saved_regional_maps, where_to_save_plume_results)}/MAPS/{os.path.basename(file_name)}'.replace(
+    path_to_the_figure_file_to_save = f'{os.path.dirname(file_name).replace("MAPS", "PLUME_DETECTION").replace(regional_map_dir, plume_dir)}/MAPS/{os.path.basename(file_name)}'.replace(
         '.pkl', '')
 
     # Ensure the directory for saving figures exists
@@ -2055,7 +2055,7 @@ def main_process(file_name, file_names_pattern,
                                                     parameters,
                                                     plume_name,
                                                     inside_polygon_mask,
-                                                    use_dynamic_threshold)
+                                                    dynamic_thresh)
 
         if the_plume is None:
             continue
@@ -2674,14 +2674,14 @@ def Pipeline_to_delineate_the_plume(ds_reduced,
                                     parameters,
                                     plume_name,
                                     inside_polygon_mask,
-                                    use_dynamic_threshold):
+                                    dynamic_thresh):
     the_plume = Create_the_plume_mask(ds_reduced,
                                       bathymetry_data_aligned_to_reduced_map,
                                       land_mask,
                                       parameters,
                                       plume_name)
 
-    the_plume.determine_SPM_threshold(use_dynamic_threshold)
+    the_plume.determine_SPM_threshold(dynamic_thresh)
     # the_plume.SPM_threshold = 10
 
     the_plume.do_a_raw_plume_detection()
@@ -2726,9 +2726,9 @@ def Pipeline_to_delineate_the_plume(ds_reduced,
 # =============================================================================
 
 
-def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_resolution_data,
-                     nb_of_cores_to_use, use_dynamic_threshold,
-                     where_are_saved_regional_maps, where_to_save_plume_results):
+def apply_plume_mask(core_arguments, Zones, time_step,
+                     nb_cores, dynamic_thresh,
+                     regional_map_dir, plume_dir):
     """
     Apply a plume mask to satellite data.
 
@@ -2739,10 +2739,14 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
 
     Parameters
     ----------
+    core_arguments : dict
+        Dictionary containing core parameters such as 'start_day' and 'end_day'.
+    Zones : str
+        The regions of interest for plume detection.
+    time_step : str or list of str
+        Temporal resolution of the data ('DAILY', 'MONTHLY', etc.).
     working_directory : str
         Base directory for data storage and results.
-    Zone : str
-        The region of interest for plume detection.
     Data_Source : str
         Source of satellite data (e.g., 'SEXTANT').
     Satellite_sensor : str
@@ -2764,9 +2768,9 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
         {'Years': unique_years_between_two_dates(core_arguments['start_day'], core_arguments['end_day']),
          'Zones': Zones,
          'Satellite_variables': ['SPM'],
-         'Temporal_resolution': ([detect_plumes_on_which_temporal_resolution_data]
-                                 if isinstance(detect_plumes_on_which_temporal_resolution_data, str)
-                                 else detect_plumes_on_which_temporal_resolution_data)})
+         'Temporal_resolution': ([time_step]
+                                 if isinstance(time_step, str)
+                                 else time_step)})
 
     cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)
 
@@ -2785,7 +2789,7 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
         # Build the file pattern to locate the satellite data files.
         file_names_pattern = fill_the_sat_paths(info,
                                                 path_to_fill_to_where_to_save_satellite_files(
-                                                    where_are_saved_regional_maps + "/" + info.Zone).replace(
+                                                    regional_map_dir + "/" + info.Zone).replace(
                                                     '[TIME_FREQUENCY]', ''),
                                                 local_path=True).replace('/*/*/*',
                                                                          f'MAPS/{info.Temporal_resolution}/{info.Year}/*.pkl')
@@ -2810,7 +2814,7 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
 
         # Align bathymetry data to the dataset resolution.
         bathymetry_data_aligned_to_reduced_map = align_bathymetry_to_resolution(ds_reduced,
-                                                                                f'{where_are_saved_regional_maps}/{info.Zone}/Bathy_data.pkl')
+                                                                                f'{regional_map_dir}/{info.Zone}/Bathy_data.pkl')
 
         # Create a mask that delineate the searching area.
         inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
@@ -2823,7 +2827,7 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
             parameters)
 
         # Process each file in parallel
-        with multiprocess.Pool(nb_of_cores_to_use) as pool:
+        with multiprocess.Pool(nb_cores) as pool:
 
             results = pool.starmap(main_process,
                                    [(file_name,
@@ -2834,14 +2838,14 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
                                      map_wo_clouds,
                                      land_mask,
                                      inside_polygon_mask,
-                                     where_to_save_plume_results,
-                                     where_are_saved_regional_maps,
-                                     use_dynamic_threshold) for file_name in file_names])
+                                     plume_dir,
+                                     regional_map_dir,
+                                     dynamic_thresh) for file_name in file_names])
 
         # Create a DataFrame from the results, sort by date, and save it to a CSV
         statistics = pd.DataFrame([x for x in results if x is not None]).sort_values('date').reset_index(drop=True)
-        folder_name = os.path.dirname(file_names[0]).replace(where_are_saved_regional_maps,
-                                                             where_to_save_plume_results).replace("MAPS",
+        folder_name = os.path.dirname(file_names[0]).replace(regional_map_dir,
+                                                             plume_dir).replace("MAPS",
                                                                                                   "PLUME_DETECTION")
         os.makedirs(folder_name, exist_ok=True)
         statistics.to_csv(f'{folder_name}/Results.csv', index=False)
@@ -2867,8 +2871,8 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
         #           map_wo_clouds,
         #           land_mask,
         #           inside_polygon_mask,
-        #           where_to_save_plume_results,
-        #           where_are_saved_regional_maps)
+        #           plume_dir,
+        #           regional_map_dir)
 
     # global_cases_to_process = cases_to_process.drop(['Year'], axis = 1).drop_duplicates().reset_index(drop = True)
 
@@ -2885,7 +2889,7 @@ def apply_plume_mask(core_arguments, Zones, detect_plumes_on_which_temporal_reso
     #                                     Years = np.arange(1998,2025))
 
 
-def make_and_plot_time_series_of_plume_areas(core_arguments, Zones, nb_of_cores_to_use,
+def make_and_plot_time_series_of_plume_areas(core_arguments, Zones, nb_cores,
                                              on_which_temporal_resolution_the_plumes_have_been_detected,
                                              where_are_saved_plume_results, where_to_save_plume_time_series):
     """
@@ -2929,6 +2933,6 @@ def make_and_plot_time_series_of_plume_areas(core_arguments, Zones, nb_of_cores_
         Temporal_resolution=robjects.StrVector(core_arguments['Temporal_resolution']),
         Years=robjects.IntVector(core_arguments['Years']),
         Plumes=robjects.ListVector(Plumes_per_zone),
-        nb_of_cores_to_use=robjects.IntVector([nb_of_cores_to_use])
+        nb_cores=robjects.IntVector([nb_cores])
     )
 

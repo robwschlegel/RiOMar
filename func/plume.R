@@ -24,13 +24,13 @@ library("doParallel")
 # Plumes = list('BAY_OF_BISCAY' = list('Gironde', 'Charente', 'Sevre'), 'SOUTHERN_BRITTANY' = list('Loire', 'Vilaine'),
 #               'GULF_OF_LION' = list('Grand Rhone', 'Petit Rhone'), 'BAY_OF_SEINE' = list('Seine'))
 # # Plumes = list('BAY_OF_SEINE' = list('Seine'))
-# nb_of_cores_to_use = 6
+# nb_cores = 6
 
 plot_time_series_of_plume_area_and_thresholds <- function(where_are_saved_plume_results, where_to_save_plume_time_series, 
                                                           Zone, Data_source, Satellite_sensor, 
-                                                          atmospheric_correction, Temporal_resolution, Years, Plumes, nb_of_cores_to_use) {
+                                                          atmospheric_correction, Temporal_resolution, Years, Plumes, nb_cores) {
   
-  registerDoParallel(cores=nb_of_cores_to_use)
+  registerDoParallel(cores=nb_cores)
   
   cases_to_process <- expand.grid( list("where_are_saved_plume_results" = where_are_saved_plume_results, 
                                         "Zone" = Zone, 
