@@ -12,6 +12,8 @@ data/RIVER_FLOW
 # Large outputs
 output/MATCH_UP_DATA
 output/REGIONAL_MAPS
+output/REGIONAL_PLUME_DETECTION
+output/FIXED_THRESHOLD
 
 # Figures
 figures/SOUTHERN_BRITTANY

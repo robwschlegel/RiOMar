@@ -885,17 +885,17 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
             
         elif 'week' in list( maps[0].coords ) : 
             
-            combined_maps = xr.concat(maps, dim='week')
+            combined_maps = xr.concat(maps, dim='week', coords='different', compat='equals')
             mean_map = combined_maps.mean(dim='week', skipna=True)
             
         elif 'month' in list( maps[0].coords ) : 
             
-            combined_maps = xr.concat(maps, dim='month')
+            combined_maps = xr.concat(maps, dim='month', coords='different', compat='equals')
             mean_map = combined_maps.mean(dim='month', skipna=True)
             
         elif 'year' in list( maps[0].coords ) : 
             
-            combined_maps = xr.concat(maps, dim='year')
+            combined_maps = xr.concat(maps, dim='year', coords='different', compat='equals')
             mean_map = combined_maps.mean(dim='year', skipna=True)
         
         # Reverse log-transform if needed

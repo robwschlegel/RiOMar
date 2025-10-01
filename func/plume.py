@@ -31,11 +31,10 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (load_file, coordinates_of_pixels_to_inspect, align_bathymetry_to_resolution,
-                   unique_years_between_two_dates, load_shapefile_data,
-                   path_to_fill_to_where_to_save_satellite_files,
-                   fill_the_sat_paths, get_all_cases_to_process_for_regional_maps_or_plumes_or_X11,
-                   define_parameters)
+from util import (load_file, coordinates_of_pixels_to_inspect, define_parameters, 
+                  align_bathymetry_to_resolution, unique_years_between_two_dates, 
+                  path_to_fill_to_where_to_save_satellite_files, load_shapefile_data,
+                  fill_the_sat_paths, get_all_cases_to_process_for_regional_maps_or_plumes_or_X11)
 
 
 # =============================================================================
@@ -1810,10 +1809,10 @@ def Check_if_the_area_is_too_cloudy(dataset, map_wo_clouds, parameters) :
     """    
 
     # Select the sub-area of the dataset for cloud cover evaluation based on latitude and longitude ranges.
-    sub_area_to_check_for_zeros = dataset.sel(lat=slice(parameters['lat_range_of_the_area_to_check_for_clouds'][0], 
-                                                   parameters['lat_range_of_the_area_to_check_for_clouds'][1]), 
-                                         lon=slice(parameters['lon_range_of_the_area_to_check_for_clouds'][0], 
-                                                   parameters['lon_range_of_the_area_to_check_for_clouds'][1]))
+    sub_area_to_check_for_zeros = dataset.sel(lat=slice(parameters['lat_range_of_the_area_to_check_for_clouds'][0],
+                                                        parameters['lat_range_of_the_area_to_check_for_clouds'][1]), 
+                                              lon=slice(parameters['lon_range_of_the_area_to_check_for_clouds'][0], 
+                                                        parameters['lon_range_of_the_area_to_check_for_clouds'][1]))
         
     # Count the number of cloudy pixels within the sub-area.
     # Cloudy pixels are null in the current dataset but valid in the annual dataset.    
@@ -1824,16 +1823,17 @@ def Check_if_the_area_is_too_cloudy(dataset, map_wo_clouds, parameters) :
     
     # Calculate the cloud coverage percentage and compare it to the threshold.
     # If the percentage of cloudy pixels exceeds the threshold, return True.
-    if n_total_pixel == 0 :
-        test = True
-    else :
-        test = (100 * n_cloudy_pixels / n_total_pixel) > parameters['threshold_of_cloud_coverage_in_percentage']
+    # if n_total_pixel == 0 :
+    #     test = True
+    # else :
+    #     test = (100 * n_cloudy_pixels / n_total_pixel) > parameters['threshold_of_cloud_coverage_in_percentage']
+    cloud_test = (100 * n_cloudy_pixels / n_total_pixel) > parameters['threshold_of_cloud_coverage_in_percentage']
     
     # Return the result indicating whether the area is too cloudy.
-    return test
+    return cloud_test
 
 
-def fast_delimitation_of_a_river_plume_area(   spm_map, land_mask, start_point, SPM_threshold, maximal_threshold, max_steps = 20) : 
+def fast_delimitation_of_a_river_plume_area(spm_map, land_mask, start_point, SPM_threshold, maximal_threshold, max_steps = 20) : 
     
     """
     Delimits a river plume area based on a Suspended Particulate Matter (SPM) map 
@@ -2013,8 +2013,8 @@ def main_process(file_name, file_names_pattern,
     # print(file_name)
 
     # Define path to save the figure generated during processing
-    path_to_the_figure_file_to_save = f'{os.path.dirname(file_name).replace("MAPS", "PLUME_DETECTION").replace(regional_map_dir, plume_dir)}/MAPS/{os.path.basename(file_name)}'.replace(
-        '.pkl', '')
+    path_to_the_figure_file_to_save = f'{os.path.dirname(file_name).replace("MAPS", "PLUME_DETECTION").replace(
+        regional_map_dir, plume_dir)}/MAPS/{os.path.basename(file_name)}'.replace('.pkl', '')
 
     # Ensure the directory for saving figures exists
     os.makedirs(f'{os.path.dirname(path_to_the_figure_file_to_save)}', exist_ok=True)
@@ -2023,7 +2023,7 @@ def main_process(file_name, file_names_pattern,
     with open(file_name, 'rb') as f:
         ds = pickle.load(f)['Basin_map']['map_data']
 
-        # Reduce the resolution of the dataset to the specified latitude and longitude resolutions
+    # Reduce the resolution of the dataset to the specified latitude and longitude resolutions
     ds_reduced = (reduce_resolution(ds, parameters['lat_new_resolution'], parameters['lon_new_resolution'])
                   if parameters['lat_new_resolution'] is not None
                   else ds)
@@ -2731,39 +2731,52 @@ def Pipeline_to_delineate_the_plume(ds_reduced,
 
 def apply_plume_mask(core_arguments, Zones, time_step, nb_cores, 
                      dynamic_thresh, regional_map_dir, plume_dir):
+      
     """
-    Apply a plume mask to satellite data.
+    Apply plume detection and analysis to satellite data.
 
-    This function processes satellite-derived data to detect and analyze plumes
-    (e.g., sediment plumes). It creates maps, applies filters, and extracts plume
-    regions based on specified parameters. Results are saved in various formats,
-    including CSV files and images.
+    This function processes satellite images to detect and analyze river plumes. It handles data loading,  
+    plume detection, statistical analysis, and visualization of results.
 
     Parameters
     ----------
     core_arguments : dict
-        Dictionary containing core parameters such as 'start_day' and 'end_day'.
-    Zones : str
-        The regions of interest for plume detection.
+        Core configuration parameters including 'start_day' and 'end_day'
+    Zones : list of str
+        List of geographic regions for plume detection
     time_step : str or list of str
-        Temporal resolution of the data ('DAILY', 'MONTHLY', etc.).
-    working_directory : str
-        Base directory for data storage and results.
-    Data_Source : str
-        Source of satellite data (e.g., 'SEXTANT').
-    Satellite_sensor : str
-        The satellite sensor used for the data.
-    Atmospheric_correction : str
-        Type of atmospheric correction applied to the data.
-    Years : list of int
-        List of years for which the data will be processed.
-    Temporal_resolution : str
-        Temporal resolution of the data ('DAILY', 'MONTHLY', etc.).
+        Temporal resolution(s) of the data (e.g., 'DAILY', 'MONTHLY')
+    nb_cores : int
+        Number of CPU cores to use for parallel processing
+    dynamic_thresh : bool
+        Whether to use dynamic threshold determination for plume detection
+    regional_map_dir : str
+        Base directory containing the regional satellite maps
+    plume_dir : str
+        Directory where plume detection results will be saved
 
     Returns
     -------
     None
-        The results are saved as files in the specified `working_directory`.
+        Results are saved to disk as:
+        - CSV files containing plume statistics
+        - PNG images showing detected plumes
+        - Animated GIFs combining the detection results
+
+    Notes
+    -----
+    The function performs the following steps:
+    1. Loads and preprocesses satellite data
+    2. Aligns bathymetry data to the satellite resolution
+    3. Creates masks for land and search areas
+    4. Detects plumes using parallel processing
+    5. Saves results as statistics and visualizations
+
+    The results include:
+    - Plume area and statistics
+    - SPM concentration thresholds
+    - Confidence indices
+    - Visualization maps
     """
 
     core_arguments.update(
@@ -2809,7 +2822,7 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
         with open(file_names[0], 'rb') as f:
             ds = pickle.load(f)['Basin_map']['map_data']
 
-            # Reduce the spatial resolution of the dataset to match the new resolution
+        # Reduce the spatial resolution of the dataset to match the new resolution
         ds_reduced = (reduce_resolution(ds, parameters['lat_new_resolution'], parameters['lon_new_resolution'])
                       if parameters['lat_new_resolution'] is not None
                       else ds)
@@ -2847,8 +2860,7 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
         # Create a DataFrame from the results, sort by date, and save it to a CSV
         statistics = pd.DataFrame([x for x in results if x is not None]).sort_values('date').reset_index(drop=True)
         folder_name = os.path.dirname(file_names[0]).replace(regional_map_dir,
-                                                             plume_dir).replace("MAPS",
-                                                                                                  "PLUME_DETECTION")
+                                                             plume_dir).replace("MAPS", "PLUME_DETECTION")
         os.makedirs(folder_name, exist_ok=True)
         statistics.to_csv(f'{folder_name}/Results.csv', index=False)
 
@@ -2863,9 +2875,9 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
         gc.collect()
 
         # For debugging
-        # for file_name in file_names :
+        # for file_name in file_names[0:10] :
         #     print(file_name)
-        #     main_process( file_name,
+        #     main_process(file_name,
         #           file_names_pattern,
         #           parameters,
         #           bathymetry_data_aligned_to_reduced_map,
@@ -2874,7 +2886,8 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
         #           land_mask,
         #           inside_polygon_mask,
         #           plume_dir,
-        #           regional_map_dir)
+        #           regional_map_dir, 
+        #           dynamic_thresh)
 
     # global_cases_to_process = cases_to_process.drop(['Year'], axis = 1).drop_duplicates().reset_index(drop = True)
 

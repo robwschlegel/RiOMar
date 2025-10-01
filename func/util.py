@@ -671,9 +671,12 @@ def define_parameters(Zone) :
     dict
         A dictionary containing the parameters for the specified zone.
     """
-        
-    if Zone == "BAY_OF_SEINE" :
-        
+
+    if not isinstance(Zone, str):
+        print("Zone must be a string.")
+        return None
+
+    if Zone == 'BAY_OF_SEINE' :        
         lon_new_resolution = 0.015
         lat_new_resolution = 0.015
         searching_strategies = {'Seine' : {'grid' : np.array([    [False, False, False, False, False],
@@ -702,9 +705,7 @@ def define_parameters(Zone) :
         fixed_threshold = {'Seine' : 9.5}
         river_mouth_to_exclude = {'Canal de Caen à la mer' : [49.296, -0.245]}
         
-        
-    if Zone == "BAY_OF_BISCAY" :
-        
+    elif Zone == 'BAY_OF_BISCAY' :        
         lon_new_resolution = 0.015
         lat_new_resolution = 0.015
         searching_strategies = {'Gironde' : {'grid' : np.array([  [False, False, False, False, False],
@@ -753,8 +754,7 @@ def define_parameters(Zone) :
         fixed_threshold = {'Gironde' : 4.7, 'Charente' : 7.8, 'Sevre' : 5.2} 
         river_mouth_to_exclude = {}
     
-    if Zone == "GULF_OF_LION" :   
-        
+    elif Zone == 'GULF_OF_LION' :        
         lon_new_resolution = 0.015
         lat_new_resolution = 0.015
         searching_strategies = {'Grand Rhone' : {'grid' : np.array([  [False, False, False, False, False, False, False],
@@ -793,8 +793,7 @@ def define_parameters(Zone) :
         fixed_threshold = {'Grand Rhone' : 1.2, 'Petit Rhone' : 1.9} 
         river_mouth_to_exclude = {}
         
-    if Zone == 'EASTERN_CHANNEL' :
-        
+    elif Zone == 'EASTERN_CHANNEL' :        
         lon_new_resolution = 0.015
         lat_new_resolution = 0.015
         searching_strategies = {'Arques' : {'grid' : np.array([   [False, False, False, False, False],
@@ -864,8 +863,7 @@ def define_parameters(Zone) :
                                         'Authie' : None, 'Canche' : None, 'Liane' : None}
         river_mouth_to_exclude = {}
       
-    if Zone == 'SOUTHERN_BRITTANY': 
-         
+    elif Zone == 'SOUTHERN_BRITTANY':         
         lon_new_resolution = 0.015
         lat_new_resolution = 0.015
         searching_strategies = {'Loire' : {'grid' : np.array([    [False, False, False, False, False],
@@ -904,32 +902,36 @@ def define_parameters(Zone) :
         river_mouth_to_exclude = {}
 
     else :
-        return
+        print(f"The zone {Zone} is not available. Please select one of the following zones : 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'GULF_OF_LION', 'EASTERN_CHANNEL', 'SOUTHERN_BRITTANY'.")
+        return None
     
-    searching_strategy_directions = coordinates_of_pixels_to_inspect( searching_strategies )
+    # TODO: Investigate why this is causing errors
+    searching_strategy_directions = coordinates_of_pixels_to_inspect(searching_strategies)
     
-    return {'lon_new_resolution' : lon_new_resolution, 
-            'lat_new_resolution' : lat_new_resolution, 
-            'searching_strategies' : searching_strategies, 
-            'bathymetric_threshold' : bathymetric_threshold, 
-            'starting_points' : starting_points, 
-            'core_of_the_plumes' : core_of_the_plumes,
-            'lat_range_of_the_area_to_check_for_clouds' : lat_range_of_the_area_to_check_for_clouds, 
-            'lon_range_of_the_area_to_check_for_clouds' : lon_range_of_the_area_to_check_for_clouds, 
-            'threshold_of_cloud_coverage_in_percentage' : threshold_of_cloud_coverage_in_percentage,
-            'lat_range_of_the_map_to_plot' : lat_range_of_the_map_to_plot, 
-            'lon_range_of_the_map_to_plot' : lon_range_of_the_map_to_plot, 
-            'lat_range_to_search_plume_area' : lat_range_to_search_plume_area, 
-            'lon_range_to_search_plume_area' : lon_range_to_search_plume_area,
-            'maximal_bathymetric_for_zone_with_resuspension' : maximal_bathymetric_for_zone_with_resuspension,
-            'minimal_distance_from_estuary_for_zone_with_resuspension' : minimal_distance_from_estuary_for_zone_with_resuspension,
-            'max_steps_for_the_directions' : max_steps_for_the_directions,
-            'maximal_threshold' : maximal_threshold,
-            'minimal_threshold' : minimal_threshold,
-            'quantile_to_use' : quantile_to_use,
-            'fixed_threshold' : fixed_threshold,
-            'river_mouth_to_exclude' : river_mouth_to_exclude,
-            'searching_strategy_directions' : searching_strategy_directions}
+    return {
+        'lon_new_resolution' : lon_new_resolution, 
+        'lat_new_resolution' : lat_new_resolution, 
+        'searching_strategies' : searching_strategies, 
+        'bathymetric_threshold' : bathymetric_threshold, 
+        'starting_points' : starting_points, 
+        'core_of_the_plumes' : core_of_the_plumes,
+        'lat_range_of_the_area_to_check_for_clouds' : lat_range_of_the_area_to_check_for_clouds, 
+        'lon_range_of_the_area_to_check_for_clouds' : lon_range_of_the_area_to_check_for_clouds, 
+        'threshold_of_cloud_coverage_in_percentage' : threshold_of_cloud_coverage_in_percentage,
+        'lat_range_of_the_map_to_plot' : lat_range_of_the_map_to_plot, 
+        'lon_range_of_the_map_to_plot' : lon_range_of_the_map_to_plot, 
+        'lat_range_to_search_plume_area' : lat_range_to_search_plume_area, 
+        'lon_range_to_search_plume_area' : lon_range_to_search_plume_area,
+        'maximal_bathymetric_for_zone_with_resuspension' : maximal_bathymetric_for_zone_with_resuspension,
+        'minimal_distance_from_estuary_for_zone_with_resuspension' : minimal_distance_from_estuary_for_zone_with_resuspension,
+        'max_steps_for_the_directions' : max_steps_for_the_directions,
+        'maximal_threshold' : maximal_threshold,
+        'minimal_threshold' : minimal_threshold,
+        'quantile_to_use' : quantile_to_use,
+        'fixed_threshold' : fixed_threshold,
+        'river_mouth_to_exclude' : river_mouth_to_exclude,
+        'searching_strategy_directions' : searching_strategy_directions
+    }
 
 
 def coordinates_of_pixels_to_inspect(searching_strategies) : 

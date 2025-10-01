@@ -25,29 +25,57 @@ mpl.use('agg')
 # The zones for mapping
 zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY']
 
+# The time steps to investigate
+time_steps = ['DAILY', 'WEEKLY', 'MONTHLY', 'ANNUAL']
+
 # Basic arguments to be used throughout the script
-core_arguments = {'Data_sources':['SEXTANT'],
-                  'Sensor_names':["merged"],
-                  'Satellite_variables':['SPM'],
-                  'Atmospheric_corrections':['polymer'],
-                  'Temporal_resolution':['DAILY'],
-                  'start_day':'1998/01/01',
-                  'end_day':'2025/12/31'}
+sextant_spim_all = {'Data_sources':['SEXTANT'],
+                    'Sensor_names':["merged"],
+                    'Satellite_variables':['SPM'],
+                    'Atmospheric_corrections':['polymer'],
+                    'Temporal_resolution':['DAILY'],
+                    'start_day':'1998/01/01',
+                    'end_day':'2025/12/31'}
 
 
 # =============================================================================
 # ### Detect plumes
 # =============================================================================
 
+sextant_spim_1998 = {'Data_sources':['SEXTANT'],
+                    'Sensor_names':["merged"],
+                    'Satellite_variables':['SPM'],
+                    'Atmospheric_corrections':['polymer'],
+                    'Temporal_resolution':['DAILY'],
+                    'start_day':'1998/01/01',
+                    'end_day':'1998/12/31'}
+
+# Test for one year and one zone
+# TODO: Somewhere in the previous steps there is a mismatch between the spatial extent being used to extract data for sites
+# This then prevents the plume code from being able to correctly check for cloud coverage
+# I need to start over from the beginning and ensure the correct AOI is being ensured
+# It appears that the same AOI is being used for all zones, which is not correct
+# This is likely due to the way the AOI is defined in util.py
+# I need to ensure that the AOI is defined based on the zone being processed
+apply_plume_mask(sextant_spim_1998,
+                Zones = ['GULF_OF_LION'],
+                time_step = 'DAILY',
+                nb_cores = 14,
+                dynamic_thresh = False,
+                regional_map_dir = "output/REGIONAL_MAPS",
+                plume_dir = "output/FIXED_THRESHOLD")
+
+
 # Basic plume detection
 for zone in zones_list:
-    apply_plume_mask(core_arguments,
-                     Zones = [zone],
-                     time_step = 'DAILY',
-                     nb_cores = 14,
-                     dynamic_thresh = False,
-                     regional_map_dir = "output/REGIONAL_MAPS",
-                     plume_dir = "output/FIXED_THRESHOLD")
+    for time_step in time_steps:
+        apply_plume_mask(sextant_spim_all,
+                         Zones = [zone],
+                         time_step = time_step,
+                         nb_cores = 14,
+                         dynamic_thresh = False,
+                         regional_map_dir = "output/REGIONAL_MAPS",
+                         plume_dir = "output/FIXED_THRESHOLD")
 
 
 # =============================================================================
@@ -56,12 +84,10 @@ for zone in zones_list:
 
 # All in one go
 for zone in zones_list:
-    make_and_plot_time_series_of_plume_areas(core_arguments,
+    make_and_plot_time_series_of_plume_areas(sextant_spim_all,
                                              Zones = [zone],
                                              nb_of_cores_to_use = 14,
                                              on_which_temporal_resolution_the_plumes_have_been_detected = 'WEEKLY',
                                              where_are_saved_plume_results = "output/FIXED_THRESHOLD",
                                              where_to_save_plume_time_series = "output/FIXED_THRESHOLD")
     
-# TODO: Add dynamic thresholding once it works properly
-
