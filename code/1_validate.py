@@ -59,11 +59,12 @@ Match_up_with_insitu_measurements(sextant_spim_all,
                                   where_are_saved_satellite_data = 'data',
                                   where_to_save_Match_Up_data = 'output')
 
+
 # =============================================================================
 # ### Satellite - in situ Match up for drivers
 # =============================================================================
 
-# I'm imafining to put here some sort of initial comparison of the driver data against some
+# I'm imagining to put here some sort of initial comparison of the driver data against some
 # measurement of the rivers and their plumes. But this may be better to leave until 
 # step 4) time series analysis.
 
