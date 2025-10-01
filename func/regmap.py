@@ -321,6 +321,7 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
     nb_of_day = pd.to_datetime(date).strftime("%d")     
     info['week'] = f'{info.month}_{determine_the_week_based_on_the_day(nb_of_day)}'
     info['date_for_plot'] = info.day
+    info['period_name'] = 'daily'
     
     # Sort data by latitude and longitude
     map_ini = map_ini.sortby('lat')
@@ -352,7 +353,7 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
     Bloom_data = None
     
     # Generate and save plot if requested
-    if do_the_plot : 
+    if do_the_plot :
     
         do_and_save_the_plot(info, 
                              Basin_data, Embouchure_data, Bloom_data, 
@@ -469,12 +470,19 @@ def Process_each_week(Year_month_week_pattern,
     date_of_the_weekly_map = np.mean([int(x.replace('/', '')) for x in Year_month_week_days]).astype(int).astype(str)
     
     # Compute and save the mean map for the week
-    get_the_mean_map_and_save_it(where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
+    # NB: There is an issue in here with arguments not being ordered correctly or called explictly
+    # get_the_mean_map_and_save_it(where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
+    #                             [{'Basin_map' : x[1], 'Embouchure_map' : x[2],'Bloom_map' : x[3]} for x in weekly_results],
+    #                             info,
+    #                             Year_month_week_pattern[4:], Year_month_week_pattern[4:],
+    #                             "WEEKLY", save_map_plots_of_which_time_frequency['WEEKLY'], date_of_the_weekly_map)
+    get_the_mean_map_and_save_it( where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
                                 [{'Basin_map' : x[1], 'Embouchure_map' : x[2],'Bloom_map' : x[3]} for x in weekly_results],
                                 info,
-                                Year_month_week_pattern[4:], Year_month_week_pattern[4:],
-                                "WEEKLY", save_map_plots_of_which_time_frequency['WEEKLY'], date_of_the_weekly_map) 
-    
+                                period_name = 'the week', climatological_subfolder = 'WEEKLY',
+                                do_the_plot = save_map_plots_of_which_time_frequency['WEEKLY'], 
+                                date_for_plot = date_of_the_weekly_map)
+
     del weekly_results
     gc.collect()
     
@@ -623,18 +631,23 @@ def do_and_save_the_plot(info, Basin_data, Embouchure_data, Bloom_data,
         colorbar_palette = 'viridis'
         rectangle_color = "red"
         
-    if "SPM" in info.Satellite_variable : 
+    elif "SPM" in info.Satellite_variable : 
         unit_satellite_variable = 'g.m-3'
         colorbar_limits = [1e0, 1e2]
         colorbar_palette = 'Spectral_r'
         rectangle_color = "black"
         
-    if "SST" in info.Satellite_variable : 
+    elif "SST" in info.Satellite_variable : 
         unit_satellite_variable = '°C'
         colorbar_limits = [0.1, 30]
         colorbar_palette = 'Spectral_r'
         rectangle_color = "black"
         
+    else : 
+        unit_satellite_variable = 'unknown unit'
+        colorbar_limits = [1e-1, 1e2]
+        colorbar_palette = 'viridis'
+        rectangle_color = "green"
       
     # Adjust colorbar limits for climatological maps
     if climatological_map : 
@@ -829,8 +842,8 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
     """
         
     min_number_of_maps = {'WEEKLY' : 1, # Minimal number of daily maps per week
-                            'MONTHLY' : 2, # Minimal number of weekly maps per month
-                            'ANNUAL' : 12} # Minimal number of monthly maps per year
+                          'MONTHLY' : 2, # Minimal number of weekly maps per month
+                          'ANNUAL' : 12} # Minimal number of monthly maps per year
     
     def compute_the_mean_map(index_name = "") :
         
@@ -867,7 +880,7 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
         # Concatenate and compute the mean along the appropriate dimension
         if 'day' in list( maps[0].coords ) :
             
-            combined_maps = xr.concat(maps, dim='day')
+            combined_maps = xr.concat(maps, dim='day', coords='different', compat='equals')
             mean_map = combined_maps.mean(dim='day', skipna=True)
             
         elif 'week' in list( maps[0].coords ) : 
@@ -1157,16 +1170,18 @@ class Create_and_save_the_maps :
                 
         # Create a DataFrame to track file processing status
         files_have_been_processed = pd.DataFrame({'day' : all_days_of_the_year,
-                                                    'Does_the_file_exist' : np.isin(all_days_of_the_year, map_file_days),
-                                                    'Impossible_to_open_the_file' : '',
-                                                    'Format_not_correct' : '',
-                                                    'All_values_are_NAN' : ''})
+                                                  'Does_the_file_exist' : np.isin(all_days_of_the_year, map_file_days),
+                                                  'Impossible_to_open_the_file' : '',
+                                                  'Format_not_correct' : '',
+                                                  'All_values_are_NAN' : ''})
         
         # Generate weekly patterns for the year
         Year_month_patterns = np.unique([x[:6] for x in map_file_days])
         Year_month_week_patterns = [f"{item}_{suffix:02d}" for item in Year_month_patterns for suffix in range(1, 5)]
         suffix_ranges = { '_01': range(1, 9), '_02': range(9, 17), '_03': range(17, 25), '_04': range(25, 32) }
         
+        # TODO: This does not correctly detect if the files have been gernerated. Rather that the final time series file exists
+        # Meaning that, if this file has been paritally generated, the code will think that all files have been processed
         are_the_maps_already_produced = os.path.isfile( time_series_file_name )
 
         self.info = info
@@ -1193,8 +1208,8 @@ class Create_and_save_the_maps :
         
         # Ensure the directory for daily maps exists
         self.where_to_save_data_extended = f'{self.where_to_save_data}/MAPS/[TIME_FREQUENCY]/{self.info.Year}'
-        os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), exist_ok=True)
         os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), exist_ok=True)
+        os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), exist_ok=True)
                  
         # where_to_save_data_extended = self.where_to_save_data_extended
         # all_days_of_the_year = self.all_days_of_the_year 
