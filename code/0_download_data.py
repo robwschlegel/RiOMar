@@ -139,7 +139,7 @@ for zone in zones_list:
 # =============================================================================
 
 # Plot everything in one go (this takes a while)
-for year in range(1998+1, 2025+1):
+for year in range(1998, 2025):
     Plot_and_Save_the_map(
         sextant_chla_all,
         nb_of_cores_to_use = 14,
@@ -150,7 +150,7 @@ for year in range(1998+1, 2025+1):
     print(f'Year {year} done!')
 
 # Plot everything in one go (this takes a while)
-for year in range(1998+1, 2025+1):
+for year in range(1998, 2025):
     Plot_and_Save_the_map(
         sextant_spim_all,
         nb_of_cores_to_use = 14,

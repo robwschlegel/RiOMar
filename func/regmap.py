@@ -64,7 +64,7 @@ def get_coordinates_of_the_site(Study_area) :
         Bloom_lat_extend = 1.7 # 1.25
         Bloom_lon_extend = 3.25 # 2.25
         
-    if Study_area == "BAY_OF_BISCAY" : 
+    elif Study_area == "BAY_OF_BISCAY" : 
 
         Basin_limits = [43, 49, -7, -0.5] # (Lat min , Lat max, Lon min, Lon max)
         
@@ -80,7 +80,7 @@ def get_coordinates_of_the_site(Study_area) :
         Bloom_lat_extend = 0 # 1.25
         Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "SOUTHERN_BRITTANY" : 
+    elif Study_area == "SOUTHERN_BRITTANY" : 
 
          Basin_limits = [46, 48.5, -5, -1.5] # (Lat min , Lat max, Lon min, Lon max)
          
@@ -92,7 +92,7 @@ def get_coordinates_of_the_site(Study_area) :
          Bloom_lat_extend = 0 # 1.25
          Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "FRANCE" : 
+    elif Study_area == "FRANCE" : 
 
         Basin_limits = [41, 52, -8, 11] # (Lat min , Lat max, Lon min, Lon max)
         
@@ -104,7 +104,7 @@ def get_coordinates_of_the_site(Study_area) :
         Bloom_lat_extend = 0 # 1.25
         Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "BAY_OF_SEINE" : 
+    elif Study_area == "BAY_OF_SEINE" : 
 
         Basin_limits = [49.16, 51.38, -1.61, 2.6] # (Lat min , Lat max, Lon min, Lon max)
         
@@ -116,7 +116,7 @@ def get_coordinates_of_the_site(Study_area) :
         Bloom_lat_extend = 1 # 1.25
         Bloom_lon_extend = 1.5 # 2.25
         
-    if Study_area == "EASTERN_CHANNEL" : 
+    elif Study_area == "EASTERN_CHANNEL" : 
 
         Basin_limits = [49.16, 51.5, -1.61, 3] # (Lat min , Lat max, Lon min, Lon max)
         
@@ -128,7 +128,7 @@ def get_coordinates_of_the_site(Study_area) :
         Bloom_lat_extend = 0 # 1.25
         Bloom_lon_extend = 0 # 2.25
         
-    if Study_area == "ETANG_DE_BERRE" : 
+    elif Study_area == "ETANG_DE_BERRE" : 
 
         Basin_limits = [43.37, 43.57, 4.97, 5.26] # (Lat min , Lat max, Lon min, Lon max)
         
@@ -139,6 +139,10 @@ def get_coordinates_of_the_site(Study_area) :
         Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
         Bloom_lat_extend = 0 # 1.25
         Bloom_lon_extend = 0 # 2.25
+
+    else :
+        print(f"The zone {Study_area} is not available. Please select one of the following zones : 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'GULF_OF_LION', 'EASTERN_CHANNEL', 'SOUTHERN_BRITTANY'.")
+        return None
         
     return {'Basin_limits' : Basin_limits,
             
@@ -328,11 +332,10 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
     map_ini = map_ini.sortby('lon')
     
     # Get coordinates for the site
-    site_coordinates = get_coordinates_of_the_site('SOUTHERN_BRITTANY')
+    site_coordinates = get_coordinates_of_the_site(info.Zone)
 
     # Extract data for the Basin zone
     Basin_data = extract_key_data(map_ini, info, zone_limits = site_coordinates['Basin_limits'])
-    # Basin_data = extract_key_data(map_ini, info)
              
     if Basin_data['n'] == 0 : 
         return "All Basin data are NAN"
@@ -658,8 +661,11 @@ def do_and_save_the_plot(info, Basin_data, Embouchure_data, Bloom_data,
         fig_size = (20,10)
         colorbar_limits = colorbar_limits * 2
     
-    if any( [x in where_to_save_data_extended for x in ["BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "FRANCE"]] ) : 
+    elif any( [x in where_to_save_data_extended for x in ["BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "FRANCE"]] ) : 
         fig_size = (20,15)
+
+    else :
+        fig_size = (15,10)
                             
     size_of_axis_title = 20
     fig, ax = plt.subplots(figsize = fig_size)
@@ -673,17 +679,17 @@ def do_and_save_the_plot(info, Basin_data, Embouchure_data, Bloom_data,
     # Overlay embouchure region rectangle
     if Embouchure_data is not None : 
         Embouchure_rectangle = patches.Rectangle((Embouchure_data['zone_limits'][2], Embouchure_data['zone_limits'][0]),
-                                                    Embouchure_data['zone_limits'][3] - Embouchure_data['zone_limits'][2], 
-                                                    Embouchure_data['zone_limits'][1] - Embouchure_data['zone_limits'][0], 
-                                                    linewidth=1.5, edgecolor=rectangle_color, facecolor='none')
+                                                  Embouchure_data['zone_limits'][3] - Embouchure_data['zone_limits'][2], 
+                                                  Embouchure_data['zone_limits'][1] - Embouchure_data['zone_limits'][0], 
+                                                  linewidth=1.5, edgecolor=rectangle_color, facecolor='none')
         ax.add_patch(Embouchure_rectangle)
     
     # Overlay bloom region rectangle
     if Bloom_data is not None : 
         Bloom_rectangle = patches.Rectangle((Bloom_data['zone_limits'][2], Bloom_data['zone_limits'][0]),
-                                            Bloom_data['zone_limits'][3] - Bloom_data['zone_limits'][2], 
-                                            Bloom_data['zone_limits'][1] - Bloom_data['zone_limits'][0], 
-                                            linewidth=1.5, edgecolor=rectangle_color, facecolor='none')
+                                             Bloom_data['zone_limits'][3] - Bloom_data['zone_limits'][2], 
+                                             Bloom_data['zone_limits'][1] - Bloom_data['zone_limits'][0], 
+                                             linewidth=1.5, edgecolor=rectangle_color, facecolor='none')
         
         ax.add_patch(Bloom_rectangle)
         
@@ -897,6 +903,10 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
             
             combined_maps = xr.concat(maps, dim='year', coords='different', compat='equals')
             mean_map = combined_maps.mean(dim='year', skipna=True)
+
+        else : 
+            print("No time dimension found in the maps")
+            return
         
         # Reverse log-transform if needed
         if any( [x in info.Satellite_variable for x in ['SPM', 'CHL', 'SST']] ) :
@@ -927,6 +937,15 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
     info['day'] = str(Basin_mean_map['map_data']['period'].values)
     info['period_name'] = period_name
         
+    # Get coordinates for the site
+    # site_coordinates = get_coordinates_of_the_site(info.Zone)
+
+    # Extract data for the Basin zone
+    # Basin_data = extract_key_data(map_ini, info, zone_limits = site_coordinates['Basin_limits'])
+             
+    # if Basin_data['n'] == 0 : 
+        # return "All Basin data are NAN"
+
     # Save the mean maps and plot them if required
     if (Basin_mean_map is not None) or (Bloom_mean_map is not None) or (Embouchure_mean_map is not None) :
 
@@ -1223,12 +1242,12 @@ class Create_and_save_the_maps :
         # pool = multiprocess.Pool(nb_of_cores_to_use)
         with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
-            results = pool.starmap(Process_each_week, [(   Year_month_week_pattern, 
-                                                           self.where_to_save_data_extended, self.all_days_of_the_year, 
-                                                           self.suffix_ranges, self.info, 
-                                                           self.map_files, 
-                                                           self.files_have_been_processed,
-                                                           save_map_plots_of_which_time_frequency) 
+            results = pool.starmap(Process_each_week, [(Year_month_week_pattern, 
+                                                        self.where_to_save_data_extended, self.all_days_of_the_year, 
+                                                        self.suffix_ranges, self.info, 
+                                                        self.map_files, 
+                                                        self.files_have_been_processed,
+                                                        save_map_plots_of_which_time_frequency)
                                                        for Year_month_week_pattern in self.Year_month_week_patterns ])
                 
         # to_remove = []
@@ -1282,11 +1301,11 @@ class Create_and_save_the_maps :
         with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
             pool.starmap(get_the_mean_map_and_save_it, 
-                        [( folder_where_to_save_maps, 
-                           load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "WEEKLY"), month_nb),
-                           self.info,
-                           f'{month_nb:02d}', f'{month_nb:02d}', 'MONTHLY', save_map_plots_of_which_time_frequency['MONTHLY'],
-                           f'{self.info.Year}{month_nb:02d}15') for month_nb in (np.arange(12)+1 )])
+                        [(folder_where_to_save_maps, 
+                          load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "WEEKLY"), month_nb),
+                          self.info,
+                          f'{month_nb:02d}', f'{month_nb:02d}', 'MONTHLY', save_map_plots_of_which_time_frequency['MONTHLY'],
+                          f'{self.info.Year}{month_nb:02d}15') for month_nb in (np.arange(12)+1 )])
         
         
     def _3_create_annual_maps(self, save_map_plots_of_which_time_frequency) :
@@ -1298,12 +1317,12 @@ class Create_and_save_the_maps :
         folder_where_to_save_maps = self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'ANNUAL')
         os.makedirs(folder_where_to_save_maps, exist_ok=True)
         
-        get_the_mean_map_and_save_it( folder_where_to_save_maps,  
-                                      load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "MONTHLY")),
-                                        self.info,
-                                        period_name = 'the year', climatological_subfolder = 'ANNUAL', 
-                                        do_the_plot = save_map_plots_of_which_time_frequency['ANNUAL'],
-                                        date_for_plot = f'{self.info.Year}0701') 
+        get_the_mean_map_and_save_it(folder_where_to_save_maps,  
+                                     load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "MONTHLY")),
+                                     self.info,
+                                     period_name = 'the year', climatological_subfolder = 'ANNUAL', 
+                                     do_the_plot = save_map_plots_of_which_time_frequency['ANNUAL'],
+                                     date_for_plot = f'{self.info.Year}0701')
         
     def _4_create_the_multiyear_map(self) :
         
@@ -1315,12 +1334,12 @@ class Create_and_save_the_maps :
         folder_where_to_save_maps = self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'MULTIYEAR')
         os.makedirs(folder_where_to_save_maps, exist_ok=True)
         
-        get_the_mean_map_and_save_it( folder_where_to_save_maps,  
-                                      maps_of_the_period = load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "ANNUAL")+"*/"),
-                                        info = self.info,
-                                        period_name = 'multi-years', 
-                                        climatological_subfolder = 'MULTIYEAR', 
-                                        do_the_plot = True) 
+        get_the_mean_map_and_save_it(folder_where_to_save_maps,  
+                                     maps_of_the_period = load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "ANNUAL")+"*/"),
+                                     info = self.info,
+                                     period_name = 'multi-years', 
+                                     climatological_subfolder = 'MULTIYEAR', 
+                                     do_the_plot = True) 
 
 
 class QC_maps :

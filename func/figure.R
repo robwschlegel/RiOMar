@@ -10,6 +10,11 @@ library("maps")
 library("ggpubr")
 
 
+test1 <- tidync::tidync("~/pCloudDrive/data/WIND/BAY_OF_BISCAY/wind_202501_202509.nc") |> tidync::hyper_tibble()
+test2 <- tidync::tidync("~/pCloudDrive/data/WIND/BAY_OF_BISCAY/wind_daily_202501_202509.nc") |> tidync::hyper_tibble()
+test3 <- tidync::tidync("~/pCloudDrive/data/GLORYS/BAY_OF_BISCAY/glorys_202107_202507.nc") |> tidync::hyper_tibble()
+
+
 #### Main ####
 # where_to_save_the_figure <- "/home/terrats/Desktop/RIOMAR/TEST"
 
