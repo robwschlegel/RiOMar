@@ -37,7 +37,7 @@ sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'Atmospheric_corrections':['polymer'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
-                    'end_day':'1998/12/31'}
+                    'end_day':'2025/12/31'}
 for zone in zones_list:
     create_regional_maps(sextant_chla_all,
                          Zones = [zone],
@@ -54,7 +54,7 @@ sextant_spim_all = {'Data_sources':['SEXTANT'],
                     'Atmospheric_corrections':['polymer'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
-                    'end_day':'1998/12/31'}
+                    'end_day':'2025/12/31'}
 for zone in zones_list:
     create_regional_maps(sextant_spim_all,
                          Zones = [zone],

@@ -382,7 +382,8 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
 
 
 def Process_each_week(Year_month_week_pattern, 
-                      where_to_save_data_extended, all_days_of_the_year, suffix_ranges, info, 
+                      where_to_save_data_extended, all_days_of_the_year, 
+                      suffix_ranges, info, 
                       map_files, files_have_been_processed,
                       save_map_plots_of_which_time_frequency) :
 
@@ -405,6 +406,8 @@ def Process_each_week(Year_month_week_pattern,
         List of file paths for the current year's satellite maps.
     files_have_been_processed : DataFrame
         DataFrame tracking processing statuses for files.
+    save_map_plots_of_which_time_frequency : dict
+        Dictionary indicating which time frequencies to save plots for.
 
     Returns
     -------
@@ -474,17 +477,11 @@ def Process_each_week(Year_month_week_pattern,
     
     # Compute and save the mean map for the week
     # NB: There is an issue in here with arguments not being ordered correctly or called explictly
-    # get_the_mean_map_and_save_it(where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
-    #                             [{'Basin_map' : x[1], 'Embouchure_map' : x[2],'Bloom_map' : x[3]} for x in weekly_results],
-    #                             info,
-    #                             Year_month_week_pattern[4:], Year_month_week_pattern[4:],
-    #                             "WEEKLY", save_map_plots_of_which_time_frequency['WEEKLY'], date_of_the_weekly_map)
-    get_the_mean_map_and_save_it( where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
+    get_the_mean_map_and_save_it(where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
                                 [{'Basin_map' : x[1], 'Embouchure_map' : x[2],'Bloom_map' : x[3]} for x in weekly_results],
                                 info,
-                                period_name = 'the week', climatological_subfolder = 'WEEKLY',
-                                do_the_plot = save_map_plots_of_which_time_frequency['WEEKLY'], 
-                                date_for_plot = date_of_the_weekly_map)
+                                Year_month_week_pattern[4:], #Year_month_week_pattern[4:],
+                                "WEEKLY", save_map_plots_of_which_time_frequency['WEEKLY'], date_of_the_weekly_map)
 
     del weekly_results
     gc.collect()
@@ -886,22 +883,22 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
         # Concatenate and compute the mean along the appropriate dimension
         if 'day' in list( maps[0].coords ) :
             
-            combined_maps = xr.concat(maps, dim='day', coords='different', compat='equals')
+            combined_maps = xr.concat(maps, dim='day', coords='different', compat='equals', join='outer')
             mean_map = combined_maps.mean(dim='day', skipna=True)
             
         elif 'week' in list( maps[0].coords ) : 
             
-            combined_maps = xr.concat(maps, dim='week', coords='different', compat='equals')
+            combined_maps = xr.concat(maps, dim='week', coords='different', compat='equals', join='outer')
             mean_map = combined_maps.mean(dim='week', skipna=True)
             
         elif 'month' in list( maps[0].coords ) : 
             
-            combined_maps = xr.concat(maps, dim='month', coords='different', compat='equals')
+            combined_maps = xr.concat(maps, dim='month', coords='different', compat='equals', join='outer')
             mean_map = combined_maps.mean(dim='month', skipna=True)
             
         elif 'year' in list( maps[0].coords ) : 
             
-            combined_maps = xr.concat(maps, dim='year', coords='different', compat='equals')
+            combined_maps = xr.concat(maps, dim='year', coords='different', compat='equals', join='outer')
             mean_map = combined_maps.mean(dim='year', skipna=True)
 
         else : 
@@ -1227,8 +1224,8 @@ class Create_and_save_the_maps :
         
         # Ensure the directory for daily maps exists
         self.where_to_save_data_extended = f'{self.where_to_save_data}/MAPS/[TIME_FREQUENCY]/{self.info.Year}'
-        os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), exist_ok=True)
         os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), exist_ok=True)
+        os.makedirs(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), exist_ok=True)
                  
         # where_to_save_data_extended = self.where_to_save_data_extended
         # all_days_of_the_year = self.all_days_of_the_year 
