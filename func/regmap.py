@@ -1091,6 +1091,8 @@ def plot_and_save_the_QC_metrics(QC_df, metrics_to_plot, path_to_save_QC_files, 
                         "Skewness" : 'Are there outliers ?',
                         "n_outliers" : 'How many outliers are there ? (An outlier is considered as a value > 50)'}
 
+    # TODO: It may be that this is causing the entire dataframe to be removed,
+    # sot eh use of QC_df_for_plot["date"] below is throwing an error because it can't subset an empty dataframe
     QC_df_for_plot = QC_df[ QC_df.cloud_percentage <= max_cloud_cover ]
 
     fig, axes = plt.subplots(nrows=len(metrics_to_plot), ncols=1, figsize=(14, 17), sharex=True)        
@@ -1455,10 +1457,10 @@ class QC_maps :
         self.QC_metrics = QC_metrics_df
         
         self.QC_plot = plot_and_save_the_QC_metrics(QC_df = QC_metrics_df, 
-                                                     metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
-                                                     path_to_save_QC_files = self.where_to_save_QC_data,
-                                                     info = self.info,
-                                                     max_cloud_cover = 80)
+                                                    metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
+                                                    path_to_save_QC_files = self.where_to_save_QC_data,
+                                                    info = self.info,
+                                                    max_cloud_cover = 80)
         
     def combine_QC_metrics(self) : 
                 
