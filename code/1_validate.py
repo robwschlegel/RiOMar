@@ -44,14 +44,14 @@ Match_up_with_insitu_measurements(sextant_chla_all,
                                   where_to_save_Match_Up_data = 'output')
 
 # Match up in situ and satellite SPM data
-sextant_spim_all = {'Data_sources':['SEXTANT'],
+sextant_spm_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['SPM'],
                     'Atmospheric_corrections':['polymer'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
-Match_up_with_insitu_measurements(sextant_spim_all,
+Match_up_with_insitu_measurements(sextant_spm_all,
                                   zones = ['FRANCE'],
                                   # zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
                                   redo_the_MU_database = True, # Change to True is running for the first time 

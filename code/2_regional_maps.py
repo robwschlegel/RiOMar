@@ -48,7 +48,7 @@ for zone in zones_list:
                          where_to_save_regional_maps = "output/REGIONAL_MAPS")
 
 # All years of SPM data
-sextant_spim_all = {'Data_sources':['SEXTANT'],
+sextant_spm_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['SPM'],
                     'Atmospheric_corrections':['polymer'],
@@ -56,7 +56,7 @@ sextant_spim_all = {'Data_sources':['SEXTANT'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
 for zone in zones_list:
-    create_regional_maps(sextant_spim_all,
+    create_regional_maps(sextant_spm_all,
                          Zones = [zone],
                          overwrite_existing_regional_maps = True, # For the moment this must be set to True as it does not detect the correct files
                          save_map_plots_of_which_time_frequency = {'DAILY' : True, 'WEEKLY' : True, 'MONTHLY' : True, 'ANNUAL' : True},
@@ -69,14 +69,27 @@ for zone in zones_list:
 # ### QC of created maps
 # =============================================================================
 
+# testing for empty data.frame issue
+sextant_chla_test = {'Data_sources':['SEXTANT'],
+                    'Sensor_names':["merged"],
+                    'Satellite_variables':['CHLA'],
+                    'Atmospheric_corrections':['polymer'],
+                    'Temporal_resolution':['DAILY'],
+                    'start_day':'1998/01/01',
+                    'end_day':'2025/12/31'}
+QC_of_regional_maps(sextant_chla_test,
+                    Zones = ['BAY_OF_SEINE'],
+                    nb_of_cores_to_use = 14,
+                    where_are_saved_regional_maps = "output/REGIONAL_MAPS")
+
 # All years and zones for Chl a at once
 QC_of_regional_maps(sextant_chla_all,
                     Zones = zones_list,
                     nb_of_cores_to_use = 14,
                     where_are_saved_regional_maps = "output/REGIONAL_MAPS")
 
-# All years and zones for Chl a at once
-QC_of_regional_maps(sextant_spim_all,
+# All years and zones for SPM at once
+QC_of_regional_maps(sextant_spm_all,
                     Zones = zones_list,
                     nb_of_cores_to_use = 14,
                     where_are_saved_regional_maps = "output/REGIONAL_MAPS")

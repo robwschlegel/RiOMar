@@ -50,20 +50,20 @@ Download_satellite_data(sextant_chla_all,
 
 
 # =============================================================================
-#### Download SPIM data
+#### Download SPM data
 # =============================================================================
 
-# Download all SPIM data from 1998 to 2025
+# Download all SPM data from 1998 to 2025
 # NB: This takes a few hours and usesd ~280 GB of disk spaces
 # NB: Several days of data are missing
-sextant_spim_all = {'Data_sources':['SEXTANT'],
+sextant_spm_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['SPM'],
                     'Atmospheric_corrections':['polymer'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
-Download_satellite_data(sextant_spim_all,
+Download_satellite_data(sextant_spm_all,
                         nb_of_cores_to_use = 14,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = 'data')
@@ -135,7 +135,7 @@ for zone in zones_list:
     
 
 # =============================================================================
-#### Create maps of the Chla and SPIM data
+#### Create maps of the Chla and SPM data
 # =============================================================================
 
 # Plot everything in one go (this takes a while)
@@ -152,7 +152,7 @@ for year in range(1998, 2025):
 # Plot everything in one go (this takes a while)
 for year in range(1998, 2025):
     Plot_and_Save_the_map(
-        sextant_spim_all,
+        sextant_spm_all,
         nb_of_cores_to_use = 14,
         where_are_saved_satellite_data = 'data',
         start_day_of_maps_to_plot = f'{year}/01/01',
