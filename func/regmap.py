@@ -1021,6 +1021,11 @@ def Compute_the_metrics_of_one_map(file, exclude_coastal_areas, coastal_waters_m
     
     # 1. Mask out NaN values
     index_finite_values = np.isfinite( map_data_values_to_use )
+    # TODO: This appears to receive 0 or NaN values somehow and throughs a lot of warnings
+    # I'm thinking that the masking above isn't working as intended
+    # It may be that the coastal_waters_mask is not being applied correctly
+    # Or that the map_data_values_to_use is not being populated correctly
+    # Or that the map_data itself is not being loaded correctly
     cloud_percentage = 100 * (~index_finite_values).sum() / map_data_values_to_use.size
     filtered_values = map_data_values_to_use[ index_finite_values ]
     
@@ -1393,8 +1398,6 @@ class QC_maps :
                                                                                 f'{self.where_are_saved_regional_maps}/{self.info.Zone}/Bathy_data.pkl')
         
         bathymetric_mask = bathymetry_data_aligned_to_map_resolution > -minimal_bathymetry_in_m
-
-
         
         land_mask = the_annual_map.isnull()
                 
@@ -1412,8 +1415,6 @@ class QC_maps :
                 
         coastal_water_mask = bathymetric_mask | land_mask_diluted
         coastal_water_mask.to_netcdf( path_to_the_mask )
-        
-        
         
         fig, ax = plt.subplots(figsize=(20, 12))
         
@@ -1450,17 +1451,20 @@ class QC_maps :
         # for file_name in self.map_files :  
         #     print(file_name)
         #     QC_metrics.append(Compute_the_metrics_of_one_map( file_name, exclude_coastal_areas, self.coastal_waters_mask))
-            
-        QC_metrics_df = pd.DataFrame( [x for x in QC_metrics if x is not None] )
-        QC_metrics_df['date'] = pd.to_datetime( QC_metrics_df['date'] )
-        QC_metrics_df = QC_metrics_df.sort_values(by='date')
-        self.QC_metrics = QC_metrics_df
         
-        self.QC_plot = plot_and_save_the_QC_metrics(QC_df = QC_metrics_df, 
-                                                    metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
-                                                    path_to_save_QC_files = self.where_to_save_QC_data,
-                                                    info = self.info,
-                                                    max_cloud_cover = 80)
+        # TODO: There is a bug here caused by 'date' not existing in some of the dictionaries in QC_metrics
+        # So for now I've wrapped this last bit in a logic gate. We shall see if this causes problems later...
+        QC_metrics_df = pd.DataFrame( [x for x in QC_metrics if x is not None] )
+        if len(QC_metrics_df) > 0:
+            QC_metrics_df['date'] = pd.to_datetime( QC_metrics_df['date'] )
+            QC_metrics_df = QC_metrics_df.sort_values(by='date')
+            self.QC_metrics = QC_metrics_df
+            
+            self.QC_plot = plot_and_save_the_QC_metrics(QC_df = QC_metrics_df, 
+                                metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
+                                path_to_save_QC_files = self.where_to_save_QC_data,
+                                info = self.info,
+                                max_cloud_cover = 80)
         
     def combine_QC_metrics(self) : 
                 
