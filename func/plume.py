@@ -2904,9 +2904,9 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
     #                                     Years = np.arange(1998,2025))
 
 
-def make_and_plot_time_series_of_plume_areas(core_arguments, Zones, nb_cores,
-                                             on_which_temporal_resolution_the_plumes_have_been_detected,
-                                             where_are_saved_plume_results, where_to_save_plume_time_series):
+def make_and_plot_time_series_of_plume_areas(core_arguments, Zones, 
+                                             nb_cores, time_step,
+                                             plume_dir_in, plume_dir_out):
     """
     Calls the R function `plot_time_series_of_plume_area_and_thresholds` from Python.
 
@@ -2924,9 +2924,9 @@ def make_and_plot_time_series_of_plume_areas(core_arguments, Zones, nb_cores,
         {'Years': unique_years_between_two_dates(core_arguments['start_day'], core_arguments['end_day']),
          'Zones': Zones,
          'Satellite_variables': ['SPM'],
-         'Temporal_resolution': ([on_which_temporal_resolution_the_plumes_have_been_detected]
-                                 if isinstance(on_which_temporal_resolution_the_plumes_have_been_detected, str)
-                                 else on_which_temporal_resolution_the_plumes_have_been_detected)})
+         'Temporal_resolution': ([time_step]
+                                 if isinstance(time_step, str)
+                                 else time_step)})
 
     Plumes_per_zone = {Zone: list(define_parameters(Zone)['core_of_the_plumes'].keys()) for Zone in Zones}
 
@@ -2939,8 +2939,8 @@ def make_and_plot_time_series_of_plume_areas(core_arguments, Zones, nb_cores,
 
     # Call the R function
     r_function(
-        where_are_saved_plume_results=robjects.StrVector([where_are_saved_plume_results]),
-        where_to_save_plume_time_series=robjects.StrVector([where_to_save_plume_time_series]),
+        where_are_saved_plume_results=robjects.StrVector([plume_dir_in]),
+        where_to_save_plume_time_series=robjects.StrVector([plume_dir_out]),
         Zone=robjects.StrVector(core_arguments['Zones']),
         Data_source=robjects.StrVector(core_arguments['Data_sources']),
         Satellite_sensor=robjects.StrVector(core_arguments['Sensor_names']),

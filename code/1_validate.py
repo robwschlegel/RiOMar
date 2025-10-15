@@ -31,7 +31,7 @@ mpl.use('agg')
 sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['CHLA'],
-                    'Atmospheric_corrections':['polymer'],
+                    'Atmospheric_corrections':['Standard'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
@@ -47,7 +47,7 @@ Match_up_with_insitu_measurements(sextant_chla_all,
 sextant_spm_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['polymer'],
+                    'Atmospheric_corrections':['Standard'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}

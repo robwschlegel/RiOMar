@@ -29,10 +29,10 @@ zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTAN
 time_steps = ['DAILY', 'WEEKLY', 'MONTHLY', 'ANNUAL']
 
 # Basic arguments to be used throughout the script
-sextant_spim_all = {'Data_sources':['SEXTANT'],
+sextant_spm_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['polymer'],
+                    'Atmospheric_corrections':['Standard'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
@@ -42,36 +42,32 @@ sextant_spim_all = {'Data_sources':['SEXTANT'],
 # ### Detect plumes
 # =============================================================================
 
-sextant_spim_1998 = {'Data_sources':['SEXTANT'],
+sextant_spm_1998 = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['polymer'],
+                    'Atmospheric_corrections':['Standard'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'1998/12/31'}
 
 # Test for one year and one zone
-# TODO: Somewhere in the previous steps there is a mismatch between the spatial extent being used to extract data for sites
-# This then prevents the plume code from being able to correctly check for cloud coverage
-# I need to start over from the beginning and ensure the correct AOI is being ensured
-# It appears that the same AOI is being used for all zones, which is not correct
-# This is likely due to the way the AOI is defined in util.py
-# I need to ensure that the AOI is defined based on the zone being processed
-apply_plume_mask(sextant_spim_1998,
-                Zones = ['GULF_OF_LION'],
-                time_step = 'DAILY',
-                nb_cores = 14,
-                dynamic_thresh = False,
-                regional_map_dir = "output/REGIONAL_MAPS",
-                plume_dir = "output/FIXED_THRESHOLD")
+apply_plume_mask(sextant_spm_1998,
+                 Zones = ['GULF_OF_LION'],
+                 time_step = 'DAILY',
+                 nb_cores = 14,
+                 dynamic_thresh = False,
+                 regional_map_dir = "output/REGIONAL_MAPS",
+                 plume_dir = "output/FIXED_THRESHOLD")
 
 
 # Basic plume detection
+# TODO: WEEKLY throws an error - need to investigate
 for zone in zones_list:
-    for time_step in time_steps:
-        apply_plume_mask(sextant_spim_all,
+    #for time_step in time_steps:
+        apply_plume_mask(sextant_spm_all,
                          Zones = [zone],
-                         time_step = time_step,
+                         #time_step = time_step,
+                         time_step = 'DAILY',
                          nb_cores = 14,
                          dynamic_thresh = False,
                          regional_map_dir = "output/REGIONAL_MAPS",
@@ -82,12 +78,20 @@ for zone in zones_list:
 # ### Create time series of plume surface
 # =============================================================================
 
+# test one site and year
+make_and_plot_time_series_of_plume_areas(sextant_spm_1998,
+                                         Zones = ['GULF_OF_LION'],
+                                         nb_cores = 14,
+                                         time_step = 'DAILY',
+                                         plume_dir_in = "output/FIXED_THRESHOLD",
+                                         plume_dir_out = "output/FIXED_THRESHOLD")
+
 # All in one go
 for zone in zones_list:
-    make_and_plot_time_series_of_plume_areas(sextant_spim_all,
+    make_and_plot_time_series_of_plume_areas(sextant_spm_all,
                                              Zones = [zone],
-                                             nb_of_cores_to_use = 14,
-                                             on_which_temporal_resolution_the_plumes_have_been_detected = 'WEEKLY',
-                                             where_are_saved_plume_results = "output/FIXED_THRESHOLD",
-                                             where_to_save_plume_time_series = "output/FIXED_THRESHOLD")
+                                             nb_cores = 14,
+                                             time_step = 'DAILY',
+                                             plume_dir_in = "output/FIXED_THRESHOLD",
+                                             plume_dir_out = "output/FIXED_THRESHOLD")
     

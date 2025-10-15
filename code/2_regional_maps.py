@@ -34,7 +34,7 @@ zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTAN
 sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['CHLA'],
-                    'Atmospheric_corrections':['polymer'],
+                    'Atmospheric_corrections':['Standard'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
@@ -51,7 +51,7 @@ for zone in zones_list:
 sextant_spm_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
                     'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['polymer'],
+                    'Atmospheric_corrections':['Standard'],
                     'Temporal_resolution':['DAILY'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
@@ -68,19 +68,6 @@ for zone in zones_list:
 # =============================================================================
 # ### QC of created maps
 # =============================================================================
-
-# testing for empty data.frame issue
-sextant_chla_test = {'Data_sources':['SEXTANT'],
-                    'Sensor_names':["merged"],
-                    'Satellite_variables':['CHLA'],
-                    'Atmospheric_corrections':['polymer'],
-                    'Temporal_resolution':['DAILY'],
-                    'start_day':'1998/01/01',
-                    'end_day':'2025/12/31'}
-QC_of_regional_maps(sextant_chla_test,
-                    Zones = ['BAY_OF_SEINE'],
-                    nb_of_cores_to_use = 14,
-                    where_are_saved_regional_maps = "output/REGIONAL_MAPS")
 
 # All years and zones for Chl a at once
 QC_of_regional_maps(sextant_chla_all,
