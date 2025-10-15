@@ -53,15 +53,14 @@ sextant_spm_1998 = {'Data_sources':['SEXTANT'],
 # Test for one year and one zone
 apply_plume_mask(sextant_spm_1998,
                  Zones = ['GULF_OF_LION'],
-                 time_step = 'DAILY',
+                 time_step = 'WEEKLY',
                  nb_cores = 14,
                  dynamic_thresh = False,
                  regional_map_dir = "output/REGIONAL_MAPS",
                  plume_dir = "output/FIXED_THRESHOLD")
 
 
-# Basic plume detection
-# TODO: WEEKLY throws an error - need to investigate
+# Basic plume detection for all zones and daily results
 for zone in zones_list:
     #for time_step in time_steps:
         apply_plume_mask(sextant_spm_all,
@@ -73,6 +72,18 @@ for zone in zones_list:
                          regional_map_dir = "output/REGIONAL_MAPS",
                          plume_dir = "output/FIXED_THRESHOLD")
 
+# For weekly results
+for zone in zones_list:
+    #for time_step in time_steps:
+        apply_plume_mask(core_arguemnts = sextant_spm_all,
+                         Zones = [zone],
+                         #time_step = time_step,
+                         time_step = 'WEEKLY',
+                         nb_cores = 14,
+                         dynamic_thresh = False,
+                         regional_map_dir = "output/REGIONAL_MAPS",
+                         plume_dir = "output/FIXED_THRESHOLD")
+        
 
 # =============================================================================
 # ### Create time series of plume surface
@@ -88,6 +99,7 @@ for zone in zones_list:
                                              plume_dir_in = "output/FIXED_THRESHOLD",
                                              plume_dir_out = "output/FIXED_THRESHOLD")
 
+# Rather use weekly results for the plots
 for zone in zones_list:
     make_and_plot_time_series_of_plume_areas(sextant_spm_all,
                                              Zones = [zone],

@@ -1238,13 +1238,6 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;
     ; COMMON BLOCKS:
     ; none
-    ;
-    ; MODIFICATION HISTORY:
-    ;
-    ; Vantrepotte V.
-    ;Written  20.10.07
-    ;Last Update: 26-09-2008: RC rate of Change + comment
-    
     """
     
     # missing_values_are = np.nan # -99999
@@ -1267,11 +1260,6 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
         full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-{the_day:02d}')
                              for date in pd.to_datetime( np.unique( pd.date_range(start=dates.min(), end=dates.max(), freq = '1D').strftime('%Y-%m') ) )
                              for the_day in [ 4, 12, 20, 28]]
-    
-    # TODO: The logic gate was left open, nor was there a value for 'DAILY' so I changed that
-    elif time_frequency == "DAILY" : 
-        full_date_range = [pd.Timestamp(dates) for dates in 
-                           pd.date_range(start=dates.min(), end=dates.max(), freq = '1D')]
 
     # TODO: There does not appear to be any use for 'INITIAL' in the existing code
     # I leave this here for now in case it comes up again later
@@ -1279,7 +1267,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
         # full_date_range = dates
 
     else : 
-        raise ValueError("time_frequency must be one of 'MONTHLY', 'ANNUAL', 'WEEKLY', or 'DAILY'")
+        raise ValueError("time_frequency must be one of 'WEEKLY', 'MONTHLY', or 'ANNUAL'")
 
     var_reindexed = var.reindex(full_date_range, fill_value=np.nan)
     # var_reindexed[np.isnan(var_reindexed)] = missing_values_are
@@ -1340,10 +1328,8 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
         months = np.array([x.month for x in var_reindexed.index])
     elif time_frequency == "WEEKLY" :
         months = np.array([x.strftime('%m-%d') for x in var_reindexed.index])
-    elif time_frequency == "DAILY" :
-        months = np.array([x.strftime('%m-%d') for x in var_reindexed.index])
     else : 
-        raise ValueError("time_frequency must be one of 'MONTHLY', 'ANNUAL', 'WEEKLY', or 'DAILY'")
+        raise ValueError("time_frequency must be one of 'WEEKLY', 'MONTHLY', or 'ANNUAL'")
         
     values_to_use = np.zeros(len(var_reindexed)).astype(bool)
     
@@ -1352,11 +1338,8 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
         n_time_step_per_year = int(n_time_step_per_year * 4)
     elif time_frequency == "ANNUAL" : 
         n_time_step_per_year = int(n_time_step_per_year / 12)
-        # TODO: I added this logic gate, not certain it is correct
-    elif time_frequency == "DAILY" :
-        n_time_step_per_year = int(len(np.unique(months)))
     else : 
-        raise ValueError("time_frequency must be one of 'MONTHLY', 'ANNUAL', 'WEEKLY', or 'DAILY'")
+        raise ValueError("time_frequency must be one of 'WEEKLY', 'MONTHLY', or 'ANNUAL'")
         
     index_month_to_use = np.zeros(n_time_step_per_year).astype(bool)
     

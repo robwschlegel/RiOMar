@@ -424,6 +424,15 @@ def Process_each_week(Year_month_week_pattern,
     filtering, data extraction, and summary statistics computation.
     """
     
+    # For debugging
+    # Year_month_week_pattern = self.Year_month_week_patterns[0]
+    # where_to_save_data_extended = self.where_to_save_data_extended
+    # all_days_of_the_year = self.all_days_of_the_year
+    # suffix_ranges = self.suffix_ranges
+    # info = self.info
+    # map_files = self.map_files
+    # files_have_been_processed = self.files_have_been_processed
+
     # Get file patterns for the given week
     Year_month_week_days = get_file_patterns(Year_month_week_pattern, suffix_ranges)
     
@@ -480,7 +489,7 @@ def Process_each_week(Year_month_week_pattern,
     get_the_mean_map_and_save_it(where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
                                 [{'Basin_map' : x[1], 'Embouchure_map' : x[2],'Bloom_map' : x[3]} for x in weekly_results],
                                 info,
-                                Year_month_week_pattern[4:], #Year_month_week_pattern[4:],
+                                Year_month_week_pattern[4:], Year_month_week_pattern[4:],
                                 "WEEKLY", save_map_plots_of_which_time_frequency['WEEKLY'], date_of_the_weekly_map)
 
     del weekly_results
@@ -1097,7 +1106,7 @@ def plot_and_save_the_QC_metrics(QC_df, metrics_to_plot, path_to_save_QC_files, 
                         "n_outliers" : 'How many outliers are there ? (An outlier is considered as a value > 50)'}
 
     # TODO: It may be that this is causing the entire dataframe to be removed,
-    # sot eh use of QC_df_for_plot["date"] below is throwing an error because it can't subset an empty dataframe
+    # so the use of QC_df_for_plot["date"] below is throwing an error because it can't subset an empty dataframe
     QC_df_for_plot = QC_df[ QC_df.cloud_percentage <= max_cloud_cover ]
 
     fig, axes = plt.subplots(nrows=len(metrics_to_plot), ncols=1, figsize=(14, 17), sharex=True)        
@@ -1203,7 +1212,7 @@ class Create_and_save_the_maps :
         Year_month_week_patterns = [f"{item}_{suffix:02d}" for item in Year_month_patterns for suffix in range(1, 5)]
         suffix_ranges = { '_01': range(1, 9), '_02': range(9, 17), '_03': range(17, 25), '_04': range(25, 32) }
         
-        # TODO: This does not correctly detect if the files have been gernerated. Rather that the final time series file exists
+        # TODO: This does not correctly detect if the files have been generated. Rather that the final time series file exists
         # Meaning that, if this file has been paritally generated, the code will think that all files have been processed
         are_the_maps_already_produced = os.path.isfile( time_series_file_name )
 

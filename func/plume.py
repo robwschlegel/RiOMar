@@ -2009,7 +2009,8 @@ def main_process(file_name, file_names_pattern,
     dict
         Processed results, including plume statistics and confidence index.
     """
-
+    # file_name = "/home/calanus/RiOMar/output/REGIONAL_MAPS/GULF_OF_LION/SEXTANT/SPM/merged/Standard/MAPS/WEEKLY/1998/Averaged_over_01_01.pkl"
+    # file_name = "/home/calanus/RiOMar/output/REGIONAL_MAPS/GULF_OF_LION/SEXTANT/SPM/merged/Standard/MAPS/WEEKLY/2013/Averaged_over_01_01.pkl"
     # print(file_name)
 
     # Define path to save the figure generated during processing
@@ -2856,6 +2857,20 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
                                      plume_dir,
                                      regional_map_dir,
                                      dynamic_thresh) for file_name in file_names])
+        # results = []
+        # for file_name in file_names:
+        #     result = main_process(file_name,
+        #             file_names_pattern, 
+        #             parameters,
+        #             bathymetry_data_aligned_to_reduced_map,
+        #             france_shapefile, 
+        #             map_wo_clouds,
+        #             land_mask,
+        #             inside_polygon_mask,
+        #             plume_dir,
+        #             regional_map_dir,
+        #             dynamic_thresh)
+        #     results.append(result)
 
         # Create a DataFrame from the results, sort by date, and save it to a CSV
         statistics = pd.DataFrame([x for x in results if x is not None]).sort_values('date').reset_index(drop=True)
@@ -2875,19 +2890,19 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
         gc.collect()
 
         # For debugging
-        # for file_name in file_names[0:10] :
-        #     print(file_name)
-        #     main_process(file_name,
-        #           file_names_pattern,
-        #           parameters,
-        #           bathymetry_data_aligned_to_reduced_map,
-        #           france_shapefile,
-        #           map_wo_clouds,
-        #           land_mask,
-        #           inside_polygon_mask,
-        #           plume_dir,
-        #           regional_map_dir, 
-        #           dynamic_thresh)
+        for file_name in file_names[0:10] :
+            print(file_name)
+            main_process(file_name,
+                  file_names_pattern,
+                  parameters,
+                  bathymetry_data_aligned_to_reduced_map,
+                  france_shapefile,
+                  map_wo_clouds,
+                  land_mask,
+                  inside_polygon_mask,
+                  plume_dir,
+                  regional_map_dir, 
+                  dynamic_thresh)
 
     # global_cases_to_process = cases_to_process.drop(['Year'], axis = 1).drop_duplicates().reset_index(drop = True)
 
