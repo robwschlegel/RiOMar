@@ -633,15 +633,29 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
         final_df_reduced = final_df.loc[:,['Date', 'bin', 'Values']]
         final_df_reduced['Values'] = pd.to_numeric(final_df_reduced['Values'])
         
-        if RIVER_FLOW_time_resolution == 'WEEKLY' : 
+        # TODO: There is no 'DAILY' logic gate so I added one and closed this chain of logic gates
+        if RIVER_FLOW_time_resolution == 'DAILY' :
+            final_df = pd.concat(data_dict.values()).groupby("Date", as_index=False).agg(Values=('Flow', 'sum'), n_rivers=('Flow', 'count'))
+            final_df = final_df[ final_df.n_rivers == len(files_to_read) ]
+
+        elif RIVER_FLOW_time_resolution == 'WEEKLY' : 
             final_df_binned = final_df_reduced.groupby([final_df_reduced['Date'].dt.to_period('M'), 'bin']).agg({'Values': 'mean'}).reset_index()
             final_df_binned['Date'] = pd.to_datetime( final_df_binned['Date'].astype(str) + "-" + final_df_binned['bin'].astype(str), format = "%Y-%m-%d" )
             final_df = final_df_binned
             
-        if RIVER_FLOW_time_resolution == 'MONTHLY' :     
+        elif RIVER_FLOW_time_resolution == 'MONTHLY' :     
             final_df_binned = final_df_reduced.groupby([final_df_reduced['Date'].dt.to_period('M')]).agg({'Values': 'mean'}).reset_index()
             final_df_binned['Date'] = pd.to_datetime( final_df_binned['Date'].astype(str) + "-" + "15", format = "%Y-%m-%d" )
             final_df = final_df_binned
+
+        elif RIVER_FLOW_time_resolution == 'ANNUAL' :     
+            final_df_binned = final_df_reduced.groupby([final_df_reduced['Date'].dt.to_period('Y')]).agg({'Values': 'mean'}).reset_index()
+            final_df_binned['Date'] = pd.to_datetime( final_df_binned['Date'].astype(str) + "-06-30", format = "%Y-%m-%d" )
+            final_df = final_df_binned
+            
+        else : 
+            print("The RIVER_FLOW_time_resolution must be one of the following: 'DAILY', 'WEEKLY', 'MONTHLY', 'ANNUAL'")
+            exit_program()
 
         return final_df
          

@@ -26,26 +26,30 @@ mpl.use('agg')
 zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY']
 
 # Basic arguments to be used throughout the script
-core_arguments = {'Data_sources':['SEXTANT'],
-                  'Sensor_names':["merged"],
-                  'Satellite_variables':['SPM'],
-                  'Atmospheric_corrections':['polymer'],
-                  'Temporal_resolution':['DAILY'],
-                  'start_day':'1998/01/01',
-                  'end_day':'2025/12/31'}
+sextant_spm_all = {'Data_sources':['SEXTANT'],
+                   'Sensor_names':["merged"],
+                   'Satellite_variables':['SPM'],
+                   'Atmospheric_corrections':['Standard'],
+                   'Temporal_resolution':['DAILY'],
+                   'start_day':'1998/01/01',
+                   'end_day':'2025/12/31'}
 
 
 # =============================================================================
 # ### X11 analyses
 # =============================================================================
 
+# NB: X11 is best used on weekly or monthyl data, not daily
+# For a daily analysis it will be better to use STL decomposition
+# I will need to implement this if daily results are necessary
+
 # Full analysis in one go
-Apply_X11_method_on_time_series(core_arguments,
-                                Zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
+Apply_X11_method_on_time_series(core_arguments = sextant_spm_all,
+                                Zones = zones_list,
                                 # Zones = ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
-                                nb_of_cores_to_use = 4,
-                                on_which_temporal_resolution_the_plumes_have_been_detected = 'DAILY',
-                                where_are_saved_plume_time_series = "output/FIXED_THRESHOLD",
-                                where_to_save_X11_results = "output/FIXED_THRESHOLD",
+                                nb_cores = 14,
+                                plume_time_step = "WEEKLY",
+                                plume_dir_in = "output/FIXED_THRESHOLD",
+                                X11_dir_out = "output/FIXED_THRESHOLD",
                                 include_river_flow = True)
 

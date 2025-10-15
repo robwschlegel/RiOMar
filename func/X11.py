@@ -6,7 +6,6 @@
 #### Modules
 # =============================================================================
 
-
 import sys, os
 import numpy as np
 import pandas as pd
@@ -21,16 +20,16 @@ func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 from util import (get_all_cases_to_process_for_regional_maps_or_plumes_or_X11,
-                   path_to_fill_to_where_to_save_satellite_files,
-                   fill_the_sat_paths, load_csv_files_in_the_package_folder, define_parameters)
+                  path_to_fill_to_where_to_save_satellite_files,
+                  fill_the_sat_paths, load_csv_files_in_the_package_folder, define_parameters)
 
 
 # =============================================================================
 #### Utility functions
 # =============================================================================
 
+def apply_X11_method_and_save_results(values, variable_name, dates, info, X11_dir_out):
 
-def apply_X11_method_and_save_results(values, variable_name, dates, info, where_to_save_X11_results):
     filtered_values, filtered_dates = keep_the_dates_within_full_year(values, pd.to_datetime(dates))
 
     if info.Temporal_resolution == 'WEEKLY':
@@ -57,7 +56,7 @@ def apply_X11_method_and_save_results(values, variable_name, dates, info, where_
     # Adjust layout
     plt.tight_layout()
 
-    folder_where_to_store_the_plot = os.path.join(where_to_save_X11_results, info.Zone, 'X11_ANALYSIS', variable_name)
+    folder_where_to_store_the_plot = os.path.join(X11_dir_out, info.Zone, 'X11_ANALYSIS', variable_name)
     os.makedirs(folder_where_to_store_the_plot, exist_ok=True)
     file_name = "_".join(info.drop(["Zone", "Year", "Satellite_variable"]).astype(str).values)
 
@@ -82,6 +81,7 @@ def apply_X11_method_and_save_results(values, variable_name, dates, info, where_
 
 
 def keep_the_dates_within_full_year(values, dates):
+
     min_date = dates.min()
     max_date = dates.max()
 
@@ -1171,9 +1171,6 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
                              cutoff_fill=30.0, season_test=False):
     
     """
-    PURPOSE:
-    Decompose a time series var into 3 components: T: TREND, S: SEASON, Y: Irregular
-    
     ; PURPOSE:
     ; Decompose a time series var into 3 components: T: TREND, S: SEASON, Y: Irregular
     ;
@@ -1183,7 +1180,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ; temporal_decomp_V2_6_x11, Var, month, hbad
     ;
     ; INPUTS:
-    ; Var:  vector representing the ANNUAL TIME SERIES  to be decomposed (12 months cycle including bad values)
+    ; Var:  vector representing the ANNUAL TIME SERIES to be decomposed (12 months cycle including bad values)
     ; month: vector of month
     ; hbad: bad value
     ; data: ouput structure
@@ -1230,8 +1227,8 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;			Seasonal_Kendall_sen: make_array(5, value = fbad), $
     ;
     ;			slope_trend: fbad, $
-    ;            intercept_trend : fbad, $               .
-    ;            prob_Test_trend:fbad , $
+    ;           intercept_trend : fbad, $               .
+    ;           prob_Test_trend:fbad , $
     ;
     ;			flag: fbad  $; TEST the efficiency of the gap filling method
     ;		}
@@ -1256,25 +1253,35 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     if isinstance(dates, str) : 
         dates = pd.to_datetime(dates)
     
-    var = pd.Series(values, index= dates )
+    var = pd.Series(values, index = dates)
 
     if time_frequency == "ANNUAL" : 
         full_date_range = [pd.Timestamp(f'{date.year}-07-01') for date in 
                            pd.date_range(start=dates.min(), end=dates.max() + pd.offsets.MonthEnd(0), freq = '1Y')]
     
-    if time_frequency == "MONTHLY" : 
+    elif time_frequency == "MONTHLY" : 
         full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-15') for date in 
                            pd.date_range(start=dates.min(), end=dates.max() + pd.offsets.MonthEnd(0), freq = '1M')]
         
-    if time_frequency == "WEEKLY" : 
-        full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-{the_day:02d}') 
+    elif time_frequency == "WEEKLY" : 
+        full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-{the_day:02d}')
                              for date in pd.to_datetime( np.unique( pd.date_range(start=dates.min(), end=dates.max(), freq = '1D').strftime('%Y-%m') ) )
                              for the_day in [ 4, 12, 20, 28]]
-        
-    if time_frequency == "INITIAL" : 
-        full_date_range = dates
-        
-    var_reindexed = var.reindex(full_date_range, fill_value=np.nan)  
+    
+    # TODO: The logic gate was left open, nor was there a value for 'DAILY' so I changed that
+    elif time_frequency == "DAILY" : 
+        full_date_range = [pd.Timestamp(dates) for dates in 
+                           pd.date_range(start=dates.min(), end=dates.max(), freq = '1D')]
+
+    # TODO: There does not appear to be any use for 'INITIAL' in the existing code
+    # I leave this here for now in case it comes up again later
+    # elif time_frequency == "INITIAL" : 
+        # full_date_range = dates
+
+    else : 
+        raise ValueError("time_frequency must be one of 'MONTHLY', 'ANNUAL', 'WEEKLY', or 'DAILY'")
+
+    var_reindexed = var.reindex(full_date_range, fill_value=np.nan)
     # var_reindexed[np.isnan(var_reindexed)] = missing_values_are
     
     N_values = len(var_reindexed)
@@ -1325,28 +1332,38 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     perc_valid_data = 100 - np.sum(np.isnan(var_reindexed)) / len(var_reindexed) * 100.0
     data['14_perc_valid_data'] = perc_valid_data
 
-    if perc_valid_data < overall_cutoff :
-        
+    if perc_valid_data < overall_cutoff :        
         data['24_flag'] = -100
         return data
 
     if time_frequency in ["MONTHLY", "ANNUAL"] : 
         months = np.array([x.month for x in var_reindexed.index])
-    if time_frequency == "WEEKLY" :     
+    elif time_frequency == "WEEKLY" :
         months = np.array([x.strftime('%m-%d') for x in var_reindexed.index])
+    elif time_frequency == "DAILY" :
+        months = np.array([x.strftime('%m-%d') for x in var_reindexed.index])
+    else : 
+        raise ValueError("time_frequency must be one of 'MONTHLY', 'ANNUAL', 'WEEKLY', or 'DAILY'")
         
     values_to_use = np.zeros(len(var_reindexed)).astype(bool)
     
-    n_months_per_year = 12
+    n_time_step_per_year = 12
     if time_frequency == "WEEKLY" : 
-        n_months_per_year = int(n_months_per_year * 4)
-    if time_frequency == "ANNUAL" : 
-        n_months_per_year = int(n_months_per_year / 12)
+        n_time_step_per_year = int(n_time_step_per_year * 4)
+    elif time_frequency == "ANNUAL" : 
+        n_time_step_per_year = int(n_time_step_per_year / 12)
+        # TODO: I added this logic gate, not certain it is correct
+    elif time_frequency == "DAILY" :
+        n_time_step_per_year = int(len(np.unique(months)))
+    else : 
+        raise ValueError("time_frequency must be one of 'MONTHLY', 'ANNUAL', 'WEEKLY', or 'DAILY'")
         
-    index_month_to_use = np.zeros(n_months_per_year).astype(bool)
+    index_month_to_use = np.zeros(n_time_step_per_year).astype(bool)
     
     for i_m in np.unique(months) :
         
+        # i_m=np.unique(months)[0]
+
         ind_month_i = np.where(months == i_m)[0]
         ind_bad_val_month_i = np.where( np.isnan(var_reindexed[ind_month_i]) )[0]
         n_bad_val_month_i = len(ind_bad_val_month_i)
@@ -1526,18 +1543,17 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     return data
 
 
-def Apply_X11_method_on_time_series(core_arguments, Zones, nb_of_cores_to_use,
-                                    on_which_temporal_resolution_the_plumes_have_been_detected,
-                                    where_are_saved_plume_time_series,
-                                    where_to_save_X11_results,
+def Apply_X11_method_on_time_series(core_arguments, Zones, nb_cores,
+                                    plume_time_step,
+                                    plume_dir_in, X11_dir_out,
                                     include_river_flow=False):
+    
     core_arguments.update({'Zones': Zones,
                            'Years': "*",
                            'Satellite_variables': ['SPM'],
-                           'Temporal_resolution': ([on_which_temporal_resolution_the_plumes_have_been_detected]
-                                                   if isinstance(
-                               on_which_temporal_resolution_the_plumes_have_been_detected, str)
-                                                   else on_which_temporal_resolution_the_plumes_have_been_detected)})
+                           'Temporal_resolution': ([plume_time_step]
+                                                   if isinstance(plume_time_step, str)
+                                                   else plume_time_step)})
 
     cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)
 
@@ -1549,7 +1565,7 @@ def Apply_X11_method_on_time_series(core_arguments, Zones, nb_of_cores_to_use,
 
         file_names_pattern = (fill_the_sat_paths(info,
                                                  path_to_fill_to_where_to_save_satellite_files(
-                                                     where_are_saved_plume_time_series + "/" + info.Zone),
+                                                     plume_dir_in + "/" + info.Zone),
                                                  local_path=True)
                               .replace(info.atmospheric_correction, f'{info.atmospheric_correction}/PLUME_DETECTION/')
                               .replace('/*/*/*', '/Time_series_of_plume_area_and_SPM_threshold.csv'))
@@ -1562,7 +1578,7 @@ def Apply_X11_method_on_time_series(core_arguments, Zones, nb_of_cores_to_use,
 
         apply_X11_method_and_save_results(values=ts_data[var_to_use].tolist(), variable_name=var_to_use,
                                           dates=ts_data.date, info=info,
-                                          where_to_save_X11_results=where_to_save_X11_results)
+                                          X11_dir_out=X11_dir_out)
 
         if include_river_flow:
             river_flow_data = load_csv_files_in_the_package_folder(RIVER_FLOW=True, Zone_of_river_flow=info.Zone,
@@ -1575,7 +1591,7 @@ def Apply_X11_method_on_time_series(core_arguments, Zones, nb_of_cores_to_use,
                                                                  info.atmospheric_correction: "",
                                                                  info.sensor_name: "",
                                                                  info.Data_source: "River_flow"}),
-                                              where_to_save_X11_results=where_to_save_X11_results)
+                                              X11_dir_out=X11_dir_out)
 
             # Source the R script
             X11_R_path = os.path.join(func_dir, 'X11.R')
@@ -1586,7 +1602,7 @@ def Apply_X11_method_on_time_series(core_arguments, Zones, nb_of_cores_to_use,
 
             # Call the R function
             r_function(
-                where_are_saved_X11_results=robjects.StrVector([where_to_save_X11_results]),
+                where_are_saved_X11_results=robjects.StrVector([X11_dir_out]),
                 Zone=robjects.StrVector([info.Zone]),
                 Data_source=robjects.StrVector([info.Data_source]),
                 sensor_name=robjects.StrVector([info.sensor_name]),

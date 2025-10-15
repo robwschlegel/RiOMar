@@ -78,7 +78,8 @@ for zone in zones_list:
 # ### Create time series of plume surface
 # =============================================================================
 
-# All in one go
+# All in one go for daily results
+# NB: X11 will not run on the daily results - need to use STL decomposition instead
 for zone in zones_list:
     make_and_plot_time_series_of_plume_areas(sextant_spm_all,
                                              Zones = [zone],
@@ -87,3 +88,10 @@ for zone in zones_list:
                                              plume_dir_in = "output/FIXED_THRESHOLD",
                                              plume_dir_out = "output/FIXED_THRESHOLD")
 
+for zone in zones_list:
+    make_and_plot_time_series_of_plume_areas(sextant_spm_all,
+                                             Zones = [zone],
+                                             nb_cores = 14,
+                                             time_step = 'WEEKLY',
+                                             plume_dir_in = "output/FIXED_THRESHOLD",
+                                             plume_dir_out = "output/FIXED_THRESHOLD")
