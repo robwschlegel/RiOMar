@@ -30,12 +30,12 @@ time_steps = ['DAILY', 'WEEKLY', 'MONTHLY', 'ANNUAL']
 
 # Basic arguments to be used throughout the script
 sextant_spm_all = {'Data_sources':['SEXTANT'],
-                    'Sensor_names':["merged"],
-                    'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['Standard'],
-                    'Temporal_resolution':['DAILY'],
-                    'start_day':'1998/01/01',
-                    'end_day':'2025/12/31'}
+                   'Sensor_names':["merged"],
+                   'Satellite_variables':['SPM'],
+                   'Atmospheric_corrections':['Standard'],
+                   'Temporal_resolution':['DAILY'],
+                   'start_day':'1998/01/01',
+                   'end_day':'2025/12/31'}
 
 
 # =============================================================================
@@ -78,14 +78,6 @@ for zone in zones_list:
 # ### Create time series of plume surface
 # =============================================================================
 
-# test one site and year
-make_and_plot_time_series_of_plume_areas(sextant_spm_1998,
-                                         Zones = ['GULF_OF_LION'],
-                                         nb_cores = 14,
-                                         time_step = 'DAILY',
-                                         plume_dir_in = "output/FIXED_THRESHOLD",
-                                         plume_dir_out = "output/FIXED_THRESHOLD")
-
 # All in one go
 for zone in zones_list:
     make_and_plot_time_series_of_plume_areas(sextant_spm_all,
@@ -94,4 +86,4 @@ for zone in zones_list:
                                              time_step = 'DAILY',
                                              plume_dir_in = "output/FIXED_THRESHOLD",
                                              plume_dir_out = "output/FIXED_THRESHOLD")
-    
+

@@ -21,7 +21,7 @@ library("doParallel")
 # Utils -------------------------------------------------------------------
 
 ggplot_theme <-   function() {
-  theme(text = element_text(size=35, colour = "black"), #25
+  theme(text = element_text(size = 35, colour = "black"), #25
         plot.title = element_text(hjust = 0.5, size = 55),
         plot.subtitle = element_text(hjust = 0.5),
         panel.grid.major = element_blank(),
@@ -30,8 +30,8 @@ ggplot_theme <-   function() {
         panel.border = element_rect(linetype = "solid", fill = NA),
         axis.text = element_text(size = 35, colour = "black"),
         axis.title = element_text(size = 40, colour = "black"),
-        axis.text.x=element_text(angle=0),
-        axis.ticks.length=unit(.25, "cm"))}
+        axis.text.x = element_text(angle = 0),
+        axis.ticks.length = unit(.25, "cm"))}
 
 save_plot_as_png <- function(plot, name = c(), width = 14, height = 8.27, path, res = 150) {
   
@@ -62,9 +62,9 @@ save_file_as_csv <- function(data, file_name) {
 plot_function <- function(data, y_variable, Temporal_resolution) {
   
   if ("Satellite_sensor" %in% names(data)) {
-    ggplot_base <- ggplot(data, aes(x = date, y = .data[[y_variable]], group = Satellite_sensor, color = Satellite_sensor))  
+    ggplot_base <- ggplot(data, aes(x = date, y = .data[[y_variable]], group = Satellite_sensor, colour = Satellite_sensor))  
   } else {
-    ggplot_base <- ggplot(data, aes(x = date, y = .data[[y_variable]])) + labs(color = "")
+    ggplot_base <- ggplot(data, aes(x = date, y = .data[[y_variable]])) #+ labs(colour = "")
   }
   
   the_plot <- ggplot_base +
@@ -84,7 +84,7 @@ plot_function <- function(data, y_variable, Temporal_resolution) {
     data['smoothed_threshold_data'] <- smoothed_threshold_data
     
     the_plot <- the_plot + geom_line(aes(y = smoothed_threshold_data), 
-                                     linewidth = 1.5, na.rm = TRUE, color = "black")
+                                     linewidth = 1.5, na.rm = TRUE, colour = "black")
     
   }
   
