@@ -30,22 +30,6 @@ zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTAN
 # ### Make regional maps
 # =============================================================================
 
-# Test for one year and site for SPM
-sextant_spm_1998 = {'Data_sources':['SEXTANT'],
-                    'Sensor_names':["merged"],
-                    'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['Standard'],
-                    'Temporal_resolution':['DAILY'],
-                    'start_day':'1998/01/01',
-                    'end_day':'1998/12/31'}
-create_regional_maps(core_arguments = sextant_spm_1998,
-                     Zones = ['GULF_OF_LION'],
-                     overwrite_existing_regional_maps = True, # For the moment this must be set to True as it does not detect the correct files
-                     save_map_plots_of_which_time_frequency = {'DAILY' : True, 'WEEKLY' : True, 'MONTHLY' : True, 'ANNUAL' : True},
-                     nb_of_cores_to_use = 14,
-                     where_are_saved_satellite_data = "data",
-                     where_to_save_regional_maps = "output/REGIONAL_MAPS")
-
 # All years of Chl a data
 sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],

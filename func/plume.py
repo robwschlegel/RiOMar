@@ -2890,19 +2890,19 @@ def apply_plume_mask(core_arguments, Zones, time_step, nb_cores,
         gc.collect()
 
         # For debugging
-        for file_name in file_names[0:10] :
-            print(file_name)
-            main_process(file_name,
-                  file_names_pattern,
-                  parameters,
-                  bathymetry_data_aligned_to_reduced_map,
-                  france_shapefile,
-                  map_wo_clouds,
-                  land_mask,
-                  inside_polygon_mask,
-                  plume_dir,
-                  regional_map_dir, 
-                  dynamic_thresh)
+        # for file_name in file_names[0:10] :
+        #     print(file_name)
+        #     main_process(file_name,
+        #           file_names_pattern,
+        #           parameters,
+        #           bathymetry_data_aligned_to_reduced_map,
+        #           france_shapefile,
+        #           map_wo_clouds,
+        #           land_mask,
+        #           inside_polygon_mask,
+        #           plume_dir,
+        #           regional_map_dir, 
+        #           dynamic_thresh)
 
     # global_cases_to_process = cases_to_process.drop(['Year'], axis = 1).drop_duplicates().reset_index(drop = True)
 

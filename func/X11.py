@@ -1171,6 +1171,9 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
                              cutoff_fill=30.0, season_test=False):
     
     """
+    PURPOSE:
+    Decompose a time series var into 3 components: T: TREND, S: SEASON, Y: Irregular
+    
     ; PURPOSE:
     ; Decompose a time series var into 3 components: T: TREND, S: SEASON, Y: Irregular
     ;
@@ -1180,7 +1183,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ; temporal_decomp_V2_6_x11, Var, month, hbad
     ;
     ; INPUTS:
-    ; Var:  vector representing the ANNUAL TIME SERIES to be decomposed (12 months cycle including bad values)
+    ; Var:  vector representing the ANNUAL TIME SERIES  to be decomposed (12 months cycle including bad values)
     ; month: vector of month
     ; hbad: bad value
     ; data: ouput structure
@@ -1189,14 +1192,14 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;
     ;filter_outlier : if set filter of the outlier assuming a normal distribution (mean +/- (out_lim*std))
     ;out_limit : limit considered for outlier detection ...default: 3
-    ;overall_cutoff: cutoff value for the test on the initial % of valid data in the TS. If %age of valid data < overall cutoff -> flagged. Default 50%
-    ;perc_month_limit : cutoff value for selecting the valid months for the "shortened years". in % default 50%
+    ;overall_cutoff: cutoff value for the test on the intial % of valid data in the TS. If %age of valid data < overall cutoff -> flagged. Default 50%
+    ;perc_month_limit : cutoff value for selecting the valid months for the "shortened years". in % defualt 50%
     ;X11_pezzulli: if set use the X11 method defined in Pezzulli et al., J of Climate, 2005
     ;X11_user : if set use the X11 method defined in the X11 user guide manual
     ;var_stationary : if stat compute the contribution of the X11 components to the variance of the stationary part of the initial TS
     ;lin_interpol : if set to 1 fill the gaps in the TS using linear interpolation instead of the evf method (if set to 0)
     ;cutoff_fill : cutoff value for the maximal %age of missing data acceptable for performing the gap filling procedure. Default 30% of missing data max
-    ;season_test : if set then the test on the presence of seasonality in the data is performed
+    ;season_test : if set then the test on the presence of sesoanlity in the data is performed
     ;
     
     ;========================================================================================
@@ -1227,8 +1230,8 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;			Seasonal_Kendall_sen: make_array(5, value = fbad), $
     ;
     ;			slope_trend: fbad, $
-    ;           intercept_trend : fbad, $               .
-    ;           prob_Test_trend:fbad , $
+    ;            intercept_trend : fbad, $               .
+    ;            prob_Test_trend:fbad , $
     ;
     ;			flag: fbad  $; TEST the efficiency of the gap filling method
     ;		}
@@ -1238,6 +1241,13 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;
     ; COMMON BLOCKS:
     ; none
+    ;
+    ; MODIFICATION HISTORY:
+    ;
+    ; Vantrepotte V.
+    ;Written  20.10.07
+    ;Last Update: 26-09-2008: RC rate of Change + comment
+    
     """
     
     # missing_values_are = np.nan # -99999
@@ -1246,30 +1256,25 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     if isinstance(dates, str) : 
         dates = pd.to_datetime(dates)
     
-    var = pd.Series(values, index = dates)
+    var = pd.Series(values, index= dates )
 
     if time_frequency == "ANNUAL" : 
         full_date_range = [pd.Timestamp(f'{date.year}-07-01') for date in 
                            pd.date_range(start=dates.min(), end=dates.max() + pd.offsets.MonthEnd(0), freq = '1Y')]
     
-    elif time_frequency == "MONTHLY" : 
+    if time_frequency == "MONTHLY" : 
         full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-15') for date in 
                            pd.date_range(start=dates.min(), end=dates.max() + pd.offsets.MonthEnd(0), freq = '1M')]
         
-    elif time_frequency == "WEEKLY" : 
-        full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-{the_day:02d}')
+    if time_frequency == "WEEKLY" : 
+        full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-{the_day:02d}') 
                              for date in pd.to_datetime( np.unique( pd.date_range(start=dates.min(), end=dates.max(), freq = '1D').strftime('%Y-%m') ) )
                              for the_day in [ 4, 12, 20, 28]]
-
-    # TODO: There does not appear to be any use for 'INITIAL' in the existing code
-    # I leave this here for now in case it comes up again later
-    # elif time_frequency == "INITIAL" : 
-        # full_date_range = dates
-
-    else : 
-        raise ValueError("time_frequency must be one of 'WEEKLY', 'MONTHLY', or 'ANNUAL'")
-
-    var_reindexed = var.reindex(full_date_range, fill_value=np.nan)
+        
+    if time_frequency == "INITIAL" : 
+        full_date_range = dates
+        
+    var_reindexed = var.reindex(full_date_range, fill_value=np.nan)  
     # var_reindexed[np.isnan(var_reindexed)] = missing_values_are
     
     N_values = len(var_reindexed)
@@ -1320,33 +1325,28 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     perc_valid_data = 100 - np.sum(np.isnan(var_reindexed)) / len(var_reindexed) * 100.0
     data['14_perc_valid_data'] = perc_valid_data
 
-    if perc_valid_data < overall_cutoff :        
+    if perc_valid_data < overall_cutoff :
+        
         data['24_flag'] = -100
         return data
 
     if time_frequency in ["MONTHLY", "ANNUAL"] : 
         months = np.array([x.month for x in var_reindexed.index])
-    elif time_frequency == "WEEKLY" :
+    if time_frequency == "WEEKLY" :     
         months = np.array([x.strftime('%m-%d') for x in var_reindexed.index])
-    else : 
-        raise ValueError("time_frequency must be one of 'WEEKLY', 'MONTHLY', or 'ANNUAL'")
         
     values_to_use = np.zeros(len(var_reindexed)).astype(bool)
     
-    n_time_step_per_year = 12
+    n_months_per_year = 12
     if time_frequency == "WEEKLY" : 
-        n_time_step_per_year = int(n_time_step_per_year * 4)
-    elif time_frequency == "ANNUAL" : 
-        n_time_step_per_year = int(n_time_step_per_year / 12)
-    else : 
-        raise ValueError("time_frequency must be one of 'WEEKLY', 'MONTHLY', or 'ANNUAL'")
+        n_months_per_year = int(n_months_per_year * 4)
+    if time_frequency == "ANNUAL" : 
+        n_months_per_year = int(n_months_per_year / 12)
         
-    index_month_to_use = np.zeros(n_time_step_per_year).astype(bool)
+    index_month_to_use = np.zeros(n_months_per_year).astype(bool)
     
     for i_m in np.unique(months) :
         
-        # i_m=np.unique(months)[0]
-
         ind_month_i = np.where(months == i_m)[0]
         ind_bad_val_month_i = np.where( np.isnan(var_reindexed[ind_month_i]) )[0]
         n_bad_val_month_i = len(ind_bad_val_month_i)
@@ -1526,7 +1526,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     return data
 
 
-def Apply_X11_method_on_time_series(core_arguments, Zones, nb_cores,
+def Apply_X11_method_on_time_series(core_arguments, Zones,
                                     plume_time_step,
                                     plume_dir_in, X11_dir_out,
                                     include_river_flow=False):
@@ -1550,7 +1550,7 @@ def Apply_X11_method_on_time_series(core_arguments, Zones, nb_cores,
                                                  path_to_fill_to_where_to_save_satellite_files(
                                                      plume_dir_in + "/" + info.Zone),
                                                  local_path=True)
-                              .replace(info.atmospheric_correction, f'{info.atmospheric_correction}/PLUME_DETECTION/')
+                              .replace(info.atmospheric_correction, f'{info.atmospheric_correction}/PLUME_DETECTION')
                               .replace('/*/*/*', '/Time_series_of_plume_area_and_SPM_threshold.csv'))
 
         if os.path.exists(file_names_pattern) == False:

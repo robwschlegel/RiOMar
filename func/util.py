@@ -8,6 +8,7 @@
 
 
 import os, sys, subprocess, pickle, bathyreq, glob, datetime, importlib.resources, tempfile, shutil, re
+from pathlib import Path
 import pandas as pd
 import xarray as xr
 import numpy as np
@@ -551,24 +552,15 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
                                 .rename(columns = {'gpsLat*':'LATITUDE', 
                                                    'gpsLong*':'LONGITUDE',
                                                    'nomSite*':"Site"}))
-
-        # with importlib.resources.open_text('myRIOMAR_dev.DATA.INSITU_data.SOMLIT', 'Somlit.csv') as f:
-            # return (pd.read_csv(f, sep = ";", header = 2).iloc[1:]
-            #                     .rename(columns = {'gpsLat*':'LATITUDE', 
-            #                                        'gpsLong*':'LONGITUDE',
-            #                                        'nomSite*':"Site"}))
         
     if REPHY : 
         REPHY_dir = os.path.join( proj_dir, 'data', 'INSITU_data', 'REPHY' )
         REPHY_data = os.path.join( REPHY_dir, 'Table1_REPHY_hydro_RIOMAR.csv.gz' )
         return pd.read_csv(REPHY_data, sep = ";", header = 0, encoding = "ISO-8859-1", compression = {'method' : 'gzip'})
-        # with importlib.resources.open_binary('myRIOMAR_dev.DATA.INSITU_data.REPHY', 'Table1_REPHY_hydro_RIOMAR.csv.gz') as f:
-        #     return pd.read_csv(f, sep = ";", header = 0, encoding="ISO-8859-1", compression = {'method' : 'gzip'})
         
     if FRANCE_shapefile : 
         
         shp_folder = os.path.join( proj_dir, 'data', 'FRANCE_shapefile' )  # Directly get the package folder path
-        # shp_folder = importlib.resources.files('myRIOMAR_dev.DATA.FRANCE_shapefile')  # Directly get the package folder path
     
         with tempfile.TemporaryDirectory() as tmp_dir:
             # Extract all necessary shapefile components
@@ -577,8 +569,6 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
                 shp_file = os.path.join(shp_folder, f'gadm41_FRA_0{ext}')
                 if os.path.exists(shp_file): # Ensure the file exists before copying
                     shutil.copy(shp_file, os.path.join(tmp_dir, f'gadm41_FRA_0{ext}'))
-                # if shp_file.exists():  # Ensure the file exists before copying
-                #     shutil.copy(shp_file, os.path.join(tmp_dir, f'gadm41_FRA_0{ext}'))
     
             # Read the shapefile from the temporary directory
             shapefile_path = os.path.join(tmp_dir, 'gadm41_FRA_0.shp')
@@ -587,11 +577,11 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
     if RIVER_FLOW : 
         
         where_are_river_data = os.path.join( proj_dir, 'data', 'RIVER_FLOW', Zone_of_river_flow)
-        # where_are_river_data = 'myRIOMAR_dev.DATA.RIVER_FLOW.' + Zone_of_river_flow
         
-        files_to_load = importlib.resources.files( where_are_river_data )
+        files_to_load = glob.glob(os.path.join(where_are_river_data, '*'))
         
-        files_to_read = [f for f in files_to_load.iterdir() if f.suffix in ('.txt', '.dat', '.csv', '.ascii')]
+        # Convert file paths to Path objects for consistent handling
+        files_to_read = [Path(f) for f in files_to_load if Path(f).suffix in ('.txt', '.dat', '.csv', '.ascii')]
 
         # Load each file into a dictionary of DataFrames
         data_dict = {}
@@ -635,8 +625,7 @@ def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_s
         
         # TODO: There is no 'DAILY' logic gate so I added one and closed this chain of logic gates
         if RIVER_FLOW_time_resolution == 'DAILY' :
-            final_df = pd.concat(data_dict.values()).groupby("Date", as_index=False).agg(Values=('Flow', 'sum'), n_rivers=('Flow', 'count'))
-            final_df = final_df[ final_df.n_rivers == len(files_to_read) ]
+            final_df = final_df_reduced
 
         elif RIVER_FLOW_time_resolution == 'WEEKLY' : 
             final_df_binned = final_df_reduced.groupby([final_df_reduced['Date'].dt.to_period('M'), 'bin']).agg({'Values': 'mean'}).reset_index()

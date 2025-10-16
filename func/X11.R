@@ -1,3 +1,9 @@
+# func/X11.R
+# This script provides graphical creation for the X11.py script
+
+
+# Libraries ---------------------------------------------------------------
+
 # list_of_packages <- c("plyr", "tidyverse", "ggpubr", "viridis", "doParallel", "zoo", "ggnewscale", "scales")
 # new.packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
 # if(length(new.packages)) install.packages(new.packages)
@@ -10,8 +16,7 @@ library("ggpubr")
 library("scales")
 library("ggnewscale")
 library("zoo")
-library("doParalell")
-
+# library("doParalell")
 
 # where_are_saved_X11_results = '/home/terrats/Desktop/RIOMAR/TEST/RESULTS/TEST4'
 # Zone= "BAY_OF_SEINE"
@@ -22,40 +27,7 @@ library("doParalell")
 ### Load the files 
 
 
-
-### Plot them based on the script used for plotting plume area ts
-
-
-#### Main ####
-
-plot_time_series_of_plume_area_and_river_flow <- function(where_are_saved_X11_results,
-                                                          Zone, Data_source, sensor_name,
-                                                          atmospheric_correction, Temporal_resolution) {
-  
-  X11_data <- get_X11_data(where_are_saved_X11_results, Zone, Data_source, sensor_name, atmospheric_correction, Temporal_resolution)
-  
-  Raw_plot <- make_the_plot(X11_data, type_of_signal = 'Raw')
-  
-  Interannual_plot <- make_the_plot(X11_data, type_of_signal = 'Interannual')
-  
-  Seasonal_plot <- make_the_plot(X11_data, type_of_signal = 'Seasonal')
-  
-  Residual_plot <- make_the_plot(X11_data, type_of_signal = 'Residual')
-  
-  final_plot <- ggarrange(Raw_plot, Interannual_plot, Seasonal_plot, Residual_plot, ncol = 1, nrow = 4, align = "v")
-  
-  final_plot <- annotate_figure(final_plot, top=text_grob(Zone %>% str_replace_all("_", " "), face = "bold", size = 60, color = "black"))
-  
-  save_plot_as_png(plot = final_plot, width = 40, height = 25, # = 35
-                   path = file.path(where_are_saved_X11_results, Zone, "X11_ANALYSIS", "plume_area_vs_river_flow"),
-                   name = paste(Data_source, sensor_name, atmospheric_correction, Temporal_resolution, sep = "_"))
-  
-}
-
-
-#### Utils ####
-
-
+# Utils -------------------------------------------------------------------
 
 get_X11_data <- function(where_are_saved_X11_results, Zone, Data_source, sensor_name, atmospheric_correction, Temporal_resolution) {
   
@@ -102,6 +74,7 @@ sec_axis_adjustement_factors <- function(var_to_scale, var_ref) {
   
 }
 
+
 ggplot_theme <-   function() {
   theme(text = element_text(size=35, colour = "black"), #25
         plot.title = element_text(hjust = 0.5, size = 55),
@@ -114,6 +87,7 @@ ggplot_theme <-   function() {
         axis.text.x=element_text(angle=0),
         axis.ticks.length=unit(.25, "cm"))}
 
+
 make_the_plot <- function(X11_data, type_of_signal) {
   
   unique_years <- X11_data$dates %>% year() %>% unique()
@@ -125,8 +99,8 @@ make_the_plot <- function(X11_data, type_of_signal) {
   
   if (type_of_signal %in% c("Seasonal", "Residual")) {
     X11_data_for_plot <- X11_data_for_plot %>% 
-                            mutate(river_flow = river_flow + mean(X11_data$Raw_signal_river_flow, na.rm = T),
-                                   plume_area = plume_area + mean(X11_data$Raw_signal_plume_area, na.rm = T))
+      mutate(river_flow = river_flow + mean(X11_data$Raw_signal_river_flow, na.rm = T),
+             plume_area = plume_area + mean(X11_data$Raw_signal_plume_area, na.rm = T))
   }
   
   scaling_factor <- sec_axis_adjustement_factors(var_to_scale = X11_data_for_plot$river_flow, 
@@ -188,4 +162,32 @@ save_plot_as_png <- function(plot, name = c(), width = 14, height = 8.27, path, 
   print(plot)
   dev.off()
   
-# }
+}
+
+
+# Main --------------------------------------------------------------------
+
+plot_time_series_of_plume_area_and_river_flow <- function(where_are_saved_X11_results,
+                                                          Zone, Data_source, sensor_name,
+                                                          atmospheric_correction, Temporal_resolution) {
+  
+  X11_data <- get_X11_data(where_are_saved_X11_results, Zone, Data_source, sensor_name, atmospheric_correction, Temporal_resolution)
+  
+  Raw_plot <- make_the_plot(X11_data, type_of_signal = 'Raw')
+  
+  Interannual_plot <- make_the_plot(X11_data, type_of_signal = 'Interannual')
+  
+  Seasonal_plot <- make_the_plot(X11_data, type_of_signal = 'Seasonal')
+  
+  Residual_plot <- make_the_plot(X11_data, type_of_signal = 'Residual')
+  
+  final_plot <- ggarrange(Raw_plot, Interannual_plot, Seasonal_plot, Residual_plot, ncol = 1, nrow = 4, align = "v")
+  
+  final_plot <- annotate_figure(final_plot, top=text_grob(Zone %>% str_replace_all("_", " "), face = "bold", size = 60, color = "black"))
+  
+  save_plot_as_png(plot = final_plot, width = 40, height = 25, # = 35
+                   path = file.path(where_are_saved_X11_results, Zone, "X11_ANALYSIS", "plume_area_vs_river_flow"),
+                   name = paste(Data_source, sensor_name, atmospheric_correction, Temporal_resolution, sep = "_"))
+  
+}
+

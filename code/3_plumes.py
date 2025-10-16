@@ -62,27 +62,23 @@ apply_plume_mask(sextant_spm_1998,
 
 # Basic plume detection for all zones and daily results
 for zone in zones_list:
-    #for time_step in time_steps:
-        apply_plume_mask(sextant_spm_all,
-                         Zones = [zone],
-                         #time_step = time_step,
-                         time_step = 'DAILY',
-                         nb_cores = 14,
-                         dynamic_thresh = False,
-                         regional_map_dir = "output/REGIONAL_MAPS",
-                         plume_dir = "output/FIXED_THRESHOLD")
+    apply_plume_mask(sextant_spm_all,
+                     Zones = [zone],
+                     time_step = 'DAILY',
+                     nb_cores = 14,
+                     dynamic_thresh = False,
+                     regional_map_dir = "output/REGIONAL_MAPS",
+                     plume_dir = "output/FIXED_THRESHOLD")
 
 # For weekly results
 for zone in zones_list:
-    #for time_step in time_steps:
-        apply_plume_mask(core_arguemnts = sextant_spm_all,
-                         Zones = [zone],
-                         #time_step = time_step,
-                         time_step = 'WEEKLY',
-                         nb_cores = 14,
-                         dynamic_thresh = False,
-                         regional_map_dir = "output/REGIONAL_MAPS",
-                         plume_dir = "output/FIXED_THRESHOLD")
+    apply_plume_mask(sextant_spm_all,
+                     Zones = [zone],
+                     time_step = 'WEEKLY',
+                     nb_cores = 14,
+                     dynamic_thresh = False,
+                     regional_map_dir = "output/REGIONAL_MAPS",
+                     plume_dir = "output/FIXED_THRESHOLD")
         
 
 # =============================================================================
@@ -91,13 +87,13 @@ for zone in zones_list:
 
 # All in one go for daily results
 # NB: X11 will not run on the daily results - need to use STL decomposition instead
-for zone in zones_list:
-    make_and_plot_time_series_of_plume_areas(sextant_spm_all,
-                                             Zones = [zone],
-                                             nb_cores = 14,
-                                             time_step = 'DAILY',
-                                             plume_dir_in = "output/FIXED_THRESHOLD",
-                                             plume_dir_out = "output/FIXED_THRESHOLD")
+# for zone in zones_list:
+#     make_and_plot_time_series_of_plume_areas(sextant_spm_all,
+#                                              Zones = [zone],
+#                                              nb_cores = 14,
+#                                              time_step = 'DAILY',
+#                                              plume_dir_in = "output/FIXED_THRESHOLD",
+#                                              plume_dir_out = "output/FIXED_THRESHOLD")
 
 # Rather use weekly results for the plots
 for zone in zones_list:

@@ -44,10 +44,8 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 # I will need to implement this if daily results are necessary
 
 # Full analysis in one go
-Apply_X11_method_on_time_series(core_arguments = sextant_spm_all,
+Apply_X11_method_on_time_series(sextant_spm_all,
                                 Zones = zones_list,
-                                # Zones = ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
-                                nb_cores = 14,
                                 plume_time_step = "WEEKLY",
                                 plume_dir_in = "output/FIXED_THRESHOLD",
                                 X11_dir_out = "output/FIXED_THRESHOLD",
