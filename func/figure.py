@@ -61,7 +61,7 @@ def load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_m
     folder_where_to_save_Figure_2_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURES', 'FIGURE_2', 'DATA')
     os.makedirs(folder_where_to_save_Figure_2_data, exist_ok = True)
     
-    path_to_regional_maps = {key : (path_to_fill_to_where_to_save_satellite_files( os.path.join(where_are_saved_regional_maps, 'RESULTS', key) )
+    path_to_regional_maps = {key : (path_to_fill_to_where_to_save_satellite_files( os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', key) )
                                        .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
                                                 'SEXTANT/SPM/merged/Standard/MAPS/DAILY')
                                        .replace('[YEAR]/[MONTH]/[DAY]', f'{date[:4]}/{date}.pkl')) 
@@ -168,13 +168,15 @@ def Figure_2(where_are_saved_regional_maps, where_to_save_the_figure, include_st
 
 
 def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
+    
+    # Static date for each zone to illustrate the plume detection steps
     Zone = 'BAY_OF_SEINE'
     plume_name = 'Seine'
     Date = '2018-02-25'
 
     parameters = define_parameters(Zone)
 
-    path_to_the_satellite_file_to_use = os.path.join(where_are_saved_regional_maps, 'RESULTS', Zone, 'SEXTANT', 'SPM',
+    path_to_the_satellite_file_to_use = os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', Zone, 'SEXTANT', 'SPM',
                                                      'merged',
                                                      'Standard', 'MAPS', 'DAILY', Date[:4], f'{Date}.pkl')
 
@@ -182,16 +184,16 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
     with open(path_to_the_satellite_file_to_use, 'rb') as f:
         ds = pickle.load(f)['Basin_map']['map_data']
 
-        # Reduce the resolution of the dataset to the specified latitude and longitude resolutions
+    # Reduce the resolution of the dataset to the specified latitude and longitude resolutions
     ds_reduced = (reduce_resolution(ds, parameters['lat_new_resolution'], parameters['lon_new_resolution'])
                   if parameters['lat_new_resolution'] is not None
                   else ds)
 
     bathymetry_data_aligned_to_reduced_map = align_bathymetry_to_resolution(ds_reduced,
-                                                                            f'{where_are_saved_regional_maps}/RESULTS/{Zone}/Bathy_data.pkl')
+                                                                            f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
 
     (_, land_mask) = preprocess_annual_dataset_and_compute_land_mask(
-        (path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + "/RESULTS/" + Zone)
+        (path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + "/REGIONAL_MAPS/" + Zone)
          .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
                   'SEXTANT/SPM/merged/Standard/MAPS/MULTIYEAR')
          .replace('[YEAR]/[MONTH]/[DAY]', 'Averaged_over_multi-years.pkl')
@@ -268,7 +270,7 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
 
         parameters = define_parameters(Zone)
 
-        path_to_the_satellite_file_to_use = os.path.join(where_are_saved_regional_maps, 'RESULTS', Zone, 'SEXTANT',
+        path_to_the_satellite_file_to_use = os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', Zone, 'SEXTANT',
                                                          'SPM', 'merged',
                                                          'Standard', 'MAPS', 'DAILY', Date[:4], f'{Date}.pkl')
 
@@ -282,10 +284,10 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
                       else ds)
 
         bathymetry_data_aligned_to_reduced_map = align_bathymetry_to_resolution(ds_reduced,
-                                                                                f'{where_are_saved_regional_maps}/RESULTS/{Zone}/Bathy_data.pkl')
+                                                                                f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
 
         (_, land_mask) = preprocess_annual_dataset_and_compute_land_mask(
-            (path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + "/RESULTS/" + Zone)
+            (path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + "/REGIONAL_MAPS/" + Zone)
              .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
                       'SEXTANT/SPM/merged/Standard/MAPS/MULTIYEAR')
              .replace('[YEAR]/[MONTH]/[DAY]', 'Averaged_over_multi-years.pkl')

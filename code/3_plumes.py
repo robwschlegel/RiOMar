@@ -79,7 +79,18 @@ for zone in zones_list:
                      dynamic_thresh = False,
                      regional_map_dir = "output/REGIONAL_MAPS",
                      plume_dir = "output/FIXED_THRESHOLD")
-        
+
+
+# For weekly results with dynamic threshold
+for zone in zones_list:
+    apply_plume_mask(sextant_spm_all,
+                     Zones = [zone],
+                     time_step = 'WEEKLY',
+                     nb_cores = 14,
+                     dynamic_thresh = True,
+                     regional_map_dir = "output/REGIONAL_MAPS",
+                     plume_dir = "output/DYNAMIC_THRESHOLD")
+    
 
 # =============================================================================
 # ### Create time series of plume surface

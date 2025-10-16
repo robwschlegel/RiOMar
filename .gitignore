@@ -16,7 +16,7 @@ output/REGIONAL_PLUME_DETECTION
 output/FIXED_THRESHOLD
 
 # Figures
-figures/SOUTHERN_BRITTANY
+figures/ARTICLE/FIGURES/*/DATA
 
 # C extensions
 *.so
