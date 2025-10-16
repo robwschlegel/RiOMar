@@ -39,13 +39,10 @@ Figure_4(where_are_saved_regional_maps = "output",
 Figure_5(where_are_saved_regional_maps = "output",
          where_to_save_the_figure = "figures")
 
-# TODO: Still need to run dynamic threshold plumes to get the correct figure
 Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold = "output/DYNAMIC_THRESHOLD",
            where_are_saved_plume_results_with_fixed_threshold = "output/FIXED_THRESHOLD",
            where_to_save_the_figure = "figures")
 
 Figure_8_9_10(where_are_saved_X11_results = "output/FIXED_THRESHOLD",
               where_to_save_the_figure = "figures")
-
-print("All figures have been created and saved in the 'figures' folder.")
 

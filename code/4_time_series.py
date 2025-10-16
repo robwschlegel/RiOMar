@@ -51,3 +51,16 @@ Apply_X11_method_on_time_series(sextant_spm_all,
                                 X11_dir_out = "output/FIXED_THRESHOLD",
                                 include_river_flow = True)
 
+# Full analysis in one go with dynamic threshold
+Apply_X11_method_on_time_series(sextant_spm_all,
+                                Zones = zones_list,
+                                plume_time_step = "WEEKLY",
+                                plume_dir_in = "output/DYNAMIC_THRESHOLD",
+                                X11_dir_out = "output/DYNAMIC_THRESHOLD",
+                                include_river_flow = True)
+
+
+# =============================================================================
+# ### Wind comparison
+# =============================================================================
+
