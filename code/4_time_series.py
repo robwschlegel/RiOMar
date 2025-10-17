@@ -64,3 +64,17 @@ Apply_X11_method_on_time_series(sextant_spm_all,
 # ### Wind comparison
 # =============================================================================
 
+
+
+# =============================================================================
+# ### Other comparisons
+# =============================================================================
+
+
+# =============================================================================
+# ### Multivariate analysis
+# =============================================================================
+
+# The idea here is to use a GAM to understand what factors are driving plume surface
+# variations. This will include river flow, wind speed and direction, precipitation,
+# and perhaps others.

@@ -42,7 +42,7 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 # ### Detect plumes
 # =============================================================================
 
-# Basic plume detection for all zones and daily results
+# Plume detection for all zones and daily results
 for zone in zones_list:
     apply_plume_mask(sextant_spm_all,
                      Zones = [zone],
@@ -51,6 +51,16 @@ for zone in zones_list:
                      dynamic_thresh = False,
                      regional_map_dir = "output/REGIONAL_MAPS",
                      plume_dir = "output/FIXED_THRESHOLD")
+    
+# Daily plums with a dynamic threshold
+for zone in zones_list:
+    apply_plume_mask(sextant_spm_all,
+                     Zones = [zone],
+                     time_step = 'DAILY',
+                     nb_cores = 14,
+                     dynamic_thresh = False,
+                     regional_map_dir = "output/REGIONAL_MAPS",
+                     plume_dir = "output/DYNAMIC_THRESHOLD")
 
 # For weekly results
 for zone in zones_list:
@@ -87,6 +97,16 @@ for zone in zones_list:
                                              time_step = 'DAILY',
                                              plume_dir_in = "output/FIXED_THRESHOLD",
                                              plume_dir_out = "output/FIXED_THRESHOLD")
+    
+# Daily dynamic threshold time series
+for zone in zones_list:
+    make_and_plot_time_series_of_plume_areas(sextant_spm_all,
+                                             Zones = [zone],
+                                             nb_cores = 14,
+                                             time_step = 'DAILY',
+                                             plume_dir_in = "output/DYNAMIC_THRESHOLD",
+                                             plume_dir_out = "output/DYNAMIC_THRESHOLD")
+
 
 # Rather use weekly results for the plots
 for zone in zones_list:

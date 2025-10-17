@@ -1,6 +1,9 @@
 # func/figure.R
 # This is called by func/figure.py to provide graphical outputs
 
+
+# Libraries ---------------------------------------------------------------
+
 # list_of_packages <- c("plyr", "tidyverse", "maps", "scales", "ggpubr")
 # new.packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
 # if(length(new.packages)) install.packages(new.packages)
