@@ -366,8 +366,8 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
     # Prepare the data to return                        
     key_data_to_return = ['mean', 'median', 'sd', 'n', 'n_tot']
     data_to_return = {'Basin_data' : {key: Basin_data[key] for key in key_data_to_return if Basin_data is not None},
-                    'Embouchure_data' : {key: Embouchure_data[key] for key in key_data_to_return if Embouchure_data is not None},
-                    'Bloom_data' : {key: Bloom_data[key] for key in key_data_to_return if Bloom_data is not None}}
+                      'Embouchure_data' : {key: Embouchure_data[key] for key in key_data_to_return if Embouchure_data is not None},
+                      'Bloom_data' : {key: Bloom_data[key] for key in key_data_to_return if Bloom_data is not None}}
     
     data_to_return = [pd.DataFrame.from_dict(data_to_return[f'{site}_data'], orient='index').T.rename(columns=lambda x: f'{site}_{x}') 
                       for site in ['Basin', 'Embouchure', 'Bloom']]
@@ -1135,6 +1135,7 @@ def plot_and_save_the_QC_metrics(QC_df, metrics_to_plot, path_to_save_QC_files, 
 #### Classes 
 # =============================================================================
 
+
 class Create_and_save_the_maps : 
     
     """
@@ -1319,7 +1320,6 @@ class Create_and_save_the_maps :
                           self.info,
                           f'{month_nb:02d}', f'{month_nb:02d}', 'MONTHLY', save_map_plots_of_which_time_frequency['MONTHLY'],
                           f'{self.info.Year}{month_nb:02d}15') for month_nb in (np.arange(12)+1 )])
-        
         
     def _3_create_annual_maps(self, save_map_plots_of_which_time_frequency) :
         

@@ -862,7 +862,7 @@ def define_parameters(Zone) :
         lon_range_of_the_map_to_plot = [-1.5, 3]
         lat_range_to_search_plume_area = [49.75, 49.75, 51.15, 50.4]
         lon_range_to_search_plume_area = [0.5, 1.75, 1.75, 0.5]
-        max_steps_for_the_directions = { 'Arques' : None, 'Bresle' : None, 'Somme' : None,
+        max_steps_for_the_directions = {'Arques' : None, 'Bresle' : None, 'Somme' : None,
                                         'Authie' : None, 'Canche' : None, 'Liane' : None}
         river_mouth_to_exclude = {}
       
@@ -874,18 +874,17 @@ def define_parameters(Zone) :
                                                                   [False, True,  True,  False, False],
                                                                   [False, True,  True,  True, False],
                                                                   [False, False, False, False, False],
-                                                                ]),
-                                      'coordinates_of_center' : (2,2)},
+                                                                ]), 'coordinates_of_center' : (2,2)},
                                 'Vilaine' : {'grid' : np.array([    [False, False, False, False, False],
                                                                     [False, True,  True,  False, False],
                                                                     [False, True,  True,  False, False],
                                                                     [False, True,  True,  False, False],
                                                                     [False, False, False, False, False],
-                                                                  ]),
-                                                              'coordinates_of_center' : (2,2)}}
+                                                                  ]), 'coordinates_of_center' : (2,2)}
+                                                                  }
         bathymetric_threshold = 0
         starting_points = {'Loire' : (47.29, -2.10),
-                            'Vilaine' : (47.50, -2.46)}
+                           'Vilaine' : (47.50, -2.46)}
         core_of_the_plumes = {'Loire' : (47.19, -2.36),
                               'Vilaine' : (47.47, -2.59)}
         lat_range_of_the_area_to_check_for_clouds = [46.87, 47.55]
@@ -1012,6 +1011,7 @@ def coordinates_of_pixels_to_inspect(searching_strategies) :
            
     # Return the dictionary containing the distances for all search strategies 
     return to_return
+
 
 def daily_integral(file_dir, overwrite=False):
     
