@@ -18,6 +18,18 @@ library("zoo")
 library("doParallel")
 
 
+# Path to plume pixels
+# func/plume.py
+## apply_plume_mask()
+## main_process()
+## Pipeline_to_delineate_the_plume()
+
+# func/figure.py - Figure_4()
+## func/plume.py - Create_the_plume_mask()
+
+# func/plume.py - make_the_plot()
+
+
 # Utils -------------------------------------------------------------------
 
 ggplot_theme <-   function() {

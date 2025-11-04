@@ -468,6 +468,24 @@ def make_the_plot(path_to_the_figure_file_to_save, ds, ds_reduced, france_shapef
     
     if plot_the_plume_area : 
         
+        # Save mask_area as a csv file
+        if mask_area is not None:
+            # Create directory if it doesn't exist
+            mask_dir = os.path.dirname(path_to_the_figure_file_to_save)
+            os.makedirs(mask_dir, exist_ok=True)
+            
+            # Convert mask to dataframe with lat/lon coordinates
+            mask_df = pd.DataFrame({
+                'lat': np.repeat(mask_area.lat.values, len(mask_area.lon)),
+                'lon': np.tile(mask_area.lon.values, len(mask_area.lat)), 
+                'mask': mask_area.values.flatten()
+            })
+            # mask_df = mask_df[mask_df.mask == True]
+            filtered_df = mask_df[mask_df['mask']]
+
+            # Save to .csv
+            filtered_df.to_csv(f'{path_to_the_figure_file_to_save}.csv', index=False)
+
         # Plot the reduced dataset with the same color bar limits
         ds.plot(vmin = min_color_bar, vmax = max_color_bar, norm=colors.LogNorm())
        
@@ -2606,7 +2624,6 @@ class Create_the_plume_mask :
 
         # Log the operation in the protocol
         self.protocol.append(f'{len(self.protocol)} : remove_the_river_plume_from_the_mouth_of_the_neighboring_river')
-
 
     def do_R_plot(self, where_to_save_the_plot, name_of_the_plot):
         """
