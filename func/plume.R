@@ -18,16 +18,50 @@ library("zoo")
 library("doParallel")
 
 
-# Path to plume pixels
-# func/plume.py
-## apply_plume_mask()
-## main_process()
-## Pipeline_to_delineate_the_plume()
+# Ideas for analysing plume dynamics
+# Loire + Gironde plumes
+# plumes generally turn to the right as they exit the estuary and follow the coastline northwards
+## the Gironde plume may merge with the Loire plume
+# A south-easterly wind, which favours downwellings, will have the effect of constraining the plume to the coast and reinforcing the circulation of the coastal current
+# A north-westerly wind, favouring upwellings, will stop the propagation of the plumes and disperse them offshore
+# winter winds tend to favour plume confinement at the coast
+## while a change in wind direction at the end of March or early April favours southwards propagation offshore of the plumes
+# Seine plume
+# The dynamics of the Seine plume in the bay of Seine depend mainly on bathymetry and tides, and to a lesser extent on wind
+# The annual cycle is the largest.
+# - Perhaps it would be interesting to measure the distance from the mouth to the edge of the plume
+# - Or how much plume can be attributed to SPM along the coastal zone / within a shallow depth area
 
-# func/figure.py - Figure_4()
-## func/plume.py - Create_the_plume_mask()
+# Tides
+# For each ROFI, one tide gauge is processed for: Havre for the Seine river, Saint-Nazaire for the Loire river, and Port-Bloc for the Gironde river
+# At the diurnal timescale, the three ROFIs studied are therefore mainly influenced by the semi-diurnal tidal cycle, 
+## although there are slight differences in their response to this forcing.
+# - I will need to think of a way to search forward and backward through matched time series to find neap and spring tides
+## - to then associate these to times when there are high runoff, that then quickly shifts to smaller/larger plume areas
+# - Create an index value based on the build-ip / -down from neap to spring tide
+## - Meaning, don't measure the tidal range on a given day, but rather where on the progression along the larger tidal scale that day is
 
-# func/plume.py - make_the_plot()
+# Wind
+# The zonal and meridional wind speeds were averaged spatially for each region of interest
+# The favourable downwelling and upwelling winds were defined as the quarter sector of wind parallel to the coast, 
+## directed with the coast to the right and to the left, respectively
+# As ROFI is stretched into a thin layer on the surface, it loses stability and becomes much more sensitive to mixing.
+# These wind events on the scale of a few days can shape the ROFI and have an impact on the whole month ahead.
+# However, for the ROFI of the Seine, the wind rarely has an impact except during neap tides. 
+## During these periods, only strong upwelling favourable wind can enhance the ROFI extent.
+# Weekly to monthly variability of ROFIs is dominantly driven by tidal dynamics for the Seine region and by wind and runoff dynamics in Loire and Gironde regions.
+# The dynamics of the Loire and Gironde ROFIs are significantly impacted by wind between January and June, during the periods of highest runoff
+# However, wind exerts minimal influence when river runoff is insufficient to generate a substantial ROFI. 
+# - Think of a way to show how wind may proportionately increase plume size, based on the pre-existing plume size
+## - Meaning, the plume will get relatively bigger due to wind forcing if it is already beefy
+## - A small plume will not be magnified much by wind
+
+# Discharge
+# Flood events trigger a more or less rapid response from the ROFI, from few days to a month
+# The extent of the ROFI is amplified when neap tides occur after a flood event
+# At the onset of the spring tide, the freshwater volume decreases in all salinity classes as the surface area decreases. [Seine]
+# The ROFIs for the Loire and Gironde regions do not show such a marked response to the spring and neap tide cycles.
+# Notably larger surface extensions during the neap periods following a flood
 
 
 # Utils -------------------------------------------------------------------

@@ -42,22 +42,6 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 # ### Detect plumes
 # =============================================================================
 
-# test for creating plume pixel output
-sextant_spm_1998 = {'Data_sources':['SEXTANT'],
-                   'Sensor_names':["merged"],
-                   'Satellite_variables':['SPM'],
-                   'Atmospheric_corrections':['Standard'],
-                   'Temporal_resolution':['DAILY'],
-                   'start_day':'1998/01/01',
-                   'end_day':'1998/12/31'}
-apply_plume_mask(sextant_spm_1998,
-                 Zones = ['GULF_OF_LION'],
-                 time_step = 'DAILY',
-                 nb_cores = 14,
-                 dynamic_thresh = False,
-                 regional_map_dir = "output/REGIONAL_MAPS",
-                 plume_dir = "output/FIXED_THRESHOLD")
-
 # Plume detection for all zones and daily results
 for zone in zones_list:
     apply_plume_mask(sextant_spm_all,
