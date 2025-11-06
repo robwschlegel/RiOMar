@@ -97,7 +97,7 @@ for zone in zones_list:
         zone,
         'cmems_obs-wind_glo_phy_nrt_l4_0.125deg_PT1H',
         ['eastward_wind', 'northward_wind'],
-        '2025-01-01T00:00:00', '2025-09-01T00:00:00',
+        '2025-01-01T00:00:00', '2025-10-01T00:00:00',
         f'~/pCloudDrive/data/WIND/{zone}'
     )
 

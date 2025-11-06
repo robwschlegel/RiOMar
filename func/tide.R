@@ -4,6 +4,7 @@
 
 # Libraries ---------------------------------------------------------------
 
+source("func/util.R")
 library(tidyverse)
 library(tidync)
 library(doParallel); doParallel::registerDoParallel(cores = 4)
@@ -69,7 +70,19 @@ tide_calc <- function(mouth_info){
     dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file)
   
   # Combine
-  tide_plume_df <- left_join(plume_daily, tide_df, join_by(date))
+  tide_plume_df <- left_join(plume_daily, tide_df, join_by(date)) |> 
+    zoo::na.trim()
+  
+  # Create time series objects for stl
+  ts_plume <- ts(zoo::na.approx(tide_plume_df$area_of_the_plume_mask_in_km2), frequency = 365, start = c(year(min(tide_plume_df$date)), 1))
+  stl_plume <- stl(ts_plume, s.window = "periodic")
+  ts_tide <- ts(zoo::na.approx(tide_plume_df$tide_range), frequency = 365, start = c(year(min(tide_plume_df$date)), 1))
+  stl_tide <- stl(ts_tide, s.window = "periodic")
+  
+  # Add trend elements back into dataframe for further stats
+  tide_plume_df$tide_stl <- as.vector(stl_tide$time.series[,2])
+  tide_plume_df$plume_stl <- as.vector(stl_plume$time.series[,2])
+  # cor(tide_plume_df$tide_stl, tide_plume_df$plume_stl)
   
   # Compare panache size against wind speed
   # Two separate comparisons based on upwelling or downwelling times
@@ -122,6 +135,44 @@ tide_calc <- function(mouth_info){
   full_plot <- ggpubr::ggarrange(ts_plot, cor_plot, ncol = 2, nrow = 1)
   full_plot_title <- ggpubr::ggarrange(tide_plume_title, full_plot, ncol = 1, nrow = 2, heights = c(0.05, 1)) + ggpubr::bgcolor("white")
   ggsave(filename = paste0("figures/tide_plume_cor_plot_",mouth_info$mouth_name,".png"), width = 12, height = 6, dpi = 600)
+  
+  # Get scaling factor for plotting
+  scaling_factor <- sec_axis_adjustement_factors(var_to_scale = tide_plume_df$tide_stl, 
+                                                 var_ref = tide_plume_df$plume_stl)
+  tide_plume_df <- tide_plume_df |> 
+    mutate(tide_scaled = tide_stl * scaling_factor$diff + scaling_factor$adjust)
+  unique_years <- tide_plume_df$date |> year() |> unique()
+  
+  # Plots for STL decomposition
+  ggplot(data = tide_plume_df) + 
+    # Plume data
+    geom_point(aes(x = date, y = plume_stl), color = "brown") + 
+    geom_path(aes(x = date, y = plume_stl), color = "brown") + 
+    # Wind data
+    geom_point(aes(x = date, y = tide_scaled), color = "blue") + 
+    geom_path(aes(x = date, y = tide_scaled), color = "blue") + 
+    # X-axis labels
+    scale_x_date(name = "", 
+                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
+                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
+    # Y-axis labels
+    scale_y_continuous(name = "Plume area (km²)",
+                       sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
+                                           name = "Wind speed (m/s)")) +
+    # Extra bits
+    labs(title = zone) +
+    ggplot_theme() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+          plot.subtitle = element_text(hjust = 0.5),
+          axis.text.y.left = element_text(color = "brown"), 
+          axis.ticks.y.left = element_line(color = "brown"),
+          axis.line.y.left = element_line(color = "brown"),
+          axis.title.y.left = element_text(color = "brown", margin = unit(c(0, 7.5, 0, 0), "mm")),
+          axis.text.y.right = element_text(color = "blue"), 
+          axis.ticks.y.right = element_line(color = "blue"),
+          axis.line.y.right = element_line(color = "blue"),
+          axis.title.y.right = element_text(color = "blue", margin = unit(c(0, 0, 0, 7.5), "mm")),
+          panel.border = element_rect(linetype = "solid", fill = NA))
 }
 
 

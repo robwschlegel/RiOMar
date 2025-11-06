@@ -4,6 +4,7 @@
 
 # Libraries ---------------------------------------------------------------
 
+source("func/util.R")
 library(tidyverse)
 library(tidync)
 library(seasonal)
@@ -94,7 +95,8 @@ spatial_wind_calc <- function(mouth_info){
   # Eventually it would be ideal to load river flow
   
   # Combine dataframes for further analyses
-  wind_plume_df <- left_join(plume_daily, wind_df_full, join_by(date == t))
+  wind_plume_df <- left_join(plume_daily, wind_df_full, join_by(date == t)) |> 
+    zoo::na.trim()
   # wind_plume_df_month <- wind_plume_df |> 
   #   mutate()
   
@@ -104,10 +106,14 @@ spatial_wind_calc <- function(mouth_info){
   ts_wind <- ts(zoo::na.approx(wind_plume_df$wind_spd), frequency = 365, start = c(year(min(wind_plume_df$date)), 1))
   stl_wind <- stl(ts_wind, s.window = "periodic")
   
+  # Add trend elements back into dataframe for further stats
+  wind_plume_df$wind_stl <- as.vector(stl_wind$time.series[,2])
+  wind_plume_df$plume_stl <- as.vector(stl_plume$time.series[,2])
+  
   # Compare panache size against wind speed
   # Two separate comparisons based on upwelling or downwelling times
   wind_plume_stats_all <- wind_plume_df |> 
-    mutate(updown = "all") |> 
+    mutate(welling = "all") |> 
     summarise(r = cor(wind_spd, area_of_the_plume_mask_in_km2, use = "pairwise.complete.obs"), .by = "welling")
   wind_plume_stats <- wind_plume_df |> 
     summarise(r = cor(wind_spd, area_of_the_plume_mask_in_km2, use = "pairwise.complete.obs"), .by = "welling") |> 
@@ -162,7 +168,43 @@ spatial_wind_calc <- function(mouth_info){
   full_plot_title <- ggpubr::ggarrange(wind_plume_title, full_plot, ncol = 1, nrow = 2, heights = c(0.05, 1)) + ggpubr::bgcolor("white")
   ggsave(filename = paste0("figures/wind_plume_cor_plot_",mouth_info$mouth_name,".png"), width = 12, height = 6, dpi = 600)
 
-  # Probably in a separate analysis the tides (neap <-> spring) will be folded in
+  # Get scaling factor for plotting
+  scaling_factor <- sec_axis_adjustement_factors(var_to_scale = wind_plume_df$wind_stl, 
+                                                 var_ref = wind_plume_df$plume_stl)
+  wind_plume_df <- wind_plume_df |> 
+    mutate(wind_scaled = wind_stl * scaling_factor$diff + scaling_factor$adjust)
+  unique_years <- wind_plume_df$date |> year() |> unique()
+  
+  # Plots for STL decomposition
+  ggplot(data = wind_plume_df) + 
+    # Plume data
+    geom_point(aes(x = date, y = plume_stl), color = "brown") + 
+    geom_path(aes(x = date, y = plume_stl), color = "brown") + 
+    # Wind data
+    geom_point(aes(x = date, y = wind_scaled), color = "blue") + 
+    geom_path(aes(x = date, y = wind_scaled), color = "blue") + 
+    # X-axis labels
+    scale_x_date(name = "", 
+                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
+                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
+    # Y-axis labels
+    scale_y_continuous(name = "Plume area (km²)",
+                       sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
+                                           name = "Wind speed (m/s)")) +
+    # Extra bits
+    labs(title = zone) +
+    ggplot_theme() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+          plot.subtitle = element_text(hjust = 0.5),
+          axis.text.y.left = element_text(color = "brown"), 
+          axis.ticks.y.left = element_line(color = "brown"),
+          axis.line.y.left = element_line(color = "brown"),
+          axis.title.y.left = element_text(color = "brown", margin = unit(c(0, 7.5, 0, 0), "mm")),
+          axis.text.y.right = element_text(color = "blue"), 
+          axis.ticks.y.right = element_line(color = "blue"),
+          axis.line.y.right = element_line(color = "blue"),
+          axis.title.y.right = element_text(color = "blue", margin = unit(c(0, 0, 0, 7.5), "mm")),
+          panel.border = element_rect(linetype = "solid", fill = NA))
 }
 
 

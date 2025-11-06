@@ -71,7 +71,6 @@ sec_axis_adjustement_factors <- function(var_to_scale, var_ref) {
   
   return(data.frame(diff = diff, adjust = adjust, operation = "scaled var = (var_to_scale * diff) + adjust",
                     trans_axis_operation = "var_to_scale = {scaled_var - adjust} / diff)"))
-  
 }
 
 
