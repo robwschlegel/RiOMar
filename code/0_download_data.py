@@ -86,7 +86,7 @@ for zone in zones_list:
 for zone in zones_list:
     download_cmems_subset(
         zone,
-        'cmems_obs-wind_glo_phy_nrt_l4_0.125deg_PT1H',
+        'cmems_obs-wind_glo_phy_my_l4_0.125deg_PT1H',
         ['eastward_wind', 'northward_wind'],
         '2008-01-01T00:00:00', '2025-01-01T00:00:00',
         f'~/pCloudDrive/data/WIND/{zone}'
