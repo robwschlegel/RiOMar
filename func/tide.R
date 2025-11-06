@@ -7,39 +7,11 @@
 source("func/util.R")
 library(tidyverse)
 library(tidync)
+library(seasonal)
 library(doParallel); doParallel::registerDoParallel(cores = 4)
 
 
-# Meta-data ---------------------------------------------------------------
-
-# In the future this will be taken from define_parameters() in func/util.py
-river_mouths <- data.frame(row_name = 1:4,
-                           mouth_name = c("Seine", "Gironde", "Loire", "Grand Rhone"),
-                           mouth_lon = c(0.145, -1.05, -2.10, 4.83),
-                           mouth_lat = c(49.43, 45.59, 47.29, 43.41))
-
-
 # Functions ---------------------------------------------------------------
-
-# Function for loading annual tidal range data files
-# file_name <- "data/TIDES/LE_HAVRE/4_1938.txt"
-# dir_name <- "data/TIDES/LE_HAVRE"
-load_tide_gauge <- function(dir_name){
-  
-  # Tide gauge files
-  tide_files <- dir(dir_name, pattern = ".txt", full.names = TRUE)
-  
-  # Load all files
-  suppressMessages(
-  df_tide <- map_dfr(tide_files, read_delim, col_names = c("t", "tide", "source"), skip = 14, delim = ";", col_select = c("t", "tide"))
-  )
-  df_tide_daily <- df_tide |> 
-    mutate(t = as.POSIXct(t, format = "%d/%m/%Y %H:%M:%S"),
-           date = as.Date(t)) |> 
-    summarise(tide_mean = round(mean(tide, na.rm = TRUE), 2),
-              tide_range = max(tide, na.rm = TRUE)-min(tide, na.rm = TRUE), .by = "date")
-  return(df_tide_daily)
-}
 
 # Calculate relationship between tides and panache size
 # mouth_info <- river_mouths[1,]

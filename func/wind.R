@@ -11,35 +11,7 @@ library(seasonal)
 library(doParallel); doParallel::registerDoParallel(cores = 4)
 
 
-# Meta-data ---------------------------------------------------------------
-
-# In the future this will be taken from define_parameters() in func/util.py
-river_mouths <- data.frame(row_name = 1:4,
-                           mouth_name = c("Seine", "Gironde", "Loire", "Grand Rhone"),
-                           mouth_lon = c(0.145, -1.05, -2.10, 4.83),
-                           mouth_lat = c(49.43, 45.59, 47.29, 43.41))
-
-
 # Functions ---------------------------------------------------------------
-
-# Function for loading subsets of wind NetCDF files
-load_wind_sub <- function(file_name, lon_range, lat_range){
-  wind_df <- tidync(file_name) |> 
-    hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
-                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |> 
-    # hyper_filter(longitude = longitude >= lon_range[1] & longitude <= lon_range[2],
-    #              latitude = latitude >= lat_range[1] & latitude <= lat_range[2]) |> 
-    hyper_tibble() |> 
-    dplyr::rename(u = eastward_wind, v = northward_wind, lon = longitude, lat = latitude) |> 
-    mutate(t = as.Date(time)) |> 
-    dplyr::select(t, lon, lat, u, v)
-  
-  # Remove final day of data
-  ## it is an artefact from creating daily integrals from hourly data
-  final_date <- max(wind_df$t)
-  wind_df <- filter(wind_df, t != final_date)
-  return(wind_df)
-}
 
 # Caluclate wind stats and create plots
 # mouth_info <- river_mouths[1,]
@@ -65,8 +37,8 @@ spatial_wind_calc <- function(mouth_info){
   wind_df <- purrr::map_dfr(wind_files, load_wind_sub, lon_range, lat_range)
   
   # Calculate spatial average of wind vectors by day
-  wind_df_mean <- wind_df |> 
-    summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "t")
+  # wind_df_mean <- wind_df |> 
+  #   summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
   
   # Determine simple upwelling/downwelling index based on coastal direction (based on river mouth name)
   # TODO: Think of a more sophisticated way to do this
@@ -91,14 +63,10 @@ spatial_wind_calc <- function(mouth_info){
   plume_daily <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")) |> 
     dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file) |> 
     complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA))
-  
-  # Eventually it would be ideal to load river flow
-  
+
   # Combine dataframes for further analyses
-  wind_plume_df <- left_join(plume_daily, wind_df_full, join_by(date == t)) |> 
+  wind_plume_df <- left_join(plume_daily, wind_df_full, join_by(date)) |> 
     zoo::na.trim()
-  # wind_plume_df_month <- wind_plume_df |> 
-  #   mutate()
   
   # Create time series objects for stl
   ts_plume <- ts(zoo::na.approx(wind_plume_df$area_of_the_plume_mask_in_km2), frequency = 365, start = c(year(min(wind_plume_df$date)), 1))
