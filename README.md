@@ -26,14 +26,14 @@ The dedicated CMEMS wind reanalysis product was used in this study: https://data
 
 Tide gauge data were downloaded via web form at: https://data.shom.fr/donnees/refmar/download
 
-The codes used were:
-- LE_HAVRE (Seine)
-- SAINT-NAZAIRE (Loire)
-- PORT-BLOC (Gironde)
-- FOS-SUR-MER + PORT_DE_BOUC (Rhône)
-- MARSEILLE (Rhoône)
+The id : name used were:
+- 4 : LE_HAVRE (Seine)
+- 37 : SAINT-NAZAIRE (Loire)
+- 15 : PORT-BLOC (Gironde)
+- 719 : FOS-SUR-MER + 720 : PORT_DE_BOUC (Rhône)
+- 524 : MARSEILLE (Rhoône)
 
-Note that the tide gauge choice for the Rhône river is not as clear as it is for the other rivers. This is because the nearest tide gauge to the mouth _FOS-SUR-MER_ has a limited time series, which is extended to the present by the next nearest tide gauge at _PORT_DE_BOUC_. However, if we re willing to search a bit further down the coast we find the tide gauge for _MARSEILLE_, which has a much longer time series.
+Note that the tide gauge choice for the Rhône river is not as clear as it is for the other rivers. This is because the nearest tide gauge to the mouth _FOS-SUR-MER_ has a limited time series, which is extended to the present by the next nearest tide gauge at _PORT_DE_BOUC_. However, if we re willing to search a bit further down the coast we find the tide gauge for _MARSEILLE_, which has a much longer time series. An explanation for how to access these data is available [here](https://refmar.shom.fr/donnees-refmar-sur-data.shom.fr/telechargement-des-donnees)
 
 ### Oceanographic variables
 

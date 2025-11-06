@@ -8,6 +8,7 @@ data/SEXTANT
 data/DOWNLOAD_REPORTS
 data/INSITU_data
 data/RIVER_FLOW
+data/TIDES
 
 # Large outputs
 output/MATCH_UP_DATA

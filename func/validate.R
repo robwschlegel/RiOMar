@@ -3,14 +3,14 @@
 # if(length(new.packages)) install.packages(new.packages)
 # lapply(list_of_packages, require, character.only = TRUE)
 
-library("plyr")
-library("tidyverse")
-library("viridis")
-library("scales")
-library("ggExtra")
-library("Metrics")
-library("gt")
-library("MASS")
+library(plyr)
+library(tidyverse)
+library(viridis)
+library(scales)
+library(ggExtra)
+library(Metrics)
+library(gt)
+library(MASS)
 
 
 #### Main function ####

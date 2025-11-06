@@ -10,12 +10,12 @@
 # if(length(new.packages)) install.packages(new.packages)
 # lapply(list_of_packages, require, character.only = TRUE)
 
-library("plyr")
-library("tidyverse")
-library("viridis")
-library("ggpubr")
-library("zoo")
-library("doParallel")
+library(plyr)
+library(tidyverse)
+library(viridis)
+library(ggpubr)
+library(zoo)
+library(doParallel)
 
 
 # Ideas for analysing plume dynamics
