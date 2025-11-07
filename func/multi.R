@@ -16,7 +16,7 @@ zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
 # Functions ---------------------------------------------------------------
 
 # Load all plume and driver data and perform stl
-# zone <- zones[4]
+# zone <- zones[1]
 multi_stl <- function(zone){
   
   # Determine meta-data based on zone
@@ -38,7 +38,7 @@ multi_stl <- function(zone){
   
   # Load panache time series based on river mouth name
   df_plume <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")) |> 
-    dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file) |> 
+    dplyr::select(date:confidence_index_in_perc) |>
     complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
     dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
     zoo::na.trim()
@@ -91,6 +91,7 @@ multi_stl <- function(zone){
            wind_seas = stl_single(wind_spd, out_col = "seas", start_date = min(df_plume$date)),
            wind_inter = stl_single(wind_spd, out_col = "inter", start_date = min(df_plume$date))) |> 
     mutate(zone = zone, .before = "date")
+  # print(ncol(df_all))
 
   # Exit
   return(df_all)
@@ -104,6 +105,9 @@ multi_plot <- function(){
 
 # Run ---------------------------------------------------------------------
 
-stl_all <- plyr::ldply(zones, multi_stl, .parallel = FALSE)
+# Compute all STL stats and save
+stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
+save(stl_all, file = "output/STL/stl_all.RData")
 
+# Create plots
 

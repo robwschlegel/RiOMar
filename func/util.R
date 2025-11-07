@@ -128,11 +128,11 @@ stl_single <- function(x_col, out_col, start_date, ts_freq = 365){
   
   # Decide which column to take
   if(out_col == "seas"){
-    return(stl_x$time.series[,1])
+    return(as.vector(stl_x$time.series[,1]))
   } else if(out_col == "inter"){
-    return(stl_x$time.series[,2])
+    return(as.vector(stl_x$time.series[,2]))
   } else if(out_col == "remain"){
-    return(stl_x$time.series[,3])
+    return(as.vector(stl_x$time.series[,3]))
   } else {
     stop("'out_col' not recognised")
   }
