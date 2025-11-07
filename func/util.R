@@ -46,9 +46,9 @@ load_river_flow <- function(dir_name){
       colnames(df_river) <- c("flow", "year", "month", "day")
       df_river$date <- as.Date(
         paste0(
-          df_river$Year, "-",
-          str_pad(df_river$Month, 2, pad = "0"), "-",
-          str_pad(df_river$Day, 2, pad = "0")
+          df_river$year, "-",
+          str_pad(df_river$month, 2, pad = "0"), "-",
+          str_pad(df_river$day, 2, pad = "0")
         )
       )
     }
@@ -105,6 +105,37 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
   final_date <- max(wind_df$date)
   wind_df <- filter(wind_df, date != final_date)
   return(wind_df)
+}
+
+
+# Statistics --------------------------------------------------------------
+
+stl_single <- function(x_col, out_col, start_date, ts_freq = 365){
+  
+  # Create ts object and calculate stl
+  ts_x <- ts(zoo::na.approx(x_col), frequency = ts_freq, start = c(year(start_date), quarter(start_date)))
+  stl_x <- stl(ts_x, s.window = "periodic")
+  
+  # Add NA to end if necessary
+  if(length(stl_x$time.series[,2]) != length(x_col)){
+
+    # Create a matrix of NA values
+    na_matrix <- matrix(NA, nrow = length(x_col)-length(stl_x$time.series[,2]), ncol = ncol(stl_x$time.series))
+    
+    # Append the NA matrix to the original matrix
+    stl_x$time.series <- rbind(stl_x$time.series, na_matrix)
+  }
+  
+  # Decide which column to take
+  if(out_col == "seas"){
+    return(stl_x$time.series[,1])
+  } else if(out_col == "inter"){
+    return(stl_x$time.series[,2])
+  } else if(out_col == "remain"){
+    return(stl_x$time.series[,3])
+  } else {
+    stop("'out_col' not recognised")
+  }
 }
 
 

@@ -15,9 +15,9 @@ zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
 
 # Functions ---------------------------------------------------------------
 
-# Load all plume and driver data, perform stl, compute stats and save
-# zone <- zones[1]
-multi_calc <- function(zone){
+# Load all plume and driver data and perform stl
+# zone <- zones[4]
+multi_stl <- function(zone){
   
   # Determine meta-data based on zone
   if(zone == "BAY_OF_SEINE"){
@@ -39,7 +39,12 @@ multi_calc <- function(zone){
   # Load panache time series based on river mouth name
   df_plume <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")) |> 
     dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file) |> 
-    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA))
+    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+    dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
+    zoo::na.trim()
+  
+  # Standardise last column name so it can be combined across sites
+  colnames(df_plume)[ncol(df_plume)] <- "SPM_threshold"
   
   # Load river flow data
   df_river_flow <- load_river_flow(paste0("data/RIVER_FLOW/",zone))
@@ -76,8 +81,19 @@ multi_calc <- function(zone){
   # NB: The trailing NAs are problematic...
   df_all <- left_join(df_plume, df_river_flow, by = "date") |> 
     left_join(df_tide, by = "date") |> 
-    left_join(df_wind_full, by = "date")
-  
+    left_join(df_wind_full, by = "date") |> 
+    mutate(plum_seas = stl_single(plume_area, out_col = "seas", start_date = min(df_plume$date)),
+           plum_inter = stl_single(plume_area, out_col = "inter", start_date = min(df_plume$date)),
+           flow_seas = stl_single(flow, out_col = "seas", start_date = min(df_plume$date)),
+           flow_inter = stl_single(flow, out_col = "inter", start_date = min(df_plume$date)),
+           tide_seas = stl_single(tide_range, out_col = "seas", start_date = min(df_plume$date)),
+           tide_inter = stl_single(tide_range, out_col = "inter", start_date = min(df_plume$date)),
+           wind_seas = stl_single(wind_spd, out_col = "seas", start_date = min(df_plume$date)),
+           wind_inter = stl_single(wind_spd, out_col = "inter", start_date = min(df_plume$date))) |> 
+    mutate(zone = zone, .before = "date")
+
+  # Exit
+  return(df_all)
 }
 
 # Plot the results 
@@ -87,5 +103,7 @@ multi_plot <- function(){
 
 
 # Run ---------------------------------------------------------------------
+
+stl_all <- plyr::ldply(zones, multi_stl, .parallel = FALSE)
 
 
