@@ -242,7 +242,7 @@ multi_plot <- function(df_stl){
   
   # Seasonal ts of tide
   tide_seas <- ggplot(data = df_seas) + 
-    geom_path(aes(x = doy, y = tide_seas), color = "lightgreen", linewidth = 2) +
+    geom_path(aes(x = doy, y = tide_seas), color = "green", linewidth = 2) +
     facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
     scale_y_continuous(name = "River tide (m^3/s)") +
     ggplot_theme()
@@ -251,7 +251,7 @@ multi_plot <- function(df_stl){
   # Interannual ts of tide
   tide_inter <- ggplot(data = df_pretty) + 
     # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = date, y = tide_inter), color = "lightgreen", linewidth = 2) +
+    geom_path(aes(x = date, y = tide_inter), color = "green", linewidth = 2) +
     facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
     # X-axis labels
     scale_x_date(name = "", 
@@ -264,7 +264,7 @@ multi_plot <- function(df_stl){
   
   # Seasonal ts of wind
   wind_seas <- ggplot(data = df_seas) + 
-    geom_path(aes(x = doy, y = wind_seas), color = "lightblue", linewidth = 2) +
+    geom_path(aes(x = doy, y = wind_seas), color = "purple", linewidth = 2) +
     facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
     scale_y_continuous(name = "River wind (m^3/s)") +
     ggplot_theme()
@@ -273,7 +273,7 @@ multi_plot <- function(df_stl){
   # Interannual ts of wind
   wind_inter <- ggplot(data = df_pretty) + 
     # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = date, y = wind_inter), color = "lightblue", linewidth = 2) +
+    geom_path(aes(x = date, y = wind_inter), color = "purple", linewidth = 2) +
     facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
     # X-axis labels
     scale_x_date(name = "", 
@@ -309,4 +309,50 @@ stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
 save(stl_all, file = "output/STATS/stl_all.RData")
 
 # Create plots
+
+
+
+# Missing data ------------------------------------------------------------
+
+# Get missing dates of
+SPM_files_NA <- data.frame(file_name = dir("data/SEXTANT/SPM/", pattern = ".nc", recursive = TRUE)) |> 
+  mutate(base_name = basename(file_name)) |> 
+  separate(base_name, "-", extra = "drop") |> 
+  dplyr::rename(date = `-`) |> 
+  mutate(date = as.Date(date, format = "%Y%m%d")) |> 
+  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+  filter(is.na(file_name))
+write_csv(SPM_files_NA, "output/STATS/missing_SPM.csv")
+chla_files_NA <- data.frame(file_name = dir("data/SEXTANT/CHLA/", pattern = ".nc", recursive = TRUE)) |> 
+  mutate(base_name = basename(file_name)) |> 
+  separate(base_name, "-", extra = "drop") |> 
+  dplyr::rename(date = `-`) |> 
+  mutate(date = as.Date(date, format = "%Y%m%d")) |> 
+  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+  filter(is.na(file_name))
+write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
+
+# Filter down to missing days
+SPM_files_NA_count <- SPM_files |>  
+  mutate(year = year(date),
+         month = month(date, label = TRUE, abbr = TRUE)) |> 
+  summarise(miss_count_month_year = n(), .by = c("year", "month"))
+chla_files_NA_count <- chla_files |> 
+  mutate(year = year(date),
+         month = month(date, label = TRUE, abbr = TRUE)) |> 
+  summarise(miss_count_month_year = n(), .by = c("year", "month"))
+
+# Plot
+ggplot(SPM_files_NA_count, aes(x = month, y = miss_count_month_year)) +
+  geom_col() +
+  facet_wrap(~year) +
+  labs(x = NULL, y = "count", title = "Monthly count of missing SPM SEXTANT files") +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggsave("figures/missng_SPM.png", width = 9, height = 9, dpi = 600)
+ggplot(chla_files_NA_count, aes(x = month, y = miss_count_month_year)) +
+  geom_col() +
+  facet_wrap(~year) +
+  labs(x = NULL, y = "count", title = "Monthly count of missing chl a SEXTANT files") +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggsave("figures/missng_chla.png", width = 9, height = 9, dpi = 600)
 
