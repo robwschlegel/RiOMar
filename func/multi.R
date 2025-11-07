@@ -112,177 +112,130 @@ multi_plot <- function(df_stl){
   unique_years <- df_pretty$date |> year() |> unique()
   
   # One year of data for seasonal plots
-  # df_mean <- df_pretty
-  # TODO: Reduce to monthly points and take the min max as bands for a ribbon plot
-  ## Calculate the mean values per site to bump up the seasonal clims correctly
+  df_mean <- df_pretty |> 
+    summarise(plume_mean = mean(plume_area, na.rm = TRUE), 
+              flow_mean = mean(flow, na.rm = TRUE), 
+              wind_mean = mean(wind_spd, na.rm = TRUE), 
+              tide_mean = mean(tide_range, na.rm = TRUE), .by = plot_title)
   df_seas <- df_pretty |> 
     filter(year(date) == 1999) |> 
     mutate(month = month(date, label = TRUE, abbr = TRUE),
            doy = yday(date)) |> 
     dplyr::select(zone, plot_title, month, doy, plume_seas, flow_seas, tide_seas, wind_seas) |> 
-    distinct()
+    distinct() |> 
+    left_join(df_mean, by = "plot_title") #|>
+  # TODO: Look into how the seasonal signals are corrected to not have values below 0
+  ## Look into STL documentation
+    # mutate(plume_seas = plume_seas + plume_mean,
+    #        flow_seas = flow_seas + flow_mean,
+    #        tide_seas = tide_seas + tide_mean,
+    #        wind_seas = wind_seas + wind_mean)
   
-  # Daily ts of river plumes
-  plume_daily <- ggplot(data = df_pretty) + 
-    # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = date, y = plume_area), color = "brown") +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    # X-axis labels
-    scale_x_date(name = "", 
-                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
-    # Y-axis labels
-    scale_y_continuous(name = "Plume area (km²)") +
-    ggplot_theme()
-  ggsave(filename = "figures/plume_daily.png", plot = plume_daily, width = 24, height = 20, dpi = 300)
+  # Convenience wrappers for daily, seasonal, and interannual plot
+  plot_daily <- function(df, y_col, line_colour, y_label, file_stub){
+    pl_daily <- ggplot(data = df) + 
+      geom_path(aes_string(x = "date", y = y_col), color = line_colour) +
+      facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+      scale_x_date(name = "", expand = c(0,0),
+                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
+                   labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
+      scale_y_continuous(name = y_label) +
+      ggplot_theme()
+    ggsave(filename = paste0("figures/",file_stub,"_daily.png"), plot = pl_daily, width = 24, height = 20, dpi = 300)
+    pl_daily
+  }
+  # TODO: Create ribbon plot by getting min/max/mean per month group
+  plot_seas <- function(df, y_col, line_colour, y_label, file_stub){
+    pl_seas <- ggplot(data = df) + 
+      geom_path(aes_string(x = "doy", y = y_col), color = line_colour, linewidth = 2) +
+      facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+      scale_y_continuous(name = y_label) +
+      scale_x_continuous(expand = c(0, 0)) +
+      ggplot_theme()
+    ggsave(filename = paste0("figures/",file_stub,"_seas.png"), plot = pl_seas, width = 24, height = 20, dpi = 300)
+  }
+  plot_inter <- function(df, y_col, line_colour, y_label, file_stub){
+    pl_inter <- ggplot(data = df) + 
+      geom_path(aes_string(x = "date", y = y_col), color = line_colour, linewidth = 2) +
+      facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+      scale_x_date(name = "", 
+                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
+                   labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
+      scale_y_continuous(name = y_label) +
+      ggplot_theme()
+    ggsave(filename = paste0("figures/",file_stub,"_inter.png"), plot = pl_inter, width = 24, height = 20, dpi = 300)
+  }
   
-  # Seasonal ts of river plumes
-  plume_seas <- ggplot(data = df_seas) + 
-    # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = doy, y = plume_seas), color = "brown", linewidth = 2) +
-    # Facet
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    # X-axis labels
-    # scale_x_date(name = "", 
-    #              breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-    #              labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
-    # Y-axis labels
-    scale_y_continuous(name = "Plume area (km²)") +
-    ggplot_theme()
-  ggsave(filename = "figures/plume_seas.png", plot = plume_seas, width = 24, height = 20, dpi = 300)
+  # Daily time series
+  plot_daily(df_pretty, "plume_area", "brown", "Plume area (km²)", "plume")
   
-  # Interannual ts of river plumes
-  plume_inter <- ggplot(data = df_pretty) + 
-    # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = date, y = plume_inter), color = "brown", linewidth = 2) +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    # X-axis labels
-    scale_x_date(name = "", 
-                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
-    # Y-axis labels
-    scale_y_continuous(name = "Plume area (km²)") +
-    ggplot_theme()
-  ggsave(filename = "figures/plume_inter.png", plot = plume_inter, width = 24, height = 20, dpi = 300)
+  # Seasonal time series
+  plot_seas(df_seas, "plume_seas", "brown", "Plume area (km^2)", "plume")
+  plot_seas(df_seas, "flow_seas", "blue", "River flow (m^3 s-1)", "flow")
+  plot_seas(df_seas, "tide_seas", "darkgreen", "Tidal range (m)", "tide")
+  plot_seas(df_seas, "wind_seas", "purple", "Wind speed (m s-1)", "wind")
   
+  # Interannual time series
+  plot_inter(df_pretty, "plume_inter", "brown", "Plume area (km^2)", "plume")
+  plot_inter(df_pretty, "flow_inter", "blue", "River flow (m^3 s-1)", "flow")
+  plot_inter(df_pretty, "tide_inter", "darkgreen", "Tidal range (m)", "tide")
+  plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s-1)", "wind")
 
-  # Get scaling factors for plotting
-  # TODO: Multiple scalng of second y-axes does not appear to be possible
-  ## Will need to create each facet individualy
-  # scaling_factor_flow <- sec_axis_adjustement_factors(var_to_scale = df_pretty$flow_inter, 
-  #                                                     var_ref = df_pretty$plume_inter)
-  # scaling_factor_tide <- sec_axis_adjustement_factors(var_to_scale = df_pretty$tide_inter, 
-  #                                                     var_ref = df_pretty$plume_inter)
-  # scaling_factor_wind <- sec_axis_adjustement_factors(var_to_scale = df_pretty$wind_inter, 
-  #                                                     var_ref = df_pretty$plume_inter)
-  # 
-  # df_scaling_flow <- summarise(df_pretty, sec_axis_adjustement_factors(flow_inter, plume_inter), .by = plot_title)
-  # df_scale_flow <- left_join(df_pretty, df_scaling_flow, by = "plot_title") |> 
-  #   mutate(flow_scaled = flow_inter * diff + adjust)
-  #   
-  # 
-  # 
-  #   mutate(flow_scaled = flow_inter * scaling_factor_flow$diff + scaling_factor_flow$adjust,
-  #          tide_scaled = tide_inter * scaling_factor_tide$diff + scaling_factor_tide$adjust,
-  #          wind_scaled = wind_inter * scaling_factor_wind$diff + scaling_factor_wind$adjust)
-  # 
-  # # Interannual plume vs river flow
-  # ggplot(data = df_scale_flow) + 
-  #   # Plume data
-  #   geom_point(aes(x = date, y = plume_inter), color = "brown") + 
-  #   geom_path(aes(x = date, y = plume_inter), color = "brown") + 
-  #   # Wind data
-  #   # geom_point(aes(x = date, y = flow_scaled), color = "blue") + 
-  #   # geom_path(aes(x = date, y = flow_scaled), color = "blue") + 
-  #   # Facet
-  #   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  #   # X-axis labels
-  #   scale_x_date(name = "", 
-  #                breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-  #                labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
-  #   # Y-axis labels
-  #   scale_y_continuous(name = "Plume area (km²)",
-  #                      sec.axis = sec_axis(transform = ~ {. - df_scaling_flow$adjust} / df_scaling_flow$diff, 
-  #                                          name = "River flow (m³/s)")) +
-  #   # Extra bits
-  #   ggplot_theme() +
-  #   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-  #         plot.subtitle = element_text(hjust = 0.5),
-  #         axis.text.y.left = element_text(color = "brown"), 
-  #         axis.ticks.y.left = element_line(color = "brown"),
-  #         axis.line.y.left = element_line(color = "brown"),
-  #         axis.title.y.left = element_text(color = "brown", margin = unit(c(0, 7.5, 0, 0), "mm")),
-  #         axis.text.y.right = element_text(color = "blue"), 
-  #         axis.ticks.y.right = element_line(color = "blue"),
-  #         axis.line.y.right = element_line(color = "blue"),
-  #         axis.title.y.right = element_text(color = "blue", margin = unit(c(0, 0, 0, 7.5), "mm")),
-  #         panel.border = element_rect(linetype = "solid", fill = NA))
+  # TODO: Make this so it can work with seasonal data as well
+  # df <- df_pretty; var_1 <- "plume_inter"; var_2 <- "flow_inter"
+  # colour_1 <- "brown"; colour_2 <- "blue"; label_1 <- "Plume area (km^2)"; label_2 <- "River flow (m^3 s-1)"; file_stub <- "comparison_plume_flow_inter"
+  comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2, file_stub){
+    
+    df_sub <- df[,c("plot_title", "date", var_1, var_2)]
+    colnames(df_sub) <- c("plot_title", "date", "var_1", "var_2")
+    
+    # TODO: Improve this so that the plot works with the individual scaling factors per site
+    ## Though this does seem to work somewhat OK
+    ## Need to look into the sec_axis documentation more to see how the transform function works across facets
+    scaling_factor <- sec_axis_adjustement_factors(df_sub$var_2, df_sub$var_1)
+    
+    df_scaling <- summarise(df_sub, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
+    df_scale <- left_join(df_sub, df_scaling, by = "plot_title") |>
+      mutate(var_2_scaled = var_2 * diff + adjust, .after = "var_2")
+
+    # Interannual plume vs river flow
+    pl_comp <- ggplot(data = df_scale) +
+      # Var 1 data
+      geom_point(aes(x = date, y = var_1), color = colour_1) +
+      geom_path(aes(x = date, y = var_1), color = colour_1) +
+      # Wind data
+      geom_point(aes(x = date, y = var_2_scaled), color = colour_2) +
+      geom_path(aes(x = date, y = var_2_scaled), color = colour_2) +
+      # Facet
+      facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+      # X-axis labels
+      scale_x_date(name = "", expand = c(0, 0),
+                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(),
+                   labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
+      # Y-axis labels
+      scale_y_continuous(name = label_1,
+                         sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
+                                             name = label_2)) +
+      # Extra bits
+      ggplot_theme() +
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+            plot.subtitle = element_text(hjust = 0.5),
+            axis.text.y.left = element_text(color = colour_1),
+            axis.ticks.y.left = element_line(color = colour_1),
+            axis.line.y.left = element_line(color = colour_1),
+            axis.title.y.left = element_text(color = colour_1, margin = unit(c(0, 7.5, 0, 0), "mm")),
+            axis.text.y.right = element_text(color = colour_2),
+            axis.ticks.y.right = element_line(color = colour_2),
+            axis.line.y.right = element_line(color = colour_2),
+            axis.title.y.right = element_text(color = colour_2, margin = unit(c(0, 0, 0, 7.5), "mm")),
+            panel.border = element_rect(linetype = "solid", fill = NA))
+    ggsave(filename = paste0("figures/",file_stub,".png"), plot = pl_comp, width = 24, height = 20, dpi = 300)
+  }
   
-  # Seasonal ts of river flow
-  flow_seas <- ggplot(data = df_seas) + 
-    geom_path(aes(x = doy, y = flow_seas), color = "blue", linewidth = 2) +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    scale_y_continuous(name = "River flow (m^3/s)") +
-    ggplot_theme()
-  ggsave(filename = "figures/flow_seas.png", plot = flow_seas, width = 24, height = 20, dpi = 300)
-  
-  # Interannual ts of river plumes
-  flow_inter <- ggplot(data = df_pretty) + 
-    # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = date, y = flow_inter), color = "blue", linewidth = 2) +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    # X-axis labels
-    scale_x_date(name = "", 
-                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
-    # Y-axis labels
-    scale_y_continuous(name = "River flow (m^3/s)") +
-    ggplot_theme()
-  ggsave(filename = "figures/flow_inter.png", plot = flow_inter, width = 24, height = 20, dpi = 300)
-  
-  # Seasonal ts of tide
-  tide_seas <- ggplot(data = df_seas) + 
-    geom_path(aes(x = doy, y = tide_seas), color = "green", linewidth = 2) +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    scale_y_continuous(name = "River tide (m^3/s)") +
-    ggplot_theme()
-  ggsave(filename = "figures/tide_seas.png", plot = tide_seas, width = 24, height = 20, dpi = 300)
-  
-  # Interannual ts of tide
-  tide_inter <- ggplot(data = df_pretty) + 
-    # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = date, y = tide_inter), color = "green", linewidth = 2) +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    # X-axis labels
-    scale_x_date(name = "", 
-                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
-    # Y-axis labels
-    scale_y_continuous(name = "River tide (m^3/s)") +
-    ggplot_theme()
-  ggsave(filename = "figures/tide_inter.png", plot = tide_inter, width = 24, height = 20, dpi = 300)
-  
-  # Seasonal ts of wind
-  wind_seas <- ggplot(data = df_seas) + 
-    geom_path(aes(x = doy, y = wind_seas), color = "purple", linewidth = 2) +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    scale_y_continuous(name = "River wind (m^3/s)") +
-    ggplot_theme()
-  ggsave(filename = "figures/wind_seas.png", plot = wind_seas, width = 24, height = 20, dpi = 300)
-  
-  # Interannual ts of wind
-  wind_inter <- ggplot(data = df_pretty) + 
-    # geom_point(aes(x = date, y = plume_area), color = "brown") + 
-    geom_path(aes(x = date, y = wind_inter), color = "purple", linewidth = 2) +
-    facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-    # X-axis labels
-    scale_x_date(name = "", 
-                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
-    # Y-axis labels
-    scale_y_continuous(name = "River wind (m^3/s)") +
-    ggplot_theme()
-  ggsave(filename = "figures/wind_inter.png", plot = wind_inter, width = 24, height = 20, dpi = 300)
+  # Comparison plots
+  comparison_plot(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter")
+  comparison_plot(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_inter")
+  comparison_plot(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_inter")
   
   # Everything on one plot
   df_all_scaled <- df_pretty |> 
