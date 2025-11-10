@@ -37,9 +37,9 @@ spatial_wind_calc <- function(mouth_info){
   wind_df <- purrr::map_dfr(wind_files, load_wind_sub, lon_range, lat_range)
   
   # Calculate spatial average of wind vectors by day
-  # wind_df_mean <- wind_df |> 
-  #   summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
-  
+  wind_df_mean <- wind_df |>
+    summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
+
   # Determine simple upwelling/downwelling index based on coastal direction (based on river mouth name)
   # TODO: Think of a more sophisticated way to do this
   if(zone %in% c("BAY_OF_BISCAY", "SOUTHERN_BRITTANY")){
@@ -62,7 +62,8 @@ spatial_wind_calc <- function(mouth_info){
   # Load panache time series based on river mouth name
   plume_daily <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")) |> 
     dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file) |> 
-    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA))
+    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+    mutate(area_of_the_plume_mask_in_km2 = ifelse(area_of_the_plume_mask_in_km2 > 20000, NA, area_of_the_plume_mask_in_km2))
 
   # Combine dataframes for further analyses
   wind_plume_df <- left_join(plume_daily, wind_df_full, join_by(date)) |> 
@@ -134,7 +135,7 @@ spatial_wind_calc <- function(mouth_info){
   cor_plot <- ggpubr::ggarrange(wind_plume_cor_plot, wind_plume_cor_lag_plot, ncol = 1, nrow = 2, labels = c("c)", "d)"), heights = c(1, 0.3))
   full_plot <- ggpubr::ggarrange(ts_plot, cor_plot, ncol = 2, nrow = 1)
   full_plot_title <- ggpubr::ggarrange(wind_plume_title, full_plot, ncol = 1, nrow = 2, heights = c(0.05, 1)) + ggpubr::bgcolor("white")
-  ggsave(filename = paste0("figures/wind_plume_cor_plot_",mouth_info$mouth_name,".png"), width = 12, height = 6, dpi = 600)
+  ggsave(filename = paste0("figures/cor_plot_wind_plume_",mouth_info$mouth_name,".png"), width = 12, height = 6, dpi = 600)
 
   # Get scaling factor for plotting
   scaling_factor <- sec_axis_adjustement_factors(var_to_scale = wind_plume_df$wind_stl, 

@@ -39,7 +39,8 @@ tide_calc <- function(mouth_info){
   
   # Load panache time series based on river mouth name
   plume_daily <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")) |> 
-    dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file)
+    dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file) |> 
+    mutate(area_of_the_plume_mask_in_km2 = ifelse(area_of_the_plume_mask_in_km2 > 20000, NA, area_of_the_plume_mask_in_km2))
   
   # Combine
   tide_plume_df <- left_join(plume_daily, tide_df, join_by(date)) |> 
@@ -74,7 +75,7 @@ tide_calc <- function(mouth_info){
     labs(y = "tidal range (m)", x = NULL) +
     scale_x_date(expand = 0) +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
-  tide_plot
+  # tide_plot
   
   # Panache size
   panache_plot <- ggplot(tide_plume_df, aes(x = date, y = area_of_the_plume_mask_in_km2)) +
@@ -106,7 +107,7 @@ tide_calc <- function(mouth_info){
   cor_plot <- ggpubr::ggarrange(tide_plume_cor_plot, tide_plume_cor_lag_plot, ncol = 1, nrow = 2, labels = c("c)", "d)"), heights = c(1, 0.3))
   full_plot <- ggpubr::ggarrange(ts_plot, cor_plot, ncol = 2, nrow = 1)
   full_plot_title <- ggpubr::ggarrange(tide_plume_title, full_plot, ncol = 1, nrow = 2, heights = c(0.05, 1)) + ggpubr::bgcolor("white")
-  ggsave(filename = paste0("figures/tide_plume_cor_plot_",mouth_info$mouth_name,".png"), width = 12, height = 6, dpi = 600)
+  ggsave(filename = paste0("figures/cor_plot_tide_plume_",mouth_info$mouth_name,".png"), width = 12, height = 6, dpi = 600)
   
   # Get scaling factor for plotting
   scaling_factor <- sec_axis_adjustement_factors(var_to_scale = tide_plume_df$tide_stl, 
