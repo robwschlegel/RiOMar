@@ -113,23 +113,21 @@ multi_plot <- function(df_stl){
   
   # One year of data for seasonal plots
   df_mean <- df_pretty |> 
-    summarise(plume_mean = mean(plume_area, na.rm = TRUE), 
-              flow_mean = mean(flow, na.rm = TRUE), 
-              wind_mean = mean(wind_spd, na.rm = TRUE), 
-              tide_mean = mean(tide_range, na.rm = TRUE), .by = plot_title)
+    summarise(plume_mean = mean(plume_inter, na.rm = TRUE), 
+              flow_mean = mean(flow_inter, na.rm = TRUE), 
+              wind_mean = mean(wind_inter, na.rm = TRUE), 
+              tide_mean = mean(tide_inter, na.rm = TRUE), .by = plot_title)
   df_seas <- df_pretty |> 
     filter(year(date) == 1999) |> 
     mutate(month = month(date, label = TRUE, abbr = TRUE),
            doy = yday(date)) |> 
     dplyr::select(zone, plot_title, month, doy, plume_seas, flow_seas, tide_seas, wind_seas) |> 
     distinct() |> 
-    left_join(df_mean, by = "plot_title") #|>
-  # TODO: Look into how the seasonal signals are corrected to not have values below 0
-  ## Look into STL documentation
-    # mutate(plume_seas = plume_seas + plume_mean,
-    #        flow_seas = flow_seas + flow_mean,
-    #        tide_seas = tide_seas + tide_mean,
-    #        wind_seas = wind_seas + wind_mean)
+    left_join(df_mean, by = "plot_title") |>
+    mutate(plume_seas = plume_seas + plume_mean,
+           flow_seas = flow_seas + flow_mean,
+           tide_seas = tide_seas + tide_mean,
+           wind_seas = wind_seas + wind_mean)
   
   # Convenience wrappers for daily, seasonal, and interannual plot
   plot_daily <- function(df, y_col, line_colour, y_label, file_stub){
@@ -140,19 +138,29 @@ multi_plot <- function(df_stl){
                    breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
                    labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
       scale_y_continuous(name = y_label) +
+      labs( x = NULL) +
       ggplot_theme()
     ggsave(filename = paste0("figures/",file_stub,"_daily.png"), plot = pl_daily, width = 24, height = 20, dpi = 300)
     pl_daily
   }
-  # TODO: Create ribbon plot by getting min/max/mean per month group
   plot_seas <- function(df, y_col, line_colour, y_label, file_stub){
-    pl_seas <- ggplot(data = df) + 
-      geom_path(aes_string(x = "doy", y = y_col), color = line_colour, linewidth = 2) +
+    df_sub <- df[,c("plot_title", "month", y_col)]
+    colnames(df_sub)[3] = "val"
+    df_sub <- df_sub |> 
+      summarise(val_min = min(val, na.rm = TRUE),
+                val_mean = mean(val, na.rm = TRUE),
+                val_max = max(val, na.rm = TRUE), .by = c("plot_title", "month")) |> 
+      mutate(month_int = as.integer(month))
+    pl_seas <- ggplot(data = df_sub, aes(x = month_int)) + 
+      geom_ribbon(aes(ymin = val_min, ymax = val_max), fill = line_colour, alpha = 0.3) +
+      geom_path(aes(y = val_mean), color = line_colour, linewidth = 2) +
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
       scale_y_continuous(name = y_label) +
-      scale_x_continuous(expand = c(0, 0)) +
+      scale_x_continuous(expand = c(0, 0), breaks = 1:12, labels = month.abb) +
+      labs(x = NULL) +
       ggplot_theme()
     ggsave(filename = paste0("figures/",file_stub,"_seas.png"), plot = pl_seas, width = 24, height = 20, dpi = 300)
+    pl_seas
   }
   plot_inter <- function(df, y_col, line_colour, y_label, file_stub){
     pl_inter <- ggplot(data = df) + 
@@ -164,6 +172,7 @@ multi_plot <- function(df_stl){
       scale_y_continuous(name = y_label) +
       ggplot_theme()
     ggsave(filename = paste0("figures/",file_stub,"_inter.png"), plot = pl_inter, width = 24, height = 20, dpi = 300)
+    pl_inter
   }
   
   # Daily time series
@@ -183,39 +192,72 @@ multi_plot <- function(df_stl){
 
   # TODO: Make this so it can work with seasonal data as well
   # df <- df_pretty; var_1 <- "plume_inter"; var_2 <- "flow_inter"
+  # df <- df_seas; var_1 <- "plume_seas"; var_2 <- "flow_seas"
   # colour_1 <- "brown"; colour_2 <- "blue"; label_1 <- "Plume area (km^2)"; label_2 <- "River flow (m^3 s-1)"; file_stub <- "comparison_plume_flow_inter"
   comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2, file_stub){
     
-    df_sub <- df[,c("plot_title", "date", var_1, var_2)]
-    colnames(df_sub) <- c("plot_title", "date", "var_1", "var_2")
-    
+    if(grepl("seas", var_1)){
+      df_sub <- df[,c("plot_title", "month", var_1, var_2)]
+      colnames(df_sub) <- c("plot_title", "month", "var_1", "var_2")
+    } else {
+      df_sub <- df[,c("plot_title", "date", var_1, var_2)]
+      colnames(df_sub) <- c("plot_title", "date", "var_1", "var_2")
+    }
+
     # TODO: Improve this so that the plot works with the individual scaling factors per site
     ## Though this does seem to work somewhat OK
     ## Need to look into the sec_axis documentation more to see how the transform function works across facets
     scaling_factor <- sec_axis_adjustement_factors(df_sub$var_2, df_sub$var_1)
-    
     df_scaling <- summarise(df_sub, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
     df_scale <- left_join(df_sub, df_scaling, by = "plot_title") |>
       mutate(var_2_scaled = var_2 * diff + adjust, .after = "var_2")
-
-    # Interannual plume vs river flow
-    pl_comp <- ggplot(data = df_scale) +
-      # Var 1 data
-      geom_point(aes(x = date, y = var_1), color = colour_1) +
-      geom_path(aes(x = date, y = var_1), color = colour_1) +
-      # Wind data
-      geom_point(aes(x = date, y = var_2_scaled), color = colour_2) +
-      geom_path(aes(x = date, y = var_2_scaled), color = colour_2) +
-      # Facet
-      facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-      # X-axis labels
-      scale_x_date(name = "", expand = c(0, 0),
-                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(),
-                   labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
+    
+    # Plot base
+    if(grepl("seas", var_1)){
+      
+      # Get range for ribbon plot
+      df_scale_sub <- df_scale |> 
+        summarise(var_1_min = min(var_1, na.rm = TRUE),
+                  var_1_mean = mean(var_1, na.rm = TRUE),
+                  var_1_max = max(var_1, na.rm = TRUE),
+                  var_2_min = min(var_2_scaled, na.rm = TRUE),
+                  var_2_mean = mean(var_2_scaled, na.rm = TRUE),
+                  var_2_max = max(var_2_scaled, na.rm = TRUE), .by = c("plot_title", "month")) |> 
+        mutate(month_int = as.integer(month))
+      
+      # Plot them
+      pl_base <- ggplot(data = df_scale_sub, aes(x = month_int)) + 
+        # Var 1
+        geom_ribbon(aes(ymin = var_1_min, ymax = var_1_max), fill = colour_1, alpha = 0.3) +
+        geom_path(aes(y = var_1_mean), color = colour_1, linewidth = 2) +
+        # Var 2
+        geom_ribbon(aes(ymin = var_2_min, ymax = var_2_max), fill = colour_2, alpha = 0.3) +
+        geom_path(aes(y = var_2_mean), color = colour_2, linewidth = 2) +
+        facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+        scale_x_continuous(expand = c(0, 0), breaks = 1:12, labels = month.abb)
+    } else {
+      pl_base <- ggplot(data = df_scale) +
+        # Var 1 data
+        geom_point(aes(x = date, y = var_1), color = colour_1) +
+        geom_path(aes(x = date, y = var_1), color = colour_1) +
+        # Var 2 data
+        geom_point(aes(x = date, y = var_2_scaled), color = colour_2) +
+        geom_path(aes(x = date, y = var_2_scaled), color = colour_2) +
+        # Facet
+        facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+        # X-axis labels
+        scale_x_date(name = "", expand = c(0, 0),
+                     breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(),
+                     labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) 
+    }
+    
+    # Finish up the comparison plot
+    pl_comp <- pl_base +
       # Y-axis labels
       scale_y_continuous(name = label_1,
                          sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
                                              name = label_2)) +
+      labs( x = NULL) +
       # Extra bits
       ggplot_theme() +
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
@@ -258,11 +300,12 @@ multi_plot <- function(df_stl){
 # Run ---------------------------------------------------------------------
 
 # Compute all STL stats and save
-stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
-save(stl_all, file = "output/STATS/stl_all.RData")
+# stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
+# save(stl_all, file = "output/STATS/stl_all.RData")
+load("output/STATS/stl_all.RData")
 
 # Create plots
-
+multi_plot(stl_all)
 
 
 # Missing data ------------------------------------------------------------
