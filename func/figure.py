@@ -238,6 +238,11 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
 
     the_plume.remove_close_river_mouth(the_plume.parameters['pixel_starting_points_close_river_mouth'])
 
+    ##
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
+    #                    name_of_the_plot='before_')
+    ##
+
     the_plume.dilate_the_main_plume_area_to_merge_close_plume_areas()
 
     the_plume.remove_small_shapes_that_do_not_meet_a_minimum_size_criterion()
