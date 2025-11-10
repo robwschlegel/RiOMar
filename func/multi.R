@@ -274,7 +274,12 @@ multi_plot <- function(df_stl){
     ggsave(filename = paste0("figures/",file_stub,".png"), plot = pl_comp, width = 24, height = 20, dpi = 300)
   }
   
-  # Comparison plots
+  # Seasonal comparison plots
+  comparison_plot(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_sas")
+  comparison_plot(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_seas")
+  comparison_plot(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_seas")
+  
+  # Interannual comparison plots
   comparison_plot(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter")
   comparison_plot(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_inter")
   comparison_plot(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_inter")
