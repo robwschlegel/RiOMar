@@ -275,7 +275,7 @@ multi_plot <- function(df_stl){
   }
   
   # Seasonal comparison plots
-  comparison_plot(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_sas")
+  comparison_plot(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_seas")
   comparison_plot(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_seas")
   comparison_plot(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_seas")
   
@@ -356,4 +356,13 @@ ggplot(chla_files_NA_count, aes(x = month, y = miss_count_month_year)) +
   labs(x = NULL, y = "count", title = "Monthly count of missing chl a SEXTANT files") +
   theme(panel.border = element_rect(fill = NA, colour = "black"))
 ggsave("figures/missng_chla.png", width = 9, height = 9, dpi = 600)
+
+
+# Decomposition comparison ------------------------------------------------
+
+# X11
+
+# STL
+
+# heatwaveR
 

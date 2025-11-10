@@ -211,6 +211,7 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
     the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
                         name_of_the_plot='A')
 
+    # TODO: Change this so it reacts to fixed or dynamic. Or just alway use fixed.
     the_plume.determine_SPM_threshold(dynamic_determination_of_SPM_threshold=True)
     the_plume.SPM_threshold = 5.5
     the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
@@ -226,6 +227,10 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
         maximal_bathymetry=parameters['maximal_bathymetric_for_zone_with_resuspension'][plume_name],
         minimal_distance_from_estuary=parameters['minimal_distance_from_estuary_for_zone_with_resuspension'][
             plume_name])
+    ##
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
+    #                    name_of_the_plot='before_shallow_water_removal')
+    ##
 
     the_plume.remove_shallow_waters()
     the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
@@ -242,6 +247,11 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
     the_plume.identify_the_main_plume_shape_based_on_the_plume_core_location()
 
     the_plume.remove_shallow_waters()
+
+    ##
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
+    #                    name_of_the_plot='before_shrink_widen')
+    ##
 
     if not np.isin(plume_name, ['Seine']):
         the_plume.remove_parts_of_the_plume_area_that_widden_after_the_shrinking_phase()
