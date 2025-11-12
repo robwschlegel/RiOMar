@@ -57,12 +57,12 @@ Download_satellite_data(sextant_chla_all,
 # NB: This takes a few hours and usesd ~280 GB of disk spaces
 # NB: Several days of data are missing
 sextant_spm_all = {'Data_sources':['SEXTANT'],
-                    'Sensor_names':["merged"],
-                    'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['Standard'],
-                    'Temporal_resolution':['DAILY'],
-                    'start_day':'1998/01/01',
-                    'end_day':'2025/12/31'}
+                   'Sensor_names':["merged"],
+                   'Satellite_variables':['SPM'],
+                   'Atmospheric_corrections':['Standard'],
+                   'Temporal_resolution':['DAILY'],
+                   'start_day':'1998/01/01',
+                   'end_day':'2025/12/31'}
 Download_satellite_data(sextant_spm_all,
                         nb_of_cores_to_use = 14,
                         overwrite_existing_satellite_files = False,
@@ -143,7 +143,7 @@ for year in range(1998, 2025):
     Plot_and_Save_the_map(
         sextant_chla_all,
         nb_of_cores_to_use = 14,
-        where_are_saved_satellite_data = 'data',
+        where_are_saved_satellite_data = 'dataa',
         start_day_of_maps_to_plot = f'{year}/01/01',
         end_day_of_maps_to_plot = f'{year}/12/31'
     )
