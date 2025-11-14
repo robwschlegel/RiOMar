@@ -1,12 +1,37 @@
 # func/multi.R
 # Loads all drivers of plume size, performs stats, plots results
 
+
+# Analysis ideas ----------------------------------------------------------
+
+# Fix y-axis scaling
+
+# Create GIFs
+
+# Basic time series comparisons to get seasonal and interannual comparisons
+## Perform seasonal smoothing with heatwaveR
+## also look into fixing the tidal range time series
+## ultimately the point is to reduce the data in such a way that the time series can be related to one another in some way
+## what does an extreme event analysis reveal?
+### how do X11 and STL differ?
+## Look at seasonal Trends per month, not long term
+## Get correlations of interannual and seasonal time series
+
+# Treat each pixel like its own time series and see what is happening with the forces when the pixel is triggered as a panache
+## also how high SPM is while all this is happening
+## show primary wind direction when pixel is triggered
+## also relationship with SPM and tide range or category
+## number of times pixel is flagged related to the size of the total panache when it is flagged
+## could also tally the shape of the panache whenever pixel is flagged
+
+
 # Libraries ---------------------------------------------------------------
 
 source("func/util.R")
 library(tidyverse)
 library(tidync)
 library(seasonal)
+library(patchwork)
 library(doParallel); doParallel::registerDoParallel(cores = 4)
 
 # Zones
@@ -104,26 +129,25 @@ multi_plot <- function(df_stl){
   
   # Make pretty plot titles
   df_pretty <- df_stl |> 
-    mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Seine estuary",
-                                  zone == "BAY_OF_BISCAY" ~ "Gironde estuary",
-                                  zone == "SOUTHERN_BRITTANY" ~ "Loire estuary",
-                                  zone == "GULF_OF_LION" ~ "Rhône estuary"), .after = "zone") |> 
-    mutate(plot_title = factor(plot_title, levels = c("Seine estuary", "Loire estuary", "Gironde estuary", "Rhône estuary")))
-  unique_years <- df_pretty$date |> year() |> unique()
+    mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
+                                  zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
+                                  zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
+                                  zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
+    mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion")))
   
   # One year of data for seasonal plots
   df_mean <- df_pretty |> 
     summarise(plume_mean = mean(plume_inter, na.rm = TRUE), 
               flow_mean = mean(flow_inter, na.rm = TRUE), 
               wind_mean = mean(wind_inter, na.rm = TRUE), 
-              tide_mean = mean(tide_inter, na.rm = TRUE), .by = plot_title)
+              tide_mean = mean(tide_inter, na.rm = TRUE), .by = c(zone, plot_title))
   df_seas <- df_pretty |> 
     filter(year(date) == 1999) |> 
     mutate(month = month(date, label = TRUE, abbr = TRUE),
            doy = yday(date)) |> 
     dplyr::select(zone, plot_title, month, doy, plume_seas, flow_seas, tide_seas, wind_seas) |> 
     distinct() |> 
-    left_join(df_mean, by = "plot_title") |>
+    left_join(df_mean, by = c("zone", "plot_title")) |>
     mutate(plume_seas = plume_seas + plume_mean,
            flow_seas = flow_seas + flow_mean,
            tide_seas = tide_seas + tide_mean,
@@ -131,6 +155,7 @@ multi_plot <- function(df_stl){
   
   # Convenience wrappers for daily, seasonal, and interannual plot
   plot_daily <- function(df, y_col, line_colour, y_label, file_stub){
+    unique_years <- df$date |> year() |> unique()
     pl_daily <- ggplot(data = df) + 
       geom_path(aes_string(x = "date", y = y_col), color = line_colour) +
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
@@ -140,8 +165,8 @@ multi_plot <- function(df_stl){
       scale_y_continuous(name = y_label) +
       labs( x = NULL) +
       ggplot_theme()
-    ggsave(filename = paste0("figures/",file_stub,"_daily.png"), plot = pl_daily, width = 24, height = 20, dpi = 300)
-    pl_daily
+    ggsave(filename = paste0("figures/",file_stub,"_daily.png"), plot = pl_daily, width = 24, height = 24, dpi = 300)
+    # pl_daily
   }
   plot_seas <- function(df, y_col, line_colour, y_label, file_stub){
     df_sub <- df[,c("plot_title", "month", y_col)]
@@ -159,10 +184,11 @@ multi_plot <- function(df_stl){
       scale_x_continuous(expand = c(0, 0), breaks = 1:12, labels = month.abb) +
       labs(x = NULL) +
       ggplot_theme()
-    ggsave(filename = paste0("figures/",file_stub,"_seas.png"), plot = pl_seas, width = 24, height = 20, dpi = 300)
-    pl_seas
+    ggsave(filename = paste0("figures/",file_stub,"_seas.png"), plot = pl_seas, width = 24, height = 24, dpi = 300)
+    # pl_seas
   }
   plot_inter <- function(df, y_col, line_colour, y_label, file_stub){
+    unique_years <- df$date |> year() |> unique()
     pl_inter <- ggplot(data = df) + 
       geom_path(aes_string(x = "date", y = y_col), color = line_colour, linewidth = 2) +
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
@@ -171,12 +197,12 @@ multi_plot <- function(df_stl){
                    labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
       scale_y_continuous(name = y_label) +
       ggplot_theme()
-    ggsave(filename = paste0("figures/",file_stub,"_inter.png"), plot = pl_inter, width = 24, height = 20, dpi = 300)
-    pl_inter
+    ggsave(filename = paste0("figures/",file_stub,"_inter.png"), plot = pl_inter, width = 24, height = 24, dpi = 300)
+    # pl_inter
   }
   
   # Daily time series
-  plot_daily(df_pretty, "plume_area", "brown", "Plume area (km²)", "plume")
+  plot_daily(df_pretty, "plume_area", "brown", "Plume area (km^2)", "plume")
   
   # Seasonal time series
   plot_seas(df_seas, "plume_seas", "brown", "Plume area (km^2)", "plume")
@@ -190,11 +216,11 @@ multi_plot <- function(df_stl){
   plot_inter(df_pretty, "tide_inter", "darkgreen", "Tidal range (m)", "tide")
   plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s-1)", "wind")
 
-  # TODO: Make this so it can work with seasonal data as well
+  # Comparison plots
   # df <- df_pretty; var_1 <- "plume_inter"; var_2 <- "flow_inter"
   # df <- df_seas; var_1 <- "plume_seas"; var_2 <- "flow_seas"
   # colour_1 <- "brown"; colour_2 <- "blue"; label_1 <- "Plume area (km^2)"; label_2 <- "River flow (m^3 s-1)"; file_stub <- "comparison_plume_flow_inter"
-  comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2, file_stub){
+  comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2){
     
     if(grepl("seas", var_1)){
       df_sub <- df[,c("plot_title", "month", var_1, var_2)]
@@ -203,10 +229,8 @@ multi_plot <- function(df_stl){
       df_sub <- df[,c("plot_title", "date", var_1, var_2)]
       colnames(df_sub) <- c("plot_title", "date", "var_1", "var_2")
     }
-
-    # TODO: Improve this so that the plot works with the individual scaling factors per site
-    ## Though this does seem to work somewhat OK
-    ## Need to look into the sec_axis documentation more to see how the transform function works across facets
+    
+    # Scaling factor
     scaling_factor <- sec_axis_adjustement_factors(df_sub$var_2, df_sub$var_1)
     df_scaling <- summarise(df_sub, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
     df_scale <- left_join(df_sub, df_scaling, by = "plot_title") |>
@@ -236,6 +260,7 @@ multi_plot <- function(df_stl){
         facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
         scale_x_continuous(expand = c(0, 0), breaks = 1:12, labels = month.abb)
     } else {
+      unique_years <- df_scale$date |> year() |> unique()
       pl_base <- ggplot(data = df_scale) +
         # Var 1 data
         geom_point(aes(x = date, y = var_1), color = colour_1) +
@@ -271,18 +296,27 @@ multi_plot <- function(df_stl){
             axis.line.y.right = element_line(color = colour_2),
             axis.title.y.right = element_text(color = colour_2, margin = unit(c(0, 0, 0, 7.5), "mm")),
             panel.border = element_rect(linetype = "solid", fill = NA))
-    ggsave(filename = paste0("figures/",file_stub,".png"), plot = pl_comp, width = 24, height = 20, dpi = 300)
+    return(pl_comp)
+  }
+  
+  # Convenience wrapper to run and save comparison plots
+  # NB: this is hqrd coded to work with four plots
+  comparison_plot_save <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2, file_stub){
+    comp_list <- plyr::dlply(df, c("zone"), comparison_plot, var_1 = var_1, var_2 = var_2, 
+                             colour_1 = colour_1, colour_2 = colour_2, label_1 = label_1, label_2 = label_2)
+    comp_fig <- comp_list[[2]] + comp_list[[4]] + comp_list[[1]] + comp_list[[3]] + plot_layout(ncol = 1, axes = "collect")
+    ggsave(filename = paste0("figures/",file_stub,".png"), plot = comp_fig, width = 24, height = 24, dpi = 300)
   }
   
   # Seasonal comparison plots
-  comparison_plot(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_seas")
-  comparison_plot(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_seas")
-  comparison_plot(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_seas")
+  comparison_plot_save(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_seas")
+  comparison_plot_save(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_seas")
+  comparison_plot_save(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_seas")
   
   # Interannual comparison plots
-  comparison_plot(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter")
-  comparison_plot(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_inter")
-  comparison_plot(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_inter")
   
   # Everything on one plot
   df_all_scaled <- df_pretty |> 
