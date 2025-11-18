@@ -44,13 +44,13 @@ spatial_wind_calc <- function(mouth_info){
   # TODO: Think of a more sophisticated way to do this
   if(zone %in% c("BAY_OF_BISCAY", "SOUTHERN_BRITTANY")){
     wind_df_updown <- wind_df_mean |> 
-      mutate(welling = ifelse(u < 0, "up", "down"))
+      mutate(welling = ifelse(u < 0, "on", "off"))
   } else if (zone == "BAY_OF_SEINE"){
     wind_df_updown <- wind_df_mean |> 
-      mutate(welling = ifelse(v > 0, "up", "down"))
+      mutate(welling = ifelse(v > 0, "on", "off"))
   } else if (zone == "GULF_OF_LION"){
     wind_df_updown <- wind_df_mean |> 
-      mutate(welling = ifelse(v < 0, "up", "down"))
+      mutate(welling = ifelse(v < 0, "on", "off"))
   }
     
   # Calculate wind speed and direction

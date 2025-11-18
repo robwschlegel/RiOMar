@@ -8,7 +8,7 @@ The code is being repurposed in this repository as a continuation of the work pr
 
 The primary objective of this repository is to provide a clear layout of the workflows used to verify the integrity of a number of data products, as well as any analyses used for publications.
 
-The workflow may be found in the __/code__ folder, with the order of operatioons given in the names of the scripts.
+The workflow may be found in the __/code__ folder, with the order of operations given in the names of the scripts.
 
 ## Data sources
 
@@ -17,6 +17,11 @@ The workflow may be found in the __/code__ folder, with the order of operatioons
 #### SOMLIT
 
 #### REPHY
+
+### River discharge
+
+The primary public source of river discharge data is [HydroPortail](https://hydro.eaufrance.fr/).
+On this site one can create lists of river flow gauges of interest, query the sites, and download data.
 
 ### Wind
 
@@ -31,9 +36,12 @@ The id : name used were:
 - 37 : SAINT-NAZAIRE (Loire)
 - 15 : PORT-BLOC (Gironde)
 - 719 : FOS-SUR-MER + 720 : PORT_DE_BOUC (Rhône)
-- 524 : MARSEILLE (Rhoône)
+- 524 : MARSEILLE (Rhône)
 
-Note that the tide gauge choice for the Rhône river is not as clear as it is for the other rivers. This is because the nearest tide gauge to the mouth _FOS-SUR-MER_ has a limited time series, which is extended to the present by the next nearest tide gauge at _PORT_DE_BOUC_. However, if we re willing to search a bit further down the coast we find the tide gauge for _MARSEILLE_, which has a much longer time series. An explanation for how to access these data is available [here](https://refmar.shom.fr/donnees-refmar-sur-data.shom.fr/telechargement-des-donnees)
+Note that the tide gauge choice for the Rhône river is not as clear as it is for the other rivers. 
+This is because the nearest tide gauge to the mouth _FOS-SUR-MER_ has a limited time series, which is extended to the present by the next nearest tide gauge at _PORT_DE_BOUC_. 
+However, if we re willing to search a bit further down the coast we find the tide gauge for _MARSEILLE_, which has a much longer time series. 
+An explanation for how to access these data is available [here](https://refmar.shom.fr/donnees-refmar-sur-data.shom.fr/telechargement-des-donnees)
 
 ### Oceanographic variables
 

@@ -31,6 +31,7 @@ library(doParallel)
 # The annual cycle is the largest.
 # - Perhaps it would be interesting to measure the distance from the mouth to the edge of the plume
 # - Or how much plume can be attributed to SPM along the coastal zone / within a shallow depth area
+# [bottom] SPM concentrations are on average twice the surface SPM concentrations [Seine]
 
 # Tides
 # For each ROFI, one tide gauge is processed for: Havre for the Seine river, Saint-Nazaire for the Loire river, and Port-Bloc for the Gironde river
@@ -38,8 +39,17 @@ library(doParallel)
 ## although there are slight differences in their response to this forcing.
 # - I will need to think of a way to search forward and backward through matched time series to find neap and spring tides
 ## - to then associate these to times when there are high runoff, that then quickly shifts to smaller/larger plume areas
-# - Create an index value based on the build-ip / -down from neap to spring tide
+# - Create an index value based on the build-up/-down from neap to spring tide
 ## - Meaning, don't measure the tidal range on a given day, but rather where on the progression along the larger tidal scale that day is
+# Gironde
+# The bulge is created in moderate to high discharge conditions and relatively weak wind conditions
+# (1) formation of a bulge during the transition from spring to neap tides, 
+# (2) reinforcement of the bulge in terms of stratification during neap tides, 
+# (3) destabilization of the bulge during the neap to spring tides transition, with increased mixing that breaks stratification. 
+# When the bulge is relaxed, upwelling favorable winds can export the freshwater offshore
+# Seine
+# For a given tidal range, increasing river discharge leads to increase SPM concentrations by a factor of 2 due to the shift of the 
+# estuarine turbidity maximum toward the mouth, and high waves again multiply by 2 SPM concentrations for a given tidal range and river discharge.
 
 # Wind
 # The zonal and meridional wind speeds were averaged spatially for each region of interest
@@ -67,7 +77,7 @@ library(doParallel)
 # Utils -------------------------------------------------------------------
 
 ggplot_theme <-   function() {
-  theme(text = element_text(size = 35, colour = "black"), #25
+  theme(text = element_text(size = 35, colour = "black"),
         plot.title = element_text(hjust = 0.5, size = 55),
         plot.subtitle = element_text(hjust = 0.5),
         panel.grid.major = element_blank(),
@@ -244,7 +254,8 @@ plot_time_series_of_plume_area_and_thresholds <- function(where_are_saved_plume_
                                                                   Satellite_sensor == sub_case$Satellite_sensor, 
                                                                   atmospheric_correction == sub_case$atmospheric_correction)
         
-        where_to_save_sub_case_data <- file.path(ts_data_of_the_sub_case$path_to_file[1], sub_case$Data_source, 'SPM', sub_case$Satellite_sensor, sub_case$atmospheric_correction, 
+        where_to_save_sub_case_data <- file.path(ts_data_of_the_sub_case$path_to_file[1], sub_case$Data_source, 'SPM', 
+                                                 sub_case$Satellite_sensor, sub_case$atmospheric_correction, 
                                                  row$PLUME_DETECTION, row$Temporal_resolution)
         
         make_the_plot_from_the_df(data = ts_data_of_the_sub_case, row, 

@@ -4,8 +4,6 @@
 
 # Analysis ideas ----------------------------------------------------------
 
-# Fix y-axis scaling
-
 # Create GIFs
 
 # Basic time series comparisons to get seasonal and interannual comparisons
@@ -22,7 +20,11 @@
 ## show primary wind direction when pixel is triggered
 ## also relationship with SPM and tide range or category
 ## number of times pixel is flagged related to the size of the total panache when it is flagged
+### Would need to relate wind with time lag to this as well
 ## could also tally the shape of the panache whenever pixel is flagged
+
+# Other analyses
+## Get mean offshore distance of centroid
 
 
 # Libraries ---------------------------------------------------------------
