@@ -40,17 +40,17 @@ spatial_wind_calc <- function(mouth_info){
   wind_df_mean <- wind_df |>
     summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
 
-  # Determine simple upwelling/downwelling index based on coastal direction (based on river mouth name)
+  # Determine simple on-/off-shore direction index based on coastal direction (based on river mouth name)
   # TODO: Think of a more sophisticated way to do this
   if(zone %in% c("BAY_OF_BISCAY", "SOUTHERN_BRITTANY")){
-    wind_df_updown <- wind_df_mean |> 
-      mutate(welling = ifelse(u < 0, "on", "off"))
+    wind_df_updown <- wind_df |> 
+      mutate(direction = ifelse(u < 0, "off", "on"))
   } else if (zone == "BAY_OF_SEINE"){
-    wind_df_updown <- wind_df_mean |> 
-      mutate(welling = ifelse(v > 0, "on", "off"))
+    wind_df_updown <- wind_df |> 
+      mutate(direction = ifelse(v > 0, "off", "on"))
   } else if (zone == "GULF_OF_LION"){
-    wind_df_updown <- wind_df_mean |> 
-      mutate(welling = ifelse(v < 0, "on", "off"))
+    wind_df_updown <- wind_df |> 
+      mutate(direction = ifelse(v < 0, "off", "on"))
   }
     
   # Calculate wind speed and direction
@@ -80,12 +80,12 @@ spatial_wind_calc <- function(mouth_info){
   wind_plume_df$plume_stl <- as.vector(stl_plume$time.series[,2])
   
   # Compare panache size against wind speed
-  # Two separate comparisons based on upwelling or downwelling times
+  # Two separate comparisons based on onshore or offshore times
   wind_plume_stats_all <- wind_plume_df |> 
-    mutate(welling = "all") |> 
-    summarise(r = cor(wind_spd, area_of_the_plume_mask_in_km2, use = "pairwise.complete.obs"), .by = "welling")
+    mutate(direction = "all") |> 
+    summarise(r = cor(wind_spd, area_of_the_plume_mask_in_km2, use = "pairwise.complete.obs"), .by = "direction")
   wind_plume_stats <- wind_plume_df |> 
-    summarise(r = cor(wind_spd, area_of_the_plume_mask_in_km2, use = "pairwise.complete.obs"), .by = "welling") |> 
+    summarise(r = cor(wind_spd, area_of_the_plume_mask_in_km2, use = "pairwise.complete.obs"), .by = "direction") |> 
     rbind(wind_plume_stats_all)
   
   # Lagged correlations
@@ -94,9 +94,9 @@ spatial_wind_calc <- function(mouth_info){
     cor = map_dbl(0:30, ~ cor(wind_plume_df$wind_spd, lag(wind_plume_df$area_of_the_plume_mask_in_km2, .), use = "complete.obs"))
   )
   
-  # Plot wind speed and up/downwelling times
+  # Plot wind speed and on-/off-shore times
   wind_plot <- ggplot(wind_plume_df, aes(x = date, y = wind_spd)) +
-    geom_vline(aes(xintercept = date, colour = welling), show.legend = FALSE) +
+    geom_vline(aes(xintercept = date, colour = direction), show.legend = FALSE) +
     geom_line() +
     labs(y = "wind speed (m s-1)", x = NULL) +
     scale_x_date(expand = 0) +
@@ -114,9 +114,9 @@ spatial_wind_calc <- function(mouth_info){
   
   # Plot wind speed and panache size correlation
   wind_plume_cor_plot <- ggplot(wind_plume_df, aes(x = wind_spd, y = area_of_the_plume_mask_in_km2)) + 
-    geom_point(aes(colour = welling), alpha = 0.7) +
+    geom_point(aes(colour = direction), alpha = 0.7) +
     geom_smooth(method = "lm") +
-    geom_smooth(method = "lm", aes(colour = welling)) +
+    geom_smooth(method = "lm", aes(colour = direction)) +
     labs(y = "plume area (km^2)", x = "wind speed (m s-1)") +
     theme(panel.border = element_rect(fill = NA, colour = "black"),
           legend.position = "bottom")
