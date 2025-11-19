@@ -16,13 +16,14 @@ It is designed specifically to work for the suite of ODATIS products put into pr
 
 - Python 3.x
 - Packages:
--- netCDF4
+-- xarray
 -- matplotlib
+-- cartopy
 
 Install the required packages from a terminal with:
 
 ```
-pip install netCDF4 matplotlib
+pip install xarray matplotlib cartopy
 ```
 
 ## R
@@ -31,14 +32,14 @@ pip install netCDF4 matplotlib
 - Packages
 -- argparse
 -- ncdf4
--- httr
+-- curl
 -- ggplot2
--- dplyr
+-- reshape2
 
 Install the required packages from an R terminal with:
 
 ```
-install.packages(c("argparse", "ncdf4", "httr", "ggplot2", "dplyr"))
+install.packages(c("argparse", "ncdf4", "curl", "ggplot2", "reshape2"))
 ```
 
 ### Windows
@@ -73,23 +74,16 @@ The following examples assume the user is in a terminal at the same location as 
 ### Python
 
 ```
-python sat_access.py \
-    --server ftp.example.com \
-    --path /data/ocean_data.nc \
-    --username myusername \
-    --password mypassword \
-    --variable temperature
+python sat_access.py --variable chla --date 2025-10-15 --boundingbox 4 6 42 44 --outputdir downloads --overwrite TRUE
 ```
 
 ### R
 
 ```
-./sat_access.R \
-  --variable chla \
-  --date 2025-09-15 \
-  --outputdir downloads \
-  --overwrite TRUE
+./sat_access.R --variable chla --date 2025-09-15 --boundingbox 4 6 42 44 --outputdir downloads --overwrite TRUE
 ```
+
+__NB:__ The `./` before `sat_access.R` is necessary for bash to understand that this R script is meant to be run as an executable.
 
 # How It Works
 

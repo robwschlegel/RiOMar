@@ -26,7 +26,7 @@ parser$add_argument("-v", "--variable", type = "character", required = TRUE, hel
 parser$add_argument("-d", "--date", type = "character", required = TRUE, help = "Date of the desired variable in YYYY-MM-DD")
 parser$add_argument("-bbox", "--boundingbox", nargs = 4, type = "double", 
                     help = "The bounding box for plotting. Must be given as: lonmin, lonmax, latmin, latmax")
-parser$add_argument("-od", "--outputdir", type = "character", required = TRUE, help = "Location to save the NetCDF file")
+parser$add_argument("-od", "--outputdir", type = "character", required = TRUE, help = "Location to save the NetCDF file and output image")
 parser$add_argument("-ov", "--overwrite", type = "logical", default = FALSE, 
                     help = "Whether to overwrite an existing file or not. Default = FALSE")
 # parser$add_argument("--server", type = character, required = TRUE, help = "FTP server address")
@@ -74,9 +74,15 @@ download_and_plot <- function(dl_var, dl_date, bbox, output_dir, overwrite) {
   if(toupper(dl_var) %in% c("SPM", "SPIM")){
     file_name <- paste0(dl_date_flat,"-EUR-L4-SPIM-ATL-v01-fv01-OI.nc.bz2")
     url_product <- "EUR-L4-SPIM-ATL-v01"
+    nc_file <- file.path(output_dir, paste0(dl_date_flat,"-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"))
+    nc_var_name <- "analysed_spim"
+    var_label <- "SPM [g m-3]"
   } else if(toupper(dl_var) == "CHLA"){
     file_name <- paste0(dl_date_flat,"-EUR-L4-CHL-ATL-v01-fv01-OI.nc.bz2")
     url_product <- "EUR-L4-CHL-ATL-v01"
+    nc_file <- file.path(output_dir, paste0(dl_date_flat,"-EUR-L4-CHL-ATL-v01-fv01-OI.nc"))
+    nc_var_name <- "analysed_chl_a"
+    var_label <- "chl a [mg m-3]"
   } else {
     stop("Variable not yet available")
   }
@@ -88,7 +94,7 @@ download_and_plot <- function(dl_var, dl_date, bbox, output_dir, overwrite) {
   # Fetch file
   # GET(url_product, write_disk(output_file_ext, overwrite = TRUE), progress(), content = "raw")
   if(file.exists(file_name_full) & !overwrite){
-    message(paste0(file_name_full," already exists. Set overwrite = TRUE to force the download."))
+    message(paste0(file_name_full," already exists. Set --overwrite TRUE to force the download."))
     # return()
   } else {
     curl::curl_download(url_final, destfile = file_name_full)
@@ -111,19 +117,6 @@ download_and_plot <- function(dl_var, dl_date, bbox, output_dir, overwrite) {
   ## Plotting code -----------------------------------------------------------
 
   message("Plotting...")
-  
-  # Get nc file specifics
-  if(toupper(dl_var) %in% c("SPM", "SPIM")){
-    nc_file <- file.path(output_dir, paste0(dl_date_flat,"-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"))
-    nc_var_name <- "analysed_spim"
-    var_label <- "SPM [g m-3]"
-  } else if(toupper(dl_var) == "CHLA"){
-    nc_file <- file.path(output_dir, paste0(dl_date_flat,"-EUR-L4-CHL-ATL-v01-fv01-OI.nc"))
-    nc_var_name <- "analysed_chl_a"
-    var_label <- "chl a [mg m-3]"
-  } else {
-    stop("Variable not yet available")
-  }
   
   # Set plot name
   plot_name <- file.path(output_dir, paste0(nc_var_name,"_",dl_date,".png"))

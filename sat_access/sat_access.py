@@ -76,51 +76,20 @@ def download_and_plot(dl_var, dl_date, bbox, output_dir, overwrite=False):
 
     # Open the NetCDF file using xarray
     ds = xr.open_dataset(nc_file)
-    # print(ds)
 
-    # Assuming ds is your xarray dataset and ds.time is your time DataArray
+    # Get date value as a label for plotting
     date_value = ds.time.values[0]  # Extract the numpy.datetime64 value
     date_time_obj = pd.to_datetime(date_value)
     date_label = date_time_obj.strftime('%Y-%m-%d')
 
-    # Convert numpy.datetime64 to Python datetime
-    # date_datetime = date_value.astype('O')  # Convert to Python datetime object
-    # date_only = date_datetime.date()
-
-    # Print the date only
-    # print("Date only:", date_only)
-
-
-    # Extract the specified variable and coordinates
-    # var = ds[nc_var_name]
-    # lon = ds.lon
-    # lat = ds.lat
-    # time = ds.time
-    # date_value = ds.time.values[0]
-    # date_datetime = date_value.astype(datetime)
-    # Convert to date only
-    # date_only = date_datetime.date()
-
-    # date_datetime = date_value.astype('datetime64[ns]').astype(datetime)
-
-    # date_only = date_datetime.date()
-    # date_datetime = pd.to_datetime(date_value).to_pydatetime()
-    # print(date_value)
-    # lon_grid, lat_grid = np.meshgrid(lon, lat)
-    
-    # Select data within the bounding box
-    # var_filtered = var.where(
-    #     (lon >= bbox[0]) & (lon <= bbox[1]) &
-    #     (lat >= bbox[2]) & (lat <= bbox[3]),
-    #     drop=True
-    # )
+    # Subset NetCDF file to desired bounding box
     var_subset = ds[nc_var_name].where(
         (ds.lon >= bbox[0]) & (ds.lon <= bbox[1]) &
         (ds.lat >= bbox[2]) & (ds.lat <= bbox[3]),
         drop=True
     )
 
-    # Create a figure and axis with a Plate Carree projection
+    # Create a figure and axes with a Plate Carree projection
     fig = plt.figure(figsize=(10, 6))
     ax = plt.axes(projection=ccrs.PlateCarree())
 
@@ -145,45 +114,6 @@ def download_and_plot(dl_var, dl_date, bbox, output_dir, overwrite=False):
 
     # Show the plot
     plt.show()
-
-    # %%
-    # var_filtered.plot()
-    # var_filtered.plot.pcolormesh(x="lon", y="lat");
-
-    # Close the dataset (optional, as xarray handles file closing when the object is garbage collected)
-    # ds.close()
-
-    # Get date for plot label
-    # plot_date = datetime(1998, 1, 1) + timedelta(seconds=1234567890)
-
-    # Get the filtered lon and lat coordinates from var_filtered
-    # filtered_lon = var_filtered.lon
-    # filtered_lat = var_filtered.lat
-
-    # %%
-    # Create a meshgrid using the filtered coordinates
-    # lon_grid, lat_grid = np.meshgrid(filtered_lon, filtered_lat)
-    # lon_grid, lat_grid = np.meshgrid(var_filtered.lon, var_filtered.lat)
-
-    # Transpose var_filtered if necessary to match the orientation of lon_grid and lat_grid
-    # var_filtered_values = var_filtered.values
-    # if var_filtered_values.shape != lon_grid.shape:
-    #     var_filtered_values = var_filtered_values.T
-
-    # Plot using matplotlib with pcolormesh
-    # plt.figure(figsize=(10, 6))
-    # raster = plt.pcolormesh(lon_grid, lat_grid, var_filtered, cmap='viridis', shading='auto')
-
-    # Add colorbar and labels
-    # plt.colorbar(raster, label=var_label)
-    # plt.title(f"Map of {nc_var_name} on {time}")
-    # plt.xlabel("Longitude")
-    # plt.ylabel("Latitude")  
-
-    # Save the plot
-    # plot_name = os.path.join(output_dir, f"{nc_var_name}_{dl_date}.png")
-    # plt.savefig(plot_name, bbox_inches='tight', dpi=300)
-    # print(f"Image saved at: {plot_name}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download a NetCDF file and plot a variable as a map.")
