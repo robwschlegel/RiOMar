@@ -7,15 +7,13 @@
 
 # Libraries ---------------------------------------------------------------
 
-# suppressPackageStartupMessages()
 library(argparse) # For parsing arguments from the command line
 library(ncdf4)    # For reading NetCDF files
-# library(httr)   # For FTP download
 library(curl)     # For FTP download
 library(ggplot2)  # For visualization
 library(reshape2) # For data reshaping
 
-message(paste0("All libraries loaded."))
+# message("All libraries loaded.")
 
 
 # Parse arguments ---------------------------------------------------------
@@ -26,29 +24,36 @@ parser <- ArgumentParser(description = "Download a NetCDF file from FTP and plot
 # Add arguments
 parser$add_argument("-v", "--variable", type = "character", required = TRUE, help = "Surface variable to fetch and plot")
 parser$add_argument("-d", "--date", type = "character", required = TRUE, help = "Date of the desired variable in YYYY-MM-DD")
+parser$add_argument("-od", "--outputdir", type = "character", required = TRUE, help = "Location to save the NetCDF file")
+parser$add_argument("-ov", "--overwrite", type = "logical", default = FALSE, help = "Whether to overwrite an existing file or not. Default = FALSE")
 # parser$add_argument("--server", type = character, required = TRUE, help = "FTP server address")
 # parser$add_argument("--path", type = character, required = TRUE, help = "Path to the NetCDF file on the FTP server")
 # parser$add_argument("--username", type = character, required = TRUE, help = "FTP username")
 # parser$add_argument("--password", type = character, required = TRUE, help = "FTP password")
-parser$add_argument("-od", "--outputdir", type = "character", required = TRUE, help = "Location to save the NetCDF file")
-parser$add_argument("-ov", "--overwrite", type = "logical", default = FALSE, help = "Whether to overwrite an existing file or not. Default = FALSE")
 
 # Create the function
 args <- parser$parse_args()
 
-message(paste0("All arguments parsed."))
+# message("All arguments parsed.")
 
-
-# Download function -------------------------------------------------------
-
-# Function to download a file from FTP
+# testers...
 # dl_var = "SPM"
 # dl_var = "CHLA"
 # dl_var = "SST"
-# dl_date = "2025-11-15"
-# output_dir = "sat_access"
+# dl_date = "2025-11-16"
+# output_dir = "sat_access/downloads"
 # overwrite = FALSE
-download_file <- function(dl_var, dl_date, output_dir, overwrite) {
+
+
+# The function to call ----------------------------------------------------
+
+# Main function to download and plot
+download_and_plot <- function(dl_var, dl_date, output_dir, overwrite) {
+
+  
+  ## Download code -----------------------------------------------------------
+
+  message("Downloading file...")
   
   # Prep date strings
   dl_date_flat <- gsub("-", "", dl_date)
@@ -94,31 +99,16 @@ download_file <- function(dl_var, dl_date, output_dir, overwrite) {
     
     # Run the 7z command- On Windows, you can use 7z (from 7-Zip) if it is installed:
     # system(paste0("7z e ", bz2_file, " -o", file.path(dirname(bz2_file), "output_dir")))
+    
     message(paste0("File downloaded at: ",file_name_full))
-    # return()
   }
-}
-
-# Example
-# download_file("chla", "2025-11-14", "sat_access", overwrite = FALSE)
-
-
-# Plot function -----------------------------------------------------------
-
-# Function to plot a NetCDF variable as a map
-# dl_var = "SPM"
-# dl_var = "CHLA"
-# dl_var = "SST"
-# dl_date = "2025-11-14"
-# output_dir = "sat_access"
-# overwrite = FALSE
-plot_ncdf_map <- function(dl_var, dl_date, output_dir, overwrite) {
   
-  # Prep date strings
-  dl_date_flat <- gsub("-", "", dl_date)
+
+  ## Plotting code -----------------------------------------------------------
+
+  message("Plotting...")
   
-  # Recreate file name from input values
-  # Get product specifics
+  # Get nc file specifics
   if(toupper(dl_var) %in% c("SPM", "SPIM")){
     nc_file <- file.path(output_dir, paste0(dl_date_flat,"-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"))
     nc_var_name <- "analysed_spim"
@@ -165,27 +155,14 @@ plot_ncdf_map <- function(dl_var, dl_date, output_dir, overwrite) {
     theme(legend.position = "bottom")
   ggsave(filename = plot_name, plot = p)
   message(paste0("Image saved at: ",plot_name))
-  # print(p)
 }
 
 
-# The function to be called -----------------------------------------------
-
-# Main function to download and plot
-download_and_plot <- function(variable_name, dl_date, output_dir, overwrite) {
-  message("Downloading file...")
-  download_file(dl_var = variable_name, dl_date = dl_date, output_dir = output_dir, overwrite = overwrite)
-  
-  message("Plotting...")
-  plot_ncdf_map(variable_name, dl_date, output_dir)
-}
-
-
-# Input the args ----------------------------------------------------------
+# Parse the args ----------------------------------------------------------
 
 # Call the main function with parsed arguments
 download_and_plot(
-  variable_name = args$variable,
+  dl_var = args$variable,
   dl_date = args$date,
   output_dir = args$outputdir,
   overwrite = args$overwrite
