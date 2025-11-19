@@ -9,7 +9,7 @@
 
 library(argparse) # For parsing arguments from the command line
 library(ncdf4)    # For reading NetCDF files
-library(curl)     # For FTP download
+suppressPackageStartupMessages(library(curl))     # For FTP download
 library(ggplot2)  # For visualization
 library(reshape2) # For data reshaping
 
@@ -24,8 +24,11 @@ parser <- ArgumentParser(description = "Download a NetCDF file from FTP and plot
 # Add arguments
 parser$add_argument("-v", "--variable", type = "character", required = TRUE, help = "Surface variable to fetch and plot")
 parser$add_argument("-d", "--date", type = "character", required = TRUE, help = "Date of the desired variable in YYYY-MM-DD")
+parser$add_argument("-bbox", "--boundingbox", nargs = 4, type = "double", 
+                    help = "The bounding box for plotting. Must be given as: lonmin, lonmax, latmin, latmax")
 parser$add_argument("-od", "--outputdir", type = "character", required = TRUE, help = "Location to save the NetCDF file")
-parser$add_argument("-ov", "--overwrite", type = "logical", default = FALSE, help = "Whether to overwrite an existing file or not. Default = FALSE")
+parser$add_argument("-ov", "--overwrite", type = "logical", default = FALSE, 
+                    help = "Whether to overwrite an existing file or not. Default = FALSE")
 # parser$add_argument("--server", type = character, required = TRUE, help = "FTP server address")
 # parser$add_argument("--path", type = character, required = TRUE, help = "Path to the NetCDF file on the FTP server")
 # parser$add_argument("--username", type = character, required = TRUE, help = "FTP username")
@@ -41,6 +44,7 @@ args <- parser$parse_args()
 # dl_var = "CHLA"
 # dl_var = "SST"
 # dl_date = "2025-11-16"
+# bbox = c(4, 6, 42, 44)
 # output_dir = "sat_access/downloads"
 # overwrite = FALSE
 
@@ -48,7 +52,7 @@ args <- parser$parse_args()
 # The function to call ----------------------------------------------------
 
 # Main function to download and plot
-download_and_plot <- function(dl_var, dl_date, output_dir, overwrite) {
+download_and_plot <- function(dl_var, dl_date, bbox, output_dir, overwrite) {
 
   
   ## Download code -----------------------------------------------------------
@@ -142,11 +146,15 @@ download_and_plot <- function(dl_var, dl_date, output_dir, overwrite) {
   var_df$lon <- lon[var_df$lon_idx]
   var_df$lat <- lat[var_df$lat_idx]
   
+  # Filter df to bounding box
+  var_df_sub <- var_df[var_df$lon >= bbox[1] & var_df$lon <= bbox[2],]
+  var_df_sub <- var_df_sub[var_df_sub$lat > bbox[3] & var_df_sub$lat <= bbox[4], ]
+  
   # Get date for plot label
   plot_date <- as.Date(as.POSIXct(time, origin = "1998-01-01"))
   
   # Plot using ggplot2
-  p <- ggplot(var_df, aes(x = lon, y = lat, fill = value)) +
+  p <- ggplot(var_df_sub, aes(x = lon, y = lat, fill = value)) +
     geom_tile() +
     scale_fill_viridis_c(var_label) +
     labs(title = paste("Map of", nc_var_name, "on", plot_date),
@@ -164,6 +172,7 @@ download_and_plot <- function(dl_var, dl_date, output_dir, overwrite) {
 download_and_plot(
   dl_var = args$variable,
   dl_date = args$date,
+  bbox = args$boundingbox,
   output_dir = args$outputdir,
   overwrite = args$overwrite
 )
