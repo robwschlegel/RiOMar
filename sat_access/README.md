@@ -19,7 +19,7 @@ It is designed specifically to work for the suite of ODATIS products put into pr
 -- netCDF4
 -- matplotlib
 
-Install the required packages using:
+Install the required packages from a terminal with:
 
 ```
 pip install netCDF4 matplotlib
@@ -32,7 +32,26 @@ pip install netCDF4 matplotlib
 -- argparse
 -- ncdf4
 -- httr
+-- ggplot2
 -- dplyr
+
+Install the required packages from an R terminal with:
+
+```
+install.packages(c("argparse", "ncdf4", "httr", "ggplot2", "dplyr"))
+```
+
+### Windows
+
+Make the script executable by write clicking on it and checking the box allowing it to be run as a program.
+
+### Linux
+
+Make the script executable (run within the same location):
+
+```
+chmod +x sat_access.R
+```
 
 # Usage
 
@@ -49,7 +68,9 @@ pip install netCDF4 matplotlib
 
 ## Example Usage
 
-### Basic Example
+The following examples assume the user is in a terminal at the same location as the script.
+
+### Python
 
 ```
 python sat_access.py \
@@ -60,16 +81,14 @@ python sat_access.py \
     --variable temperature
 ```
 
-### Custom Output Filename
+### R
 
 ```
-python sat_access.py \
-    --server ftp.example.com \
-    --path /data/ocean_data.nc \
-    --username myusername \
-    --password mypassword \
-    --output my_ocean_data.nc \
-    --variable salinity
+./sat_access.R \
+  --variable chla \
+  --date 2025-09-15 \
+  --outputdir downloads \
+  --overwrite TRUE
 ```
 
 # How It Works

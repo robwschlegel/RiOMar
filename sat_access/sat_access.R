@@ -1,40 +1,147 @@
 #!/usr/bin/env Rscript
 
-# Load required libraries
-library(argparse)
-library(ncdf4)    # For reading NetCDF files
-library(httr)     # For FTP download
-library(ggplot2)  # For visualization
-library(reshape2) # For data reshaping (if needed)
 
-# Define the argument parser
+# TODO:
+# Check for download directory and either create one or return error that it doesn't exist
+
+
+# Libraries ---------------------------------------------------------------
+
+# suppressPackageStartupMessages()
+library(argparse) # For parsing arguments from the command line
+library(ncdf4)    # For reading NetCDF files
+# library(httr)   # For FTP download
+library(curl)     # For FTP download
+library(ggplot2)  # For visualization
+library(reshape2) # For data reshaping
+
+message(paste0("All libraries loaded."))
+
+
+# Parse arguments ---------------------------------------------------------
+
+# Create the parser
 parser <- ArgumentParser(description = "Download a NetCDF file from FTP and plot a variable as a map.")
 
-parser$add_argument("--server", type = character, required = TRUE, help = "FTP server address")
-parser$add_argument("--path", type = character, required = TRUE, help = "Path to the NetCDF file on the FTP server")
-parser$add_argument("--username", type = character, required = TRUE, help = "FTP username")
-parser$add_argument("--password", type = character, required = TRUE, help = "FTP password")
-parser$add_argument("--output", type = character, default = "downloaded_data.nc", help = "Local filename to save the NetCDF file")
-parser$add_argument("--variable", type = character, required = TRUE, help = "Variable name in the NetCDF file to plot")
+# Add arguments
+parser$add_argument("-v", "--variable", type = "character", required = TRUE, help = "Surface variable to fetch and plot")
+parser$add_argument("-d", "--date", type = "character", required = TRUE, help = "Date of the desired variable in YYYY-MM-DD")
+# parser$add_argument("--server", type = character, required = TRUE, help = "FTP server address")
+# parser$add_argument("--path", type = character, required = TRUE, help = "Path to the NetCDF file on the FTP server")
+# parser$add_argument("--username", type = character, required = TRUE, help = "FTP username")
+# parser$add_argument("--password", type = character, required = TRUE, help = "FTP password")
+parser$add_argument("-od", "--outputdir", type = "character", required = TRUE, help = "Location to save the NetCDF file")
+parser$add_argument("-ov", "--overwrite", type = "logical", default = FALSE, help = "Whether to overwrite an existing file or not. Default = FALSE")
 
-# Parse arguments
+# Create the function
 args <- parser$parse_args()
 
+message(paste0("All arguments parsed."))
+
+
+# Download function -------------------------------------------------------
+
 # Function to download a file from FTP
-download_ftp_file <- function(server, path, username, password, output_file) {
-  url <- paste0("ftp://", username, ":", password, "@", server, path)
-  GET(url, write_disk(output_file, overwrite = TRUE), progress())
+# dl_var = "SPM"
+# dl_var = "CHLA"
+# dl_var = "SST"
+# dl_date = "2025-11-15"
+# output_dir = "sat_access"
+# overwrite = FALSE
+download_file <- function(dl_var, dl_date, output_dir, overwrite) {
+  
+  # Prep date strings
+  dl_date_flat <- gsub("-", "", dl_date)
+  url_year_doy <- paste0(substr(dl_date, start = 1, stop = 4),"/",strftime(as.Date(dl_date), format = "%j"))
+  
+  # Get general URL based on desired variables
+  if(toupper(dl_var) %in% c("SPM", "SPIM", "CHLA")){
+    url_base <- "ftp://ftp.ifremer.fr/ifremer/cersat/products/gridded/ocean-color/atlantic"
+  } else {
+    stop("Variable not yet available")
+  }
+  
+  # Get product specifics
+  if(toupper(dl_var) %in% c("SPM", "SPIM")){
+    file_name <- paste0(dl_date_flat,"-EUR-L4-SPIM-ATL-v01-fv01-OI.nc.bz2")
+    url_product <- "EUR-L4-SPIM-ATL-v01"
+  } else if(toupper(dl_var) == "CHLA"){
+    file_name <- paste0(dl_date_flat,"-EUR-L4-CHL-ATL-v01-fv01-OI.nc.bz2")
+    url_product <- "EUR-L4-CHL-ATL-v01"
+  } else {
+    stop("Variable not yet available")
+  }
+  
+  # Assemble final URL
+  url_final <- paste(url_base, url_product, url_year_doy, file_name, sep = "/")
+  file_name_full <- file.path(output_dir, file_name)
+  
+  # Fetch file
+  # GET(url_product, write_disk(output_file_ext, overwrite = TRUE), progress(), content = "raw")
+  if(file.exists(file_name_full) & !overwrite){
+    message(paste0(file_name_full," already exists. Set overwrite = TRUE to force the download."))
+    # return()
+  } else {
+    curl::curl_download(url_final, destfile = file_name_full)
+    
+    # On Linux + Mac
+    system(paste("bunzip2 -k", file_name_full))
+    
+    # On windows
+    # Example: Unzip a .bz2 file using 7z
+    # bz2_file <- "path/to/your/file.bz2"
+    # output_file <- "path/to/your/output_file"  # Remove the .bz2 extension
+    
+    # Run the 7z command- On Windows, you can use 7z (from 7-Zip) if it is installed:
+    # system(paste0("7z e ", bz2_file, " -o", file.path(dirname(bz2_file), "output_dir")))
+    message(paste0("File downloaded at: ",file_name_full))
+    # return()
+  }
 }
 
+# Example
+# download_file("chla", "2025-11-14", "sat_access", overwrite = FALSE)
+
+
+# Plot function -----------------------------------------------------------
+
 # Function to plot a NetCDF variable as a map
-plot_ncdf_map <- function(nc_file, variable_name) {
+# dl_var = "SPM"
+# dl_var = "CHLA"
+# dl_var = "SST"
+# dl_date = "2025-11-14"
+# output_dir = "sat_access"
+# overwrite = FALSE
+plot_ncdf_map <- function(dl_var, dl_date, output_dir, overwrite) {
+  
+  # Prep date strings
+  dl_date_flat <- gsub("-", "", dl_date)
+  
+  # Recreate file name from input values
+  # Get product specifics
+  if(toupper(dl_var) %in% c("SPM", "SPIM")){
+    nc_file <- file.path(output_dir, paste0(dl_date_flat,"-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"))
+    nc_var_name <- "analysed_spim"
+    var_label <- "SPM [g m-3]"
+  } else if(toupper(dl_var) == "CHLA"){
+    nc_file <- file.path(output_dir, paste0(dl_date_flat,"-EUR-L4-CHL-ATL-v01-fv01-OI.nc"))
+    nc_var_name <- "analysed_chl_a"
+    var_label <- "chl a [mg m-3]"
+  } else {
+    stop("Variable not yet available")
+  }
+  
+  # Set plot name
+  plot_name <- file.path(output_dir, paste0(nc_var_name,"_",dl_date,".png"))
+  
   # Open the NetCDF file
   nc_data <- nc_open(nc_file)
   
   # Extract longitude, latitude, and the specified variable
-  lon <- ncvar_get(nc_data, "longitude")
-  lat <- ncvar_get(nc_data, "latitude")
-  var <- ncvar_get(nc_data, variable_name)
+  lon <- ncvar_get(nc_data, "lon")
+  lat <- ncvar_get(nc_data, "lat")
+  time <- ncvar_get(nc_data, "time")
+  var <- ncvar_get(nc_data, nc_var_name)
   
   # Close the NetCDF file
   nc_close(nc_data)
@@ -45,33 +152,42 @@ plot_ncdf_map <- function(nc_file, variable_name) {
   var_df$lon <- lon[var_df$lon_idx]
   var_df$lat <- lat[var_df$lat_idx]
   
+  # Get date for plot label
+  plot_date <- as.Date(as.POSIXct(time, origin = "1998-01-01"))
+  
   # Plot using ggplot2
   p <- ggplot(var_df, aes(x = lon, y = lat, fill = value)) +
     geom_tile() +
-    scale_fill_viridis_c() +
-    labs(title = paste("Map of", variable_name),
+    scale_fill_viridis_c(var_label) +
+    labs(title = paste("Map of", nc_var_name, "on", plot_date),
          x = "Longitude", y = "Latitude") +
-    theme_minimal()
-  
-  print(p)
+    theme_minimal() +
+    theme(legend.position = "bottom")
+  ggsave(filename = plot_name, plot = p)
+  message(paste0("Image saved at: ",plot_name))
+  # print(p)
 }
 
+
+# The function to be called -----------------------------------------------
+
 # Main function to download and plot
-download_and_plot <- function(server, path, username, password, output_file, variable_name) {
-  message("Downloading file from FTP...")
-  download_ftp_file(server, path, username, password, output_file)
+download_and_plot <- function(variable_name, dl_date, output_dir, overwrite) {
+  message("Downloading file...")
+  download_file(dl_var = variable_name, dl_date = dl_date, output_dir = output_dir, overwrite = overwrite)
   
-  message("Plotting data...")
-  plot_ncdf_map(output_file, variable_name)
+  message("Plotting...")
+  plot_ncdf_map(variable_name, dl_date, output_dir)
 }
+
+
+# Input the args ----------------------------------------------------------
 
 # Call the main function with parsed arguments
 download_and_plot(
-  server = args$server,
-  path = args$path,
-  username = args$username,
-  password = args$password,
-  output_file = args$output,
-  variable_name = args$variable
+  variable_name = args$variable,
+  dl_date = args$date,
+  output_dir = args$outputdir,
+  overwrite = args$overwrite
 )
 
