@@ -10,7 +10,8 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
-# import numpy as np
+import numpy as np
+import pandas as pd
 from datetime import datetime, timedelta
 
 def download_and_plot(dl_var, dl_date, bbox, output_dir, overwrite=False):
@@ -73,38 +74,38 @@ def download_and_plot(dl_var, dl_date, bbox, output_dir, overwrite=False):
     # Plotting code
     print("Plotting...")
 
-    # Open the NetCDF file
-    # nc_data = nc.Dataset(nc_file)
-
-    # Extract longitude, latitude, and the specified variable
-    # lon = nc_data.variables['lon'][:]
-    # lat = nc_data.variables['lat'][:]
-    # time = nc_data.variables['time'][:]
-    # var = nc_data.variables[nc_var_name][:]
-
-    # Close the NetCDF file
-    # nc_data.close()
-
-    # Create a grid of longitude and latitude
-    # lon_grid, lat_grid = np.meshgrid(lon, lat)
-
-    # Filter data to bounding box
-    # lon_mask = (lon_grid >= bbox[0]) & (lon_grid <= bbox[1])
-    # lat_mask = (lat_grid >= bbox[2]) & (lat_grid <= bbox[3])
-    # var_filtered = np.ma.masked_where(~(lon_mask & lat_mask), var)
-
     # Open the NetCDF file using xarray
     ds = xr.open_dataset(nc_file)
-    print(ds)
+    # print(ds)
+
+    # Assuming ds is your xarray dataset and ds.time is your time DataArray
+    date_value = ds.time.values[0]  # Extract the numpy.datetime64 value
+    date_time_obj = pd.to_datetime(date_value)
+    date_label = date_time_obj.strftime('%Y-%m-%d')
+
+    # Convert numpy.datetime64 to Python datetime
+    # date_datetime = date_value.astype('O')  # Convert to Python datetime object
+    # date_only = date_datetime.date()
+
+    # Print the date only
+    # print("Date only:", date_only)
+
 
     # Extract the specified variable and coordinates
     # var = ds[nc_var_name]
     # lon = ds.lon
     # lat = ds.lat
-    time = ds.time
-    date_value = ds.time.values[0]
-    date_datetime = pd.to_datetime(date_value).to_pydatetime()
-    print(date_value)
+    # time = ds.time
+    # date_value = ds.time.values[0]
+    # date_datetime = date_value.astype(datetime)
+    # Convert to date only
+    # date_only = date_datetime.date()
+
+    # date_datetime = date_value.astype('datetime64[ns]').astype(datetime)
+
+    # date_only = date_datetime.date()
+    # date_datetime = pd.to_datetime(date_value).to_pydatetime()
+    # print(date_value)
     # lon_grid, lat_grid = np.meshgrid(lon, lat)
     
     # Select data within the bounding box
@@ -140,7 +141,7 @@ def download_and_plot(dl_var, dl_date, bbox, output_dir, overwrite=False):
     ax.gridlines(draw_labels=True)
 
     # Add a title
-    plt.title(f'Map of {nc_var_name} on {time[0]}')
+    plt.title(f'Map of {nc_var_name} on {date_label}')
 
     # Show the plot
     plt.show()
