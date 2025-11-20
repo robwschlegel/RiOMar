@@ -455,20 +455,25 @@ colnames(stl_sub)[1:2] <- c("zone", "date")
 
 # heatwaveR
 plume_clim <- map_dfr(zones, plume_clim_calc) |> 
+  # mutate(plume_inter = plume_area - plume_seas) |> 
   group_by(zone) |> 
   mutate(plume_seas = plume_seas - mean(plume_seas)) |> 
-  ungroup()
+  ungroup() |> 
+  mutate(plume_inter = plume_area - plume_seas)
 
 # Combine into one big df
 decomp_df <- left_join(stl_sub, X11_plume, by = c("zone", "date")) |> 
   left_join(X11_river, by = c("zone", "date")) |> 
-  left_join(plume_clim, by = c("zone", "date")) |> 
   mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
                                 zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
                                 zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
                                 zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
   mutate(plot_title = factor(plot_title, 
-                             levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion")))
+                             levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion"))) |> 
+  mutate(year = year(date),
+         doy = yday(date))
+decomp_df$doy <- mapply(adjust_doy, decomp_df$year, decomp_df$doy)
+decomp_df <- left_join(decomp_df, plume_clim, by = c("zone", "date", "doy"))
 
 
 ## Plume comparison --------------------------------------------------------
@@ -477,10 +482,11 @@ decomp_df <- left_join(stl_sub, X11_plume, by = c("zone", "date")) |>
 
 # Extract and prep the interannual values
 plume_inter <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, plume_inter_STL, Interannual_signal_X11_plume) |> 
-  pivot_longer(cols = c(plume_inter_STL, Interannual_signal_X11_plume)) |> 
+  dplyr::select(zone, plot_title, date, plume_inter_STL, Interannual_signal_X11_plume, plume_inter) |> 
+  pivot_longer(cols = c(plume_inter_STL, Interannual_signal_X11_plume, plume_inter)) |> 
   mutate(name = case_when(name == "plume_inter_STL" ~ "plume STL",
-                          name == "Interannual_signal_X11_plume" ~ "plume X11")) |> 
+                          name == "Interannual_signal_X11_plume" ~ "plume X11",
+                          name == "plume_inter" ~ "plume smooth")) |> 
   filter(!is.na(value))
 
 # Line plot of plume size - interannual
@@ -519,7 +525,7 @@ ggsave(filename = "figures/STL_X11_plume_inter_comp.png", plot = multi_plume_int
 
 # Extract and prep the monthly values
 plume_seas <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, plume_seas_STL, Seasonal_signal_X11_plume, plume_seas) |> 
+  dplyr::select(zone, plot_title, date, doy, plume_seas_STL, Seasonal_signal_X11_plume, plume_seas) |> 
   pivot_longer(cols = c(plume_seas_STL, Seasonal_signal_X11_plume, plume_seas)) |> 
   mutate(name = case_when(name == "plume_seas_STL" ~ "plume STL",
                           name == "Seasonal_signal_X11_plume" ~ "plume X11",
@@ -561,21 +567,15 @@ ggsave(filename = "figures/STL_X11_plume_seas_comp.png", plot = multi_plume_seas
 ### DOY ---------------------------------------------------------------------
 
 # get the average doy values
-# TODO: Improve the doy workflow. Get the source code from heatwaveR
 plume_doy <- plume_seas |> 
-  mutate(year = year(date),
-         doy = yday(date)) #|> 
-  # mutate(doy_adj = adjust_doy(year, doy))
-plume_doy$doy_adj <- mapply(adjust_doy, plume_doy$year, plume_doy$doy)
-plume_doy <- plume_doy |> 
   summarise(val_min = min(value, na.rm = TRUE),
             val_mean = mean(value, na.rm = TRUE),
             val_max = max(value, na.rm = TRUE), 
-            .by = c("zone", "plot_title", "name", "doy_adj")) |> 
-  arrange(doy_adj)
+            .by = c("zone", "plot_title", "name", "doy")) |> 
+  arrange(doy)
 
 # Ribbon plot of plume - doy
-line_plume_doy <- ggplot(plume_doy, aes(x = doy_adj, y = val_mean)) +
+line_plume_doy <- ggplot(plume_doy, aes(x = doy, y = val_mean)) +
   geom_ribbon(aes(fill = name, ymin = val_min, ymax = val_max), alpha = 0.2, show.legend = FALSE) +
   geom_path(aes(colour = name), linewidth = 2)  +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
@@ -595,7 +595,7 @@ scatter_plume_doy <- plume_doy |>
   ggplot(aes(x = `plume X11`, y = `plume STL`)) +
   geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
   geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = doy_adj), size = 7) +
+  geom_point(aes(colour = doy), size = 7) +
   scale_colour_viridis_c() +
   facet_wrap(~plot_title, ncol = 1, scales = "free") +
   labs(colour = "day-of-year") +
