@@ -20,11 +20,23 @@ It is designed specifically to work for the suite of ODATIS products put into pr
 -- matplotlib
 -- cartopy
 
-Install the required packages from a terminal with:
+To check if you have Python installed, open a terminal and type:
+
+```
+python --version
+```
+
+If your machine cannot find an active version of python, but you should have one, see the troubleshooting below.
+
+Otherwise, once you have an active Python environment available in your terminal, install the required packages from a terminal with:
 
 ```
 pip install xarray matplotlib cartopy
 ```
+
+Note that if you have not used `cartopy` before, the first time you run the `sat_access.py` script it will download a few shape files. 
+This may take a few minutes on a slow internet connection. During which time the map menu will appear to be hanging, but wait it out for a while.
+You will see activity in the console as it downloads the necessary shapefiles.
 
 ## R
 
@@ -35,6 +47,12 @@ pip install xarray matplotlib cartopy
 -- curl
 -- ggplot2
 -- reshape2
+
+To check if you have R installed, open a terminal and type:
+
+```
+R --version
+```
 
 Install the required packages from an R terminal with:
 
@@ -104,6 +122,53 @@ __NB:__ The `./` before `sat_access.R` is necessary for bash to understand that 
 - FTP Connection Issues: Ensure the FTP server address, path, username, and password are correct. Check your internet connection and firewall settings.
 - Missing Variables: If the script fails to find longitude, latitude, or the specified variable, verify the variable names in your NetCDF file using a tool like Panoply.
 - Module Errors: Ensure all required Python packages are installed. Use `pip install netCDF4 matplotlib` if you encounter import errors.
+
+## Windows
+
+If this returns nothing:
+
+```
+python --version
+```
+
+But you are certain python is installed (e.g. via anaconda), you may need to add python to your PATH.
+
+In windows:
+
+1. Open System Environment Variables:
+
+  - Press Win + S, type "Environment Variables", and select "Edit the system environment variables".
+  - Click "Environment Variables".
+
+2. Edit the PATH Variable:
+
+  - Under "User variables" or "System variables", find the Path variable and click "Edit".
+  - Add the following paths (adjust for your Anaconda installation):
+  - `C:\Users\YourUsername\anaconda3`
+  - `C:\Users\YourUsername\anaconda3\Scripts`
+  - `C:\Users\YourUsername\anaconda3\Library\bin`
+  - Click OK to save.
+
+3. Restart PowerShell:
+
+  - Close and reopen PowerShell for the changes to take effect.
+
+Alternatively, if you already have a virtual environment installed on your system it would be preferable to activate it before running the script.
+
+To check the virtual environments installed on your system (with anaconda/miniconda):
+
+```
+conda env list
+
+```
+
+To activate the environment of choice:
+
+
+```
+conda activate your_env_name
+
+```
 
 # License
 
