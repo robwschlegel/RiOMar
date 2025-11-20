@@ -110,6 +110,21 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
 
 # Statistics --------------------------------------------------------------
 
+# Check for leap year
+is_leap_year <- function(year) {
+  (year %% 4 == 0 && year %% 100 != 0) || (year %% 400 == 0)
+}
+
+# Function to adjust DOY for non-leap years
+adjust_doy <- function(year, doy) {
+  if (!is_leap_year(year) && doy > 59) {
+    doy + 1
+  } else {
+    doy
+  }
+}
+
+# Calculate STL
 stl_single <- function(x_col, out_col, start_date, ts_freq = 365){
   
   # Create ts object and calculate stl

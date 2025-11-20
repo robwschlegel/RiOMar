@@ -3,6 +3,7 @@
 
 # TODO:
 # Check for download directory and either create one or return error that it doesn't exist
+# Consider ggiraph for interactive plots from the terminal
 
 
 # Libraries ---------------------------------------------------------------

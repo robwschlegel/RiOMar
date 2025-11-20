@@ -32,15 +32,16 @@
 source("func/util.R")
 library(tidyverse)
 library(tidync)
-library(seasonal)
+library(heatwaveR) # For seasonal smoothing analysis
+library(seasonal) # For X11 analysis (currently not used)
 library(patchwork)
-library(doParallel); doParallel::registerDoParallel(cores = 4)
+library(doParallel); doParallel::registerDoParallel(cores = 14)
 
 # Zones
 zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
 
 
-# Functions ---------------------------------------------------------------
+# STL ---------------------------------------------------------------------
 
 # Load all plume and driver data and perform stl
 # zone <- zones[1]
@@ -124,6 +125,17 @@ multi_stl <- function(zone){
   # Exit
   return(df_all)
 }
+
+# Compute all STL stats and save
+stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
+save(stl_all, file = "output/STATS/stl_all.RData")
+
+
+# heatwaveR ---------------------------------------------------------------
+
+
+
+# Multi-driver comparison -------------------------------------------------
 
 # Plot the results 
 # df_stl <- stl_all
@@ -337,12 +349,7 @@ multi_plot <- function(df_stl){
   ggsave(filename = "figures/all_plot.png", plot = all_plot, width = 20, height = 20, dpi = 300)
 }
 
-
-# Run ---------------------------------------------------------------------
-
-# Compute all STL stats and save
-# stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
-# save(stl_all, file = "output/STATS/stl_all.RData")
+# Load STL calculated above
 load("output/STATS/stl_all.RData")
 
 # Create plots
@@ -397,8 +404,209 @@ ggsave("figures/missng_chla.png", width = 9, height = 9, dpi = 600)
 # Decomposition comparison ------------------------------------------------
 
 # X11
+load_X11 <- function(zone, type = "plume"){
+  if(type == "plume"){
+    file_stub = "/X11_ANALYSIS/area_of_the_plume_mask_in_km2/SEXTANT_merged_Standard_WEEKLY.csv"
+  } else {
+    file_stub = "/X11_ANALYSIS/river_flow/River_flow___WEEKLY.csv"
+  }
+  suppressMessages(
+  df <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,file_stub)) |> 
+    mutate(zone = zone, .before = "dates") |> 
+    dplyr::rename(date = dates) |> 
+    dplyr::select(zone:Residual_signal) |> 
+    rename_with(~ paste0(.x, "_X11_",type), everything()) 
+  )
+  colnames(df)[1:2] <- c("zone", "date")
+  return(df)
+}
+X11_plume <- map_dfr(zones, load_X11)
+X11_river <- map_dfr(zones, load_X11, type = "river")
 
 # STL
+load("output/STATS/stl_all.RData")
+stl_sub <- dplyr::select(stl_all, zone, date, plume_seas:wind_inter) |> 
+  rename_with(~ paste0(.x, "_STL"), everything()) 
+colnames(stl_sub)[1:2] <- c("zone", "date")
 
 # heatwaveR
+
+# Combine into one big df
+decomp_df <- left_join(stl_sub, X11_plume, by = c("zone", "date")) |> 
+  left_join(X11_river, by = c("zone", "date")) |> 
+  mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
+                                zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
+                                zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
+                                zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
+  mutate(plot_title = factor(plot_title, 
+                             levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion")))
+
+
+## Plume comparison --------------------------------------------------------
+
+# Extract and prep the monthly values
+plume_seas <- decomp_df |> 
+  dplyr::select(zone, plot_title, date, plume_seas_STL, Seasonal_signal_X11_plume) |> 
+  pivot_longer(cols = c(plume_seas_STL, Seasonal_signal_X11_plume)) |> 
+  mutate(name = case_when(name == "plume_seas_STL" ~ "plume STL",
+                          name == "Seasonal_signal_X11_plume" ~ "plume X11")) |> 
+  filter(!is.na(value))
+  
+# Line plot of plume size - seas
+line_plume <- ggplot(plume_seas, aes(x = date, y = value)) +
+  geom_path(aes(colour = name)) +
+  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+  labs(colour = NULL, x = NULL, y = "Plume area (km^2)") +
+  # scale_colour_manual(key_glyph = "point") +
+  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Scatterplot of plume size - seas
+scatter_plume <- plume_seas |> 
+  pivot_wider(names_from = name, values_from = value) |> 
+  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
+  ggplot(aes(x = `plume X11`, y = `plume STL`)) +
+  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
+  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
+  geom_point(aes(colour = month)) +
+  facet_wrap(~plot_title, ncol = 1, scales = "free") +
+  labs(colour = NULL) +
+  # coord_cartesian(ratio = 1) +
+  guides(colour = guide_legend(override.aes = list(size = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Combine and save
+multi_plume <- line_plume + scatter_plume + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
+ggsave(filename = "figures/STL_X11_plume_seas_comp.png", plot = multi_plume, height = 20, width = 30)
+
+# get the average doy values
+# TODO: Improve the doy workflow. Get the source code from heatwaveR
+plume_seas_doy <- plume_seas |> 
+  mutate(year = year(date),
+         doy = yday(date)) #|> 
+  # mutate(doy_adj = adjust_doy(year, doy))
+plume_seas_doy$doy_adj <- mapply(adjust_doy, plume_seas_doy$year, plume_seas_doy$doy)
+plume_seas_doy <- plume_seas_doy |> 
+  summarise(val_min = min(value, na.rm = TRUE),
+            val_mean = mean(value, na.rm = TRUE),
+            val_max = max(value, na.rm = TRUE), 
+            .by = c("zone", "plot_title", "name", "doy_adj")) |> 
+  arrange(doy_adj)
+
+# Ribbon plot of plume - seas
+line_plume_doy <- ggplot(plume_seas_doy, aes(x = doy_adj, y = val_mean)) +
+  geom_ribbon(aes(fill = name, ymin = val_min, ymax = val_max), alpha = 0.2, show.legend = FALSE) +
+  geom_path(aes(colour = name), linewidth = 2)  +
+  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+  labs(colour = NULL, x = "day-of-year", y = "Plume area (km^2)") +
+  # scale_colour_manual(key_glyph = "point") +
+  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Scatterplot of plume size - seas doy
+scatter_plume_doy <- plume_seas_doy |> 
+  dplyr::select(-val_min, -val_max) |> 
+  pivot_wider(names_from = name, values_from = val_mean) |> 
+  # mutate(month = month(doy_adj, label = TRUE, abbr = FALSE)) |> 
+  ggplot(aes(x = `plume X11`, y = `plume STL`)) +
+  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
+  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
+  geom_point(aes(colour = doy_adj), size = 7) +
+  scale_colour_viridis_c() +
+  facet_wrap(~plot_title, ncol = 1, scales = "free") +
+  labs(colour = "day-of-year") +
+  guides(colour = guide_legend(override.aes = list(size = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Combine and save
+multi_plume_doy <- line_plume_doy + scatter_plume_doy + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
+ggsave(filename = "figures/STL_X11_plume_seas_doy_comp.png", plot = multi_plume_doy, height = 20, width = 30)
+
+
+## River flow comparison ---------------------------------------------------
+
+# Extract and prep the monthly values
+flow_seas <- decomp_df |> 
+  dplyr::select(zone, plot_title, date, flow_seas_STL, Seasonal_signal_X11_river) |> 
+  pivot_longer(cols = c(flow_seas_STL, Seasonal_signal_X11_river)) |> 
+  mutate(name = case_when(name == "flow_seas_STL" ~ "flow STL",
+                          name == "Seasonal_signal_X11_river" ~ "flow X11")) |> 
+  filter(!is.na(value))
+
+# Line plot of flow size - seas
+line_flow <- ggplot(flow_seas, aes(x = date, y = value)) +
+  geom_path(aes(colour = name)) +
+  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+  labs(colour = NULL, x = NULL, y = "River flow (m^3 s-1)") +
+  scale_colour_brewer(palette = "Dark2") +
+  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Scatterplot of flow size - seas
+scatter_flow <- flow_seas |> 
+  pivot_wider(names_from = name, values_from = value) |> 
+  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
+  ggplot(aes(x = `flow X11`, y = `flow STL`)) +
+  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
+  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
+  geom_point(aes(colour = month)) +
+  facet_wrap(~plot_title, ncol = 1, scales = "free") +
+  labs(colour = NULL) +
+  guides(colour = guide_legend(override.aes = list(size = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Combine and save
+multi_flow <- line_flow + scatter_flow + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
+ggsave(filename = "figures/STL_X11_flow_seas_comp.png", plot = multi_flow, height = 20, width = 30)
+
+# get the average doy values
+# TODO: Improve the doy workflow. Get the source code from heatwaveR
+flow_seas_doy <- flow_seas |> 
+  mutate(year = year(date),
+         doy = yday(date)) #|> 
+# mutate(doy_adj = adjust_doy(year, doy))
+flow_seas_doy$doy_adj <- mapply(adjust_doy, flow_seas_doy$year, flow_seas_doy$doy)
+flow_seas_doy <- flow_seas_doy |> 
+  summarise(val_min = min(value, na.rm = TRUE),
+            val_mean = mean(value, na.rm = TRUE),
+            val_max = max(value, na.rm = TRUE), 
+            .by = c("zone", "plot_title", "name", "doy_adj")) |> 
+  arrange(doy_adj)
+
+# Ribbon plot of flow - seas
+line_flow_doy <- ggplot(flow_seas_doy, aes(x = doy_adj, y = val_mean)) +
+  geom_ribbon(aes(fill = name, ymin = val_min, ymax = val_max), alpha = 0.2, show.legend = FALSE) +
+  geom_path(aes(colour = name), linewidth = 2)  +
+  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
+  labs(colour = NULL, x = "day-of-year", y = "flow area (km^2)") +
+  scale_colour_brewer(palette = "Dark2", aesthetics = c("colour", "fill")) +
+  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Scatterplot of flow size - seas doy
+scatter_flow_doy <- flow_seas_doy |> 
+  dplyr::select(-val_min, -val_max) |> 
+  pivot_wider(names_from = name, values_from = val_mean) |> 
+  # mutate(month = month(doy_adj, label = TRUE, abbr = FALSE)) |> 
+  ggplot(aes(x = `flow X11`, y = `flow STL`)) +
+  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
+  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
+  geom_point(aes(colour = doy_adj), size = 7) +
+  scale_colour_viridis_c() +
+  facet_wrap(~plot_title, ncol = 1, scales = "free") +
+  labs(colour = "day-of-year") +
+  guides(colour = guide_legend(override.aes = list(size = 5))) +
+  ggplot_theme() +
+  theme(legend.position = "bottom")
+
+# Combine and save
+multi_flow_doy <- line_flow_doy + scatter_flow_doy + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
+ggsave(filename = "figures/STL_X11_flow_seas_doy_comp.png", height = 20, width = 30)
 
