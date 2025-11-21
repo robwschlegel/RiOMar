@@ -138,24 +138,6 @@ save(stl_all, file = "output/STATS/stl_all.RData")
 # heatwaveR ---------------------------------------------------------------
 
 # Load data
-# Load panache time series based on river mouth name
-plume_clim_calc <- function(zone){
-  file_name <- paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")
-  suppressMessages(
-  df_plume <- read_csv(file_name) |> 
-    dplyr::select(date:confidence_index_in_perc) |>
-    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
-    dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
-    mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area),) |> 
-    zoo::na.trim() |> 
-    mutate(zone = zone, .before = "date")
-  )
-  df_clim <- ts2clm(df_plume, x = date, y = plume_area, climatologyPeriod = c(min(df_plume$date), max(df_plume$date))) |> 
-    dplyr::select(zone, date, doy, plume_area, seas, thresh) |> 
-    dplyr::rename(plume_seas = seas, plume_thresh = thresh)
-}
-
-# Load data
 plume_clim <- map_dfr(zones, plume_clim_calc)
 
   
@@ -650,6 +632,209 @@ multi_plume_resid <- line_plume_resid + scatter_plume_resid + patchwork::plot_la
 ggsave(filename = "figures/STL_X11_plume_resid_comp.png", plot = multi_plume_resid, height = 20, width = 30)
 
 
+### Trends ------------------------------------------------------------------
+
+# Quickly show the trend line and stats for all sites
+plume_trend_daily_all <- decomp_df |> 
+  dplyr::select(zone, plot_title, date, plume_area)
+## Monthly
+plume_trend_monthly_all <- plume_trend_daily_all |> 
+  mutate(date = round_date(date, "month") + days(14)) |> 
+  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
+## Annual
+plume_trend_annual_all <- plume_trend_daily_all |> 
+  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
+  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
+
+# Calculate trend 
+trend_daily_all <- plume_trend_daily_all |> 
+  summarise(slope = coef(lm(plume_area ~ date))["date"] * 365.25, .by = c("zone", "plot_title"))
+trend_monthly_all <- plume_trend_monthly_all |> 
+  summarise(slope = coef(lm(plume_area ~ date))["date"] * 365.25, .by = c("zone", "plot_title"))
+trend_annual_all <- plume_trend_annual_all |> 
+  summarise(slope = coef(lm(plume_area ~ date))["date"] * 365.25, .by = c("zone", "plot_title"))
+trend_labels_all <- rbind(trend_daily_all, trend_monthly_all, trend_annual_all) |> 
+  mutate(time_step = rep(c("daily", "monthly", "annual"), each = nrow(trend_daily_all)), .before = "slope") |> 
+  arrange(plot_title, time_step) |>
+  mutate(x = as.Date("1998-01-01"),
+         y = c(2300, 2100, 1900, 
+               11000, 10000, 9000, 
+               15000, 13800, 12600, 
+               5500, 5000, 4500))
+
+# Plot all sites as facets
+line_trend_base_all <- ggplot(plume_trend_daily_all, aes(x = date, y = plume_area)) +
+  geom_point(alpha = 0.5, aes(colour = "daily")) +
+  geom_smooth(method = "lm", colour = "black", linewidth = 2) +
+  geom_point(data = plume_trend_monthly_all, size = 4, alpha = 0.5, aes(colour = "monthly")) +
+  geom_smooth(data = plume_trend_monthly_all, method = "lm", colour = "darkblue", linewidth = 2) +
+  geom_point(data = plume_trend_annual_all, size = 7, alpha = 0.5, aes(colour = "annual")) +
+  geom_smooth(data = plume_trend_annual_all, method = "lm", colour = "blue", linewidth = 2) +
+  geom_label(data = trend_labels_all, show.legend = FALSE,
+             aes(x = x, y = y, colour = time_step, size = 6, hjust = 0,
+                 label = paste0(time_step," data slope = ", round(slope, 2), " km^2 yr-1", sep = ""))) +
+  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for daily, monthly, and annual mean plume data") +
+  scale_color_manual(name = "Time step",
+                     values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
+                     breaks = c("daily", "monthly", "annual")) +
+  facet_wrap(~plot_title, ncol = 2, scales = "free_y") +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/plume_trend_comparison_base_all.png", plot = line_trend_base_all, height = 9, width = 12)
+
+
+# Here we look at only Gulf of Lion to keep the output simpler
+
+# First we start with a linear trend of the raw time series, and another plot with the linear analysis per month
+## Daily data
+plume_trend_daily <- decomp_df |> 
+  filter(zone == "GULF_OF_LION") |>
+  dplyr::select(zone, plot_title, date, plume_area)
+## Monthly
+plume_trend_monthly <- plume_trend_daily |> 
+  mutate(date = round_date(date, "month") + days(14)) |> 
+  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
+## Annual
+plume_trend_annual <- plume_trend_daily |> 
+  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
+  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
+# Fit the linear models and extract slopes
+trend_daily <- coef(lm(plume_area ~ date, data = plume_trend_daily))["date"] * 365.25
+trend_monthly <- coef(lm(plume_area ~ date, data = plume_trend_monthly))["date"] * 365.25
+trend_annual <- coef(lm(plume_area ~ date, data = plume_trend_annual))["date"] * 365.25
+
+# Create a little dataframe for plotting the labels
+trend_labels <- data.frame(
+  time_step = c("daily", "monthly", "annual"),
+  slope = c(trend_daily, trend_monthly, trend_annual),
+  x = as.Date(c("1998-01-01", "1998-01-01", "1998-01-01")),
+  y = c(5500, 5000, 4500)
+)
+
+# Plot the three dataframes as time series with linear trends on the same panel
+line_trend_base <- ggplot(plume_trend_daily, aes(x = date, y = plume_area)) +
+  geom_point(alpha = 0.5, aes(colour = "daily")) +
+  geom_smooth(method = "lm", colour = "black", linewidth = 2) +
+  geom_point(data = plume_trend_monthly, size = 4, alpha = 0.5, aes(colour = "monthly")) +
+  geom_smooth(data = plume_trend_monthly, method = "lm", colour = "darkblue", linewidth = 2) +
+  geom_point(data = plume_trend_annual, size = 7, alpha = 0.5, aes(colour = "annual")) +
+  geom_smooth(data = plume_trend_annual, method = "lm", colour = "blue", linewidth = 2) +
+  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+             colour = c("black", "darkblue", "blue"), size = 6, hjust = 0) +
+  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for daily, monthly, and annual mean plume data") +
+  scale_color_manual(name = "Time step",
+                     values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
+                     breaks = c("daily", "monthly", "annual")) +
+  # ggplot_theme() +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/plume_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
+
+# The same plot comparing the seasonal components
+plume_seas <- decomp_df |> 
+  filter(zone == "GULF_OF_LION") |> 
+  dplyr::select(zone, plot_title, date, plume_seas_STL, Seasonal_signal_X11_plume, plume_seas) |> 
+  pivot_longer(cols = c(plume_seas_STL, Seasonal_signal_X11_plume, plume_seas)) |> 
+  mutate(name = case_when(name == "plume_seas_STL" ~ "STL seasonal",
+                          name == "Seasonal_signal_X11_plume" ~ "X11 seasonal",
+                          name == "plume_seas" ~ "smoothed seasonal")) |> 
+  filter(!is.na(value),
+         date <= as.Date("2025-02-14"),
+         date >= as.Date("1999-02-15"))
+
+# Create small dataframe of linear model slopes by name
+trend_seas_STL <- coef(lm(value ~ date, data = filter(plume_seas, name == "STL seasonal")))["date"] * 365.25
+trend_seas_X11 <- coef(lm(value ~ date, data = filter(plume_seas, name == "X11 seasonal")))["date"] * 365.25
+trend_seas_smooth <- coef(lm(value ~ date, data = filter(plume_seas, name == "smoothed seasonal")))["date"] * 365.25
+trend_seas_labels <- data.frame(
+  name = c("STL seasonal", "X11 seasonal", "smoothed seasonal"),
+  slope = c(trend_seas_STL, trend_seas_X11, trend_seas_smooth),
+  x = as.Date(c("1998-01-01", "1998-01-01", "1998-01-01")),
+  y = c(1500, 1300, 1100)
+)
+
+line_trend_seas <- ggplot(plume_seas, aes(x = date, y = value)) +
+  geom_path(alpha = 0.5, aes(colour = name)) +
+  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
+  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume seasonal components") +
+  geom_label(data = trend_seas_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+             colour = c("turquoise4", "chartreuse4", "indianred4"), size = 6, hjust = 0) +
+  scale_color_manual(name = "Decomposition method",
+                     values = c("STL seasonal" = "turquoise4", "X11 seasonal" = "chartreuse4", "smoothed seasonal" = "indianred4"),
+                     breaks = c("STL seasonal", "X11 seasonal", "smoothed seasonal")) +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/plume_trend_comparison_seas.png", plot = line_trend_seas, height = 6, width = 12)
+
+# The same plot comparing the residual components
+plume_resid <- decomp_df |> 
+  filter(zone == "GULF_OF_LION") |> 
+  dplyr::select(zone, plot_title, date, plume_resid_STL, Residual_signal_X11_plume) |> 
+  pivot_longer(cols = c(plume_resid_STL, Residual_signal_X11_plume)) |> 
+  mutate(name = case_when(name == "plume_resid_STL" ~ "STL residual",
+                          name == "Residual_signal_X11_plume" ~ "X11 residual")) |> 
+  filter(!is.na(value)) |> 
+  filter(date <= as.Date("2024-12-31"),
+         date >= as.Date("1999-01-01"))
+
+# Create small dataframe of linear model slopes by name
+trend_resid_STL <- coef(lm(value ~ date, data = filter(plume_resid, name == "STL residual")))["date"] * 365.25
+trend_resid_X11 <- coef(lm(value ~ date, data = filter(plume_resid, name == "X11 residual")))["date"] * 365.25
+trend_resid_labels <- data.frame(
+  name = c("STL residual", "X11 residual"),
+  slope = c(trend_resid_STL, trend_resid_X11),
+  x = as.Date(c("1998-01-01", "1998-01-01")),
+  y = c(4500, 4000)
+)
+
+line_trend_resid <- ggplot(plume_resid, aes(x = date, y = value)) +
+  geom_path(alpha = 0.5, aes(colour = name)) +
+  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
+  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume residual components") +
+  geom_label(data = trend_resid_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+             colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
+  scale_color_manual(name = "Decomposition method",
+                     values = c("STL residual" = "turquoise4", "X11 residual" = "chartreuse4"),
+                     breaks = c("STL residual", "X11 residual")) +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/plume_trend_comparison_resid.png", plot = line_trend_resid, height = 6, width = 12)
+
+# The same plot comparing the interannual components
+plume_inter <- decomp_df |> 
+  filter(zone == "GULF_OF_LION") |> 
+  dplyr::select(zone, plot_title, date, plume_inter_STL, Interannual_signal_X11_plume) |> 
+  pivot_longer(cols = c(plume_inter_STL, Interannual_signal_X11_plume)) |> 
+  mutate(name = case_when(name == "plume_inter_STL" ~ "STL interannual",
+                          name == "Interannual_signal_X11_plume" ~ "X11 interannual")) |> 
+  filter(!is.na(value)) |> 
+  filter(date <= as.Date("2024-12-31"),
+         date >= as.Date("1999-01-01"))
+
+# Create small dataframe of linear model slopes by name
+trend_inter_STL <- coef(lm(value ~ date, data = filter(plume_inter, name == "STL interannual")))["date"] * 365.25
+trend_inter_X11 <- coef(lm(value ~ date, data = filter(plume_inter, name == "X11 interannual")))["date"] * 365.25
+trend_inter_labels <- data.frame(
+  name = c("STL interannual", "X11 interannual"),
+  slope = c(trend_inter_STL, trend_inter_X11),
+  x = as.Date(c("1998-01-01", "1998-01-01")),
+  y = c(1300, 1200)
+)
+
+line_trend_inter <- ggplot(plume_inter, aes(x = date, y = value)) +
+  geom_path(alpha = 0.5, aes(colour = name)) +
+  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
+  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume interannual components") +
+  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+             colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
+  scale_color_manual(name = "Decomposition method",
+                     values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
+                     breaks = c("STL interannual", "X11 interannual")) +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/plume_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
+
+
 ## River flow comparison ---------------------------------------------------
 
 #### Interannual -------------------------------------------------------------
@@ -825,4 +1010,89 @@ scatter_flow_resid <- flow_resid |>
 # Combine and save
 multi_flow_resid <- line_flow_resid + scatter_flow_resid + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
 ggsave(filename = "figures/STL_X11_flow_resid_comp.png", plot = multi_flow_resid, height = 20, width = 30)
+
+
+### Trends ------------------------------------------------------------------
+
+# First we start with a linear trend of the raw time series, and another plot with the linear analysis per month
+## Daily data
+flow_trend_daily <- decomp_df |> 
+  filter(zone == "GULF_OF_LION") |>
+  dplyr::select(zone, plot_title, date, flow_seas_STL, flow_inter_STL, flow_resid_STL) |> 
+  mutate(flow = flow_seas_STL + flow_inter_STL + flow_resid_STL) |> 
+  filter(date <= as.Date("2023-12-31"),
+         date >= as.Date("1999-01-01"))
+## Monthly
+flow_trend_monthly <- flow_trend_daily |> 
+  mutate(date = round_date(date, "month") + days(14)) |> 
+  summarise(flow = mean(flow, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
+## Annual
+flow_trend_annual <- flow_trend_daily |> 
+  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
+  summarise(flow = mean(flow, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
+# Fit the linear models and extract slopes
+trend_daily <- coef(lm(flow ~ date, data = flow_trend_daily))["date"] * 365.25
+trend_monthly <- coef(lm(flow ~ date, data = flow_trend_monthly))["date"] * 365.25
+trend_annual <- coef(lm(flow ~ date, data = flow_trend_annual))["date"] * 365.25
+
+# Create a little dataframe for plotting the labels
+trend_labels <- data.frame(
+  time_step = c("daily", "monthly", "annual"),
+  slope = c(trend_daily, trend_monthly, trend_annual),
+  x = as.Date(c("1998-01-01", "1998-01-01", "1998-01-01")),
+  y = c(9000, 8000, 7000)
+)
+
+# Plot the three dataframes as time series with linear trends on the same panel
+line_trend_base <- ggplot(flow_trend_daily, aes(x = date, y = flow)) +
+  geom_point(alpha = 0.5, aes(colour = "daily")) +
+  geom_smooth(method = "lm", colour = "black", linewidth = 2) +
+  geom_point(data = flow_trend_monthly, size = 4, alpha = 0.5, aes(colour = "monthly")) +
+  geom_smooth(data = flow_trend_monthly, method = "lm", colour = "darkblue", linewidth = 2) +
+  geom_point(data = flow_trend_annual, size = 7, alpha = 0.5, aes(colour = "annual")) +
+  geom_smooth(data = flow_trend_annual, method = "lm", colour = "blue", linewidth = 2) +
+  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
+             colour = c("black", "darkblue", "blue"), size = 6, hjust = 0) +
+  labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for daily, monthly, and annual mean river flow data") +
+  scale_color_manual(name = "Time step",
+                     values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
+                     breaks = c("daily", "monthly", "annual")) +
+  # ggplot_theme() +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/flow_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
+
+# The same plot comparing the interannual components
+flow_inter <- decomp_df |> 
+  filter(zone == "GULF_OF_LION") |> 
+  dplyr::select(zone, plot_title, date, flow_inter_STL, Interannual_signal_X11_river) |> 
+  pivot_longer(cols = c(flow_inter_STL, Interannual_signal_X11_river)) |> 
+  mutate(name = case_when(name == "flow_inter_STL" ~ "STL interannual",
+                          name == "Interannual_signal_X11_river" ~ "X11 interannual")) |> 
+  filter(!is.na(value)) |> 
+  filter(date <= as.Date("2023-12-31"),
+         date >= as.Date("1999-01-01"))
+
+# Create small dataframe of linear model slopes by name
+trend_inter_STL <- coef(lm(value ~ date, data = filter(flow_inter, name == "STL interannual")))["date"] * 365.25
+trend_inter_X11 <- coef(lm(value ~ date, data = filter(flow_inter, name == "X11 interannual")))["date"] * 365.25
+trend_inter_labels <- data.frame(
+  name = c("STL interannual", "X11 interannual"),
+  slope = c(trend_inter_STL, trend_inter_X11),
+  x = as.Date(c("1998-01-01", "1998-01-01")),
+  y = c(2500, 2300)
+)
+
+line_trend_inter <- ggplot(flow_inter, aes(x = date, y = value)) +
+  geom_path(alpha = 0.5, aes(colour = name)) +
+  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
+  labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for river flow interannual components") +
+  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
+             colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
+  scale_color_manual(name = "Decomposition method",
+                     values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
+                     breaks = c("STL interannual", "X11 interannual")) +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/flow_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
 

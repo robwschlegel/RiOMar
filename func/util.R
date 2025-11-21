@@ -153,6 +153,23 @@ stl_single <- function(x_col, out_col, start_date, ts_freq = 365){
   }
 }
 
+# Load panache time series based on river mouth name
+plume_clim_calc <- function(zone){
+  file_name <- paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")
+  suppressMessages(
+    df_plume <- read_csv(file_name) |> 
+      dplyr::select(date:confidence_index_in_perc) |>
+      complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+      dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
+      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area),) |> 
+      zoo::na.trim() |> 
+      mutate(zone = zone, .before = "date")
+  )
+  df_clim <- ts2clm(df_plume, x = date, y = plume_area, climatologyPeriod = c(min(df_plume$date), max(df_plume$date))) |> 
+    dplyr::select(zone, date, doy, plume_area, seas, thresh) |> 
+    dplyr::rename(plume_seas = seas, plume_thresh = thresh)
+}
+
 
 # Plotting ----------------------------------------------------------------
 

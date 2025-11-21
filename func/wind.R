@@ -13,7 +13,7 @@ library(doParallel); doParallel::registerDoParallel(cores = 4)
 
 # Functions ---------------------------------------------------------------
 
-# Caluclate wind stats and create plots
+# Calculate wind stats and create plots
 # mouth_info <- river_mouths[1,]
 spatial_wind_calc <- function(mouth_info){
   
@@ -180,4 +180,65 @@ spatial_wind_calc <- function(mouth_info){
 # Run ---------------------------------------------------------------------
 
 plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = spatial_wind_calc)
+
+
+# Étang de Berre ----------------------------------------------------------
+
+# Boundinx box:
+edb_bbox <- c(4.792099, 5.446129, 43.356639, 43.583624)
+
+# Load
+edb_wind <- tidync("~/pCloudDrive/data/WIND/ERA5_2018_u10_v10_etang_de_berre.nc") |> 
+  hyper_tibble() |> 
+  mutate(longitude = as.numeric(longitude),
+         latitude = as.numeric(latitude),
+         time = as.POSIXct(gsub("T", " " , valid_time)))
+
+# Get pixels that cover edb
+edb_pixels <- edb_wind |> 
+  filter(longitude %in% c(5.0, 5.25),
+         latitude == 43.5)
+
+# Plot data to visualise edb
+edb_wind |> 
+  filter(valid_time == min(time)) |> 
+  ggplot(aes(x = longitude, y = latitude)) +
+  geom_tile(aes(fill = u10)) +
+  geom_tile(data = edb_pixels, aes(x = longitude, y = latitude), colour = "yellow", alpha = 0.5) +
+  annotate(geom = "rect", xmin = edb_bbox[1], xmax = edb_bbox[2], ymin = edb_bbox[3], ymax = edb_bbox[4],
+           color = "red", fill = NA, size = 1) +
+  annotation_borders() +
+  coord_quickmap(xlim = c(min(edb_wind$longitude), max(edb_wind$longitude)),
+                 ylim = c(min(edb_wind$latitude), max(edb_wind$latitude)))
+
+# Get direction and speed
+## Hourly mean of pixels
+edb_wind_mean_hourly <- edb_pixels |> 
+  summarise(u = mean(u10, na.rm = TRUE), v = mean(v10, na.rm = TRUE), .by = time) |> 
+  mutate(wind_spd = round(sqrt(u^2 + v^2), 2),
+         wind_dir = round((270-(atan2(v, u)*(180/pi)))%%360))
+
+## Daily means
+edb_wind_mean_daily <- edb_pixels |> 
+  mutate(date = as.Date(time)) |> 
+  summarise(u = mean(u10, na.rm = TRUE), v = mean(v10, na.rm = TRUE), .by = date) |> 
+  filter(date >= "2018-01-01") |> 
+  mutate(wind_spd = round(sqrt(u^2 + v^2), 2),
+         wind_dir = round((270-(atan2(v, u)*(180/pi)))%%360))
+
+# Plot hourly and daily data
+ggplot(edb_wind_mean_hourly, aes(x = time, y = wind_spd)) +
+  geom_line() +
+  labs(y = "wind speed (m s-1)", x = NULL) +
+  scale_x_datetime(expand = 0) +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggplot(edb_wind_mean_daily, aes(x = date, y = wind_spd)) +
+  geom_path(aes(colour = wind_dir)) +
+  labs(y = "wind speed (m s-1)", x = NULL) +
+  scale_x_datetime(expand = 0) +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+# Save as csv
+write_csv(edb_wind_mean_hourly, "output/ETANG_DE_BERRE/hourly_wind_speed_direction_etang_de_berre_2018.csv")
+write_csv(edb_wind_mean_daily, "output/ETANG_DE_BERRE/daily_wind_speed_direction_etang_de_berre_2018.csv")
 
