@@ -26,12 +26,12 @@ def download_and_plot(dl_var, dl_dates, bbox, output_dir, plot_var, overwrite):
     - overwrite: Whether to overwrite existing files.
     """
 
-    # Download code
-    print("Downloading file...")
-
-    # Check dates
+    # Check date range
     if len(dl_dates) > 2:
         raise ValueError("Please provide only one or two dates for the date range.")
+
+    # Download code
+    print("Downloading file...")
 
     # Set start and end dates for download
     start_date = datetime.strptime(dl_dates[0], '%Y-%m-%d')
@@ -79,6 +79,9 @@ def download_and_plot(dl_var, dl_dates, bbox, output_dir, plot_var, overwrite):
         if os.path.exists(file_name_full) and not overwrite:
             print(f"{file_name_full} already exists. Set --overwrite True to force the download.")
         else:
+            # Create directory if it does not yet exist
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
             try:
                 urllib.request.urlretrieve(url_final, file_name_full)
                 print(f"File downloaded at: {file_name_full}")
@@ -93,7 +96,7 @@ def download_and_plot(dl_var, dl_dates, bbox, output_dir, plot_var, overwrite):
         current_date += timedelta(days=1)
     
     # plot_var = False 
-    print(f"bbox: {bbox}, type: {type(bbox)}")
+    # print(f"bbox: {bbox}, type: {type(bbox)}")
     # print(bbox)
     # Plotting code
     if plot_var:
@@ -158,8 +161,8 @@ if __name__ == "__main__":
                         help="Date range for desired data in YYYY-MM-DD format. Provide only one or two values. Note that if two dates are provided, only the first will be used for plotting.")
     parser.add_argument("--outputdir", type=str, required=True, help="Directory to save the downloaded file and plot")
     parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite existing files. Default = False")
-    parser.add_argument("--plot", type=bool, default=False, help="Whether or not to plot the downloaded data. Default = True")
-    parser.add_argument("--boundingbox", type=float, nargs=4, required=False, help="Bounding box as lon_min lon_max lat_min lat_max")
+    parser.add_argument("--plot", type=bool, default=False, help="Whether or not to plot the downloaded data. Default = False")
+    parser.add_argument("--boundingbox", type=float, nargs=4, required=False, help="The bounding box for plotting. Must be given as: lonmin, lonmax, latmin, latmax")
 
     args = parser.parse_args()
     download_and_plot(args.variable, args.daterange, args.boundingbox, args.outputdir, args.plot, args.overwrite)
