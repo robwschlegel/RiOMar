@@ -2,6 +2,8 @@
 
 This Python script allows you to download a series NetCDF files for chl a and/or SPM from an FTP server and visualize a specified variable as a geographical map. 
 It is designed specifically to work for the suite of ODATIS products put into production for/during the RiOMar project.
+Note that while these scripts have been written so that they can be called from the command line, 
+they can also be opened in your IDE of choice (e.g. `VS Code`, `RStudio`, etc.) and the parameters set directly in the code. As you prefer.
 
 # features
 
@@ -32,7 +34,7 @@ Or if you would like to use an existing virtual environment (recommended):
 conda activate your_env_name
 ```
 
-If your machine cannot find an active version of python, but you should have one, see the troubleshooting below.
+If your machine cannot find an active version of Python, but you should have one, see the troubleshooting below.
 
 Otherwise, once you have an active Python environment available in your terminal, install the required packages from the terminal with:
 
@@ -56,23 +58,30 @@ You will know it is working if you see activity in the console as it downloads t
 
 To check if you have R installed, open a terminal and type:
 
+(Linux/MacOS)
+
 ```
 R --version
 ```
 
-Install the required packages from an the terminal with:
+(Windows - PowerShell)
+
+```
+Rscript --version
+```
+
+If your machine cannot find an active version of R, but you should have one, see the troubleshooting section below.
+
+(Linux/MacOS/Windows)
+Otherwise, install the required packages from the terminal/PowerShell with:
 
 ```
 Rscript -e "install.packages(c('argparse', 'ncdf4', 'curl', 'ggplot2', 'reshape2'), repos='https://cloud.r-project.org/')"
 ```
 
-### Windows
+### Linux/MacOS
 
-Make the script executable by write clicking on it and checking the box allowing it to be run as a program.
-
-### Linux
-
-Make the script executable (run within the same location as the script):
+Make the script executable (run from the same location as the script):
 
 ```
 chmod +x sat_access.R
@@ -94,36 +103,47 @@ chmod +x sat_access.R
 ## Example Usage
 
 The following examples assume the user is in a terminal at the same location as the script.
+Note that the argument `--outputdir .` specifies the current directory as the output folder.
 
 ### Python
 
 Download a single chl a file
 
 ```
-python sat_access.py --variable chla --date 2025-10-15 --outputdir downloads
+python sat_access.py --variable chla --date 2025-10-15 --outputdir .
 ```
 
 Download multiple SPM files and plot one
  
 ```
-python sat_access.py --variable SPM --date 2025-10-15 2025-10-17 --outputdir downloads --plot = True --boundingbox 4 6 42 44
+python sat_access.py --variable SPM --date 2025-10-15 2025-10-17 --outputdir . --plot = True --boundingbox 4 6 42 44
 ```
 
 ### R
 
+#### Linux/MacOS
+
 Download a single chl a file and plot it:
 
 ```
-./sat_access.R --variable chla --date 2025-09-15 --outputdir downloads --plot = TRUE --boundingbox 4 6 42 44
+./sat_access.R --variable chla --date 2025-09-15 --outputdir . --plot = TRUE --boundingbox 4 6 42 44
 ```
 
 Download multiple SPM files but plot none:
 
 ```
-./sat_access.R --variable SPM --date 2025-11-15 2025-11-17 --outputdir downloads --plot = FALSE
+./sat_access.R --variable SPM --date 2025-11-15 2025-11-17 --outputdir . --plot FALSE
 ```
 
 __NB:__ The `./` before `sat_access.R` is necessary for bash to understand that this R script is meant to be run as an executable.
+
+#### Windows
+
+Download a single chl a file and plot it:
+
+```
+Rscript sat_access.R --variable chla --date 2025-09-15 --outputdir . --plot = TRUE --boundingbox 4 6 42 44
+```
 
 # How It Works
 
@@ -144,15 +164,15 @@ __NB:__ The `./` before `sat_access.R` is necessary for bash to understand that 
 
 ## Windows
 
+### Python
+
 If this returns nothing:
 
 ```
 python --version
 ```
 
-But you are certain python is installed (e.g. via anaconda), you may need to add python to your PATH.
-
-In windows:
+But you are certain Python is installed (e.g. via anaconda), you may need to add Python to your PATH.
 
 1. Open System Environment Variables:
   - Press Win + S, type "Environment Variables", and select "Edit the system environment variables".
@@ -182,6 +202,52 @@ To activate the environment of choice:
 conda activate your_env_name
 
 ```
+### R
+
+If this returns nothing:
+
+```
+R --version
+```
+
+But you are certain R is installed, you may need to add R to your PATH.
+This is done the same as for Python above, but adding the path to your R installation, e.g.: `C:\Program Files\R\R-4.x.x\bin\`
+__NB:__ Replace `x.x` with your installed version number. Restart the PowerShell and try again.
+
+If this still doesn't work, check that the command `R` hasn't already been mapped to something else by default:
+In a PowerShell terminal type:
+
+```
+Get-Alias -Name R
+```
+
+If this returns an Alias that isn't `R.exe` you will need to add a new alias for R:
+(__NB:__ Replace `x.x` with your installed version number.)
+
+```
+Add-Content -Path $PROFILE -Value "`nNew-Alias -Name R -Value 'C:\Program Files\R\R-4.x.x\bin\R.exe'"
+```
+
+Restart PowerShell and heck that it worked:
+
+```
+Get-Alias -Name Rcode
+```
+
+You should see that the Alias for `Rcode` is now mapped to your `R` installation (e.g. `R.exe`). If yes, check the `R` version:
+
+```
+Rcode --version
+```
+
+Once `R` is recognised by your system, don't forget to install the necessary packages
+
+```
+Rscript -e "install.packages(c('argparse', 'ncdf4', 'curl', 'ggplot2', 'reshape2'), repos='https://cloud.r-project.org/')"
+```
+
+__NB:__ Regardless of what new alias you may have created for `R`, the installation of packages is still done from the PowerShell with the command `Rscript`.
+Or, you can also simply open `R`/`RStudio` and install the packages from there. Whatever is easiest for you.
 
 # License
 

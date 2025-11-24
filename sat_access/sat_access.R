@@ -3,16 +3,22 @@
 
 # Libraries ---------------------------------------------------------------
 
+# Check for missing libraries and install them if necessary
+if (!all(c("argparse", "ncdf4", "curl", "reshape2", "ggplot2") %in% installed.packages())) {
+  install.packages(c("argparse", "ncdf4", "curl", "reshape2", "ggplot2"), repos = "https://cloud.r-project.org/")
+}
+
+# Activate libraries
 library(argparse) # For parsing arguments from the command line
 library(ncdf4)    # For reading NetCDF files
 suppressPackageStartupMessages(library(curl)) # For FTP download
 library(reshape2) # For data reshaping
 library(ggplot2)  # For visualization
 
-# message("All libraries loaded.")
-
 
 # Parse arguments ---------------------------------------------------------
+
+# NB: If you have opened this script in R/RStudio and intend to run it manually, this section can be ignored.
 
 # Create the parser
 parser <- ArgumentParser(description = "Download a NetCDF file from FTP and plot a variable as a map.")
@@ -32,17 +38,6 @@ parser$add_argument("-bbox", "--boundingbox", nargs = 4, type = "double", requir
 
 # Create the function
 args <- parser$parse_args()
-
-# message("All arguments parsed.")
-
-# testers...
-# dl_var = "SPM"
-# dl_var = "CHLA"
-# dl_var = "SST"
-# dl_date = "2025-11-16"
-# bbox = c(4, 6, 42, 44)
-# output_dir = "sat_access/downloads"
-# overwrite = FALSE
 
 
 # The function to call ----------------------------------------------------
@@ -120,19 +115,9 @@ download_and_plot <- function(dl_var, dl_dates, bbox, output_dir, plot_var, over
       curl::curl_download(url_final, destfile = file_name_full)
       message(paste0("File downloaded at: ",file_name_full))
       
-      # On Linux + Mac
+      # Unzip
       system(paste("bunzip2 -k -f", file_name_full))
       message("File unzipped at: ", gsub(".bz2","",file_name_full))
-      
-      # On windows
-      # Example: Unzip a .bz2 file using 7z
-      # bz2_file <- "path/to/your/file.bz2"
-      # output_file <- "path/to/your/output_file"  # Remove the .bz2 extension
-      
-      # Run the 7z command- On Windows, you can use 7z (from 7-Zip) if it is installed:
-      # system(paste0("7z e ", bz2_file, " -o", file.path(dirname(bz2_file), "output_dir")))
-      
-
     }
     
     # Move to the next day
@@ -205,6 +190,17 @@ download_and_plot <- function(dl_var, dl_dates, bbox, output_dir, plot_var, over
 
 
 # Parse the args ----------------------------------------------------------
+
+# NB: If you have opened this script in R/RStudio and intend to run it manually, 
+# uncomment the following chunk of code and add your desired values directly:
+# args <- list(
+#   variable = "SPM",
+#   daterange = c("2023-01-01", "2023-01-05"),
+#   outputdir = "path/to/output/dir",
+#   overwrite = TRUE,
+#   plot = TRUE,
+#   boundingbox = c(-10, 10, 35, 45)
+# )
 
 # Call the main function with parsed arguments
 download_and_plot(
