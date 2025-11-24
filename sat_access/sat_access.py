@@ -93,7 +93,8 @@ def download_and_plot(dl_var, dl_dates, bbox, output_dir, plot_var, overwrite):
         current_date += timedelta(days=1)
     
     # plot_var = False 
-    print(f"plot_var: {plot_var}, type: {type(plot_var)}")
+    print(f"bbox: {bbox}, type: {type(bbox)}")
+    # print(bbox)
     # Plotting code
     if plot_var:
 
@@ -111,6 +112,10 @@ def download_and_plot(dl_var, dl_dates, bbox, output_dir, plot_var, overwrite):
         date_label = date_time_obj.strftime('%Y-%m-%d')
 
         # Subset NetCDF file to desired bounding box
+        if(bbox is None):
+            bbox = [ds.lon.min().item(), ds.lon.max().item(), ds.lat.min().item(), ds.lat.max().item()]
+            print(f"No bounding box provided, using full extent: {bbox}")
+            
         var_subset = ds[nc_var_name].where(
             (ds.lon >= bbox[0]) & (ds.lon <= bbox[1]) &
             (ds.lat >= bbox[2]) & (ds.lat <= bbox[3]),
@@ -151,10 +156,10 @@ if __name__ == "__main__":
     parser.add_argument("--variable", type=str, required=True, help="Variable to download (e.g., 'SPM', 'CHLA')")
     parser.add_argument("--daterange", type=str, nargs='+', required=True, 
                         help="Date range for desired data in YYYY-MM-DD format. Provide only one or two values. Note that if two dates are provided, only the first will be used for plotting.")
-    parser.add_argument("--boundingbox", type=float, nargs=4, required=True, help="Bounding box as lon_min lon_max lat_min lat_max")
     parser.add_argument("--outputdir", type=str, required=True, help="Directory to save the downloaded file and plot")
-    parser.add_argument("--plot", type=bool, default=False, help="Whether or not to plot the downloaded data. Default = True")
     parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite existing files. Default = False")
+    parser.add_argument("--plot", type=bool, default=False, help="Whether or not to plot the downloaded data. Default = True")
+    parser.add_argument("--boundingbox", type=float, nargs=4, required=False, help="Bounding box as lon_min lon_max lat_min lat_max")
 
     args = parser.parse_args()
     download_and_plot(args.variable, args.daterange, args.boundingbox, args.outputdir, args.plot, args.overwrite)

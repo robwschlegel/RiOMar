@@ -78,12 +78,12 @@ chmod +x sat_access.R
 
 | Argument | Description | Required | Example Value |
 |----|----|----|----|
-| `--server` | FTP server address | Yes | ftp.example.com |
-| `--path` | Path to the NetCDF file on the FTP server | Yes | /data/file.nc |
-| `--username` | FTP username | Yes | user123 |
-| `--password` | FTP password | Yes | pass123 |
-| `--variable` | The data layer to visualise | Yes |temperature |
-| `--output` | Local filename to save the NetCDF file | No | downloaded_data.nc |
+| `--variable` | The data layer to download | Yes | SPM |
+| `--daterange` | Date range for desired data in YYYY-MM-DD format | Yes | 2025-10-15 |
+| `--outputdir` | Local folder to save the NetCDF file | Yes | downloads |
+| `--overwrite` | Overwrite existing files; Default = False | No | True |
+| `--plot` | Whether or not to plot the downloaded data. Default = False | No | True |
+| `--boundingbox` | Bounding box as lon_min lon_max lat_min lat_max | No | 4 6 42 44 |
 
 ## Example Usage
 
@@ -91,8 +91,16 @@ The following examples assume the user is in a terminal at the same location as 
 
 ### Python
 
+Download a single chl a file
+
 ```
-python sat_access.py --variable chla --date 2025-10-15 --boundingbox 4 6 42 44 --outputdir downloads --overwrite TRUE
+python sat_access.py --variable chla --date 2025-10-15 --outputdir .
+```
+
+ Download multiple SPM files
+ 
+ ```
+python sat_access.py --variable SPM --date 2025-10-15 2025-10-17 --outputdir .
 ```
 
 ### R
