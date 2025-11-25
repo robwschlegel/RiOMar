@@ -44,7 +44,7 @@ zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
 # STL ---------------------------------------------------------------------
 
 # Load all plume and driver data and perform stl
-# zone <- zones[1]
+# zone <- zones[4]
 multi_stl <- function(zone){
   
   # Determine meta-data based on zone
@@ -90,19 +90,19 @@ multi_stl <- function(zone){
   # Determine simple upwelling/downwelling index based on coastal direction (based on river mouth name)
   # TODO: Think of a more sophisticated way to do this
   if(zone %in% c("BAY_OF_BISCAY", "SOUTHERN_BRITTANY")){
-    df_wind_welling <- df_wind |> 
-      mutate(welling = ifelse(u < 0, "up", "down"))
+    df_wind_updown <- df_wind |> 
+      mutate(direction = ifelse(u < 0, "off", "on"))
   } else if (zone == "BAY_OF_SEINE"){
-    df_wind_welling <- df_wind |> 
-      mutate(welling = ifelse(v > 0, "up", "down"))
+    df_wind_updown <- df_wind |> 
+      mutate(direction = ifelse(v > 0, "off", "on"))
   } else if (zone == "GULF_OF_LION"){
-    df_wind_welling <- df_wind |> 
-      mutate(welling = ifelse(v < 0, "up", "down"))
+    df_wind_updown <- df_wind |> 
+      mutate(direction = ifelse(v < 0, "off", "on"))
   }
   
   # Calculate wind speed and direction
   # NB: wind_dir is where the wind is coming from, not going to
-  df_wind_full <- df_wind_welling |> 
+  df_wind_full <- df_wind_updown |> 
     mutate(wind_spd = round(sqrt(u^2 + v^2), 2),
            wind_dir = round((270-(atan2(v, u)*(180/pi)))%%360))
   
@@ -431,9 +431,9 @@ X11_flow <- map_dfr(zones, load_X11, type = "flow")
 
 # STL
 load("output/STATS/stl_all.RData")
-stl_sub <- dplyr::select(stl_all, zone, date, flow, tide_range, welling:wind_resid) |> 
+stl_sub <- dplyr::select(stl_all, zone, date, flow, tide_range, direction:wind_resid) |> 
   rename_with(~ paste0(.x, "_STL"), everything())
-colnames(stl_sub)[1:7] <- c("zone", "date", "flow", "tide_range", "welling", "wind_spd", "wind_dir")
+colnames(stl_sub)[1:7] <- c("zone", "date", "flow", "tide_range", "direction", "wind_spd", "wind_dir")
 
 # heatwaveR
 plume_clim <- map_dfr(zones, plume_clim_calc) |> 
@@ -818,18 +818,45 @@ trend_inter_labels <- data.frame(
   name = c("STL interannual", "X11 interannual"),
   slope = c(trend_inter_STL, trend_inter_X11),
   x = as.Date(c("1998-01-01", "1998-01-01")),
-  y = c(1300, 1200)
+  y = c(2800, 2500)
 )
 
-line_trend_inter <- ggplot(plume_inter, aes(x = date, y = value)) +
-  geom_path(alpha = 0.5, aes(colour = name)) +
+# Create monthly means for more approximate comparison
+plume_inter_monthly <- plume_inter |> 
+  mutate(date = round_date(date, "month") + days(14)) |> 
+  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
+  mutate(timestep = "monthly")
+
+# Create annual means
+plume_inter_annual <- plume_inter |> 
+  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
+  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
+  mutate(timestep = "annual")
+
+# Combine to plot all at once
+plume_inter_timesteps <- mutate(plume_inter, timestep = "daily") |> 
+  rbind(plume_inter_monthly) |> 
+  rbind(plume_inter_annual) |> 
+  mutate(timestep = factor(timestep, levels = c("daily", "monthly", "annual")))
+
+line_trend_inter <- ggplot(plume_inter_timesteps, aes(x = date, y = value)) +
+  geom_line(data = filter(plume_inter_timesteps, timestep == "daily"), 
+            aes(colour = name, linetype = timestep), alpha = 0.9) +
+  geom_line(data = filter(plume_inter_timesteps, timestep == "monthly"), 
+            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 1.5) +
+  geom_line(data = filter(plume_inter_timesteps, timestep == "annual"), 
+            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 2.0) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
   labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume interannual components") +
   geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
              colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
-  scale_color_manual(name = "Decomposition method",
+  scale_color_manual(name = "Decomposition",
                      values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
                      breaks = c("STL interannual", "X11 interannual")) +
+  scale_linetype_manual(name = "Time step",
+                     values = c("daily" = "dotted", "monthly" = "dashed", "annual" = "solid"),
+                     breaks = c("daily", "monthly", "annual"),
+                     labels = c("daily/weekly", "monthly", "annual")) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
 ggsave(filename = "figures/plume_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
@@ -856,7 +883,7 @@ plume_ts <- decomp_df |>
                                      name %in% c("plume_seas_STL", "Seasonal_signal_X11_plume") ~ "seasonal",
                                      name %in% c("plume_inter_STL", "Interannual_signal_X11_plume") ~ "interannual",
                                      name %in% c("plume_resid_STL", "Residual_signal_X11_plume") ~ "residual")) |> 
-  mutate(decomp_group = factor(decomp_group, levels = c("base", "STL", "X11")),
+  mutate(decomp_group = factor(decomp_group, levels = c("base", "X11", "STL")),
          component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
 
 # Plot the time series' of values
@@ -865,8 +892,8 @@ line_plume_comp_vs_raw <-ggplot(plume_ts, aes(x = date, y = value, colour = comp
   labs(colour = NULL, x = NULL, y = "Plume area (km^2)",
        title = "Decomposition components compared to base plume area (average mean values)") +
   scale_colour_brewer(palette = "Dark2") +
-  scale_linetype(name = "Decomposition") +#,
-                 # values = c("solid", "dotdash", "dashed", "dotted")) +
+  scale_linetype_manual(name = "Decomposition",
+                 values = c("solid", "dashed", "dotted")) +
                  # values = c("total" = "solid", "seasonal" = "dotdash", "interannual" = "dashed", "residual" = "dotted")) +
   scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
@@ -906,7 +933,7 @@ plume_prop <- decomp_df |>
                                      name %in% c("prop_inter_STL", "prop_inter_X11") ~ "interannual",
                                      name %in% c("prop_resid_STL", "prop_resid_X11") ~ "residual"),
          linear_plot = case_when(name %in% c("plume_area", "plume_inter_STL", "Interannual_signal_X11_plume") ~ "yes")) |> 
-  mutate(decomp_group = factor(decomp_group, levels = c("base", "STL", "X11")),
+  mutate(decomp_group = factor(decomp_group, levels = c("base", "X11", "STL")),
          component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
 
 # Get scaling factors for dual axis plot
@@ -977,7 +1004,6 @@ scatter_flow_inter <- flow_inter |>
   geom_point(aes(colour = month)) +
   facet_wrap(~plot_title, ncol = 1, scales = "free") +
   labs(colour = NULL) +
-  # coord_cartesian(ratio = 1) +
   guides(colour = guide_legend(override.aes = list(size = 5))) +
   ggplot_theme() +
   theme(legend.position = "bottom")
@@ -1188,11 +1214,34 @@ trend_inter_labels <- data.frame(
   name = c("STL interannual", "X11 interannual"),
   slope = c(trend_inter_STL, trend_inter_X11),
   x = as.Date(c("1998-01-01", "1998-01-01")),
-  y = c(2500, 2300)
+  y = c(6000, 5500)
 )
 
-line_trend_inter <- ggplot(flow_inter, aes(x = date, y = value)) +
-  geom_path(alpha = 0.5, aes(colour = name)) +
+# Create monthly means for more approximate comparison
+flow_inter_monthly <- flow_inter |> 
+  mutate(date = round_date(date, "month") + days(14)) |> 
+  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
+  mutate(timestep = "monthly")
+
+# Create annual means
+flow_inter_annual <- flow_inter |> 
+  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
+  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
+  mutate(timestep = "annual")
+
+# Combine to plot all at once
+flow_inter_timesteps <- mutate(flow_inter, timestep = "daily") |> 
+  rbind(flow_inter_monthly) |> 
+  rbind(flow_inter_annual) |> 
+  mutate(timestep = factor(timestep, levels = c("daily", "monthly", "annual")))
+
+line_trend_inter <- ggplot(flow_inter_timesteps, aes(x = date, y = value)) +
+  geom_line(data = filter(flow_inter_timesteps, timestep == "daily"), 
+            aes(colour = name, linetype = timestep), alpha = 0.9) +
+  geom_line(data = filter(flow_inter_timesteps, timestep == "monthly"), 
+            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 1.5) +
+  geom_line(data = filter(flow_inter_timesteps, timestep == "annual"), 
+            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 2.0) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
   labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for river flow interannual components") +
   geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
@@ -1200,6 +1249,10 @@ line_trend_inter <- ggplot(flow_inter, aes(x = date, y = value)) +
   scale_color_manual(name = "Decomposition method",
                      values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
                      breaks = c("STL interannual", "X11 interannual")) +
+  scale_linetype_manual(name = "Time step",
+                        values = c("daily" = "dotted", "monthly" = "dashed", "annual" = "solid"),
+                        breaks = c("daily", "monthly", "annual"),
+                        labels = c("daily/weekly", "monthly", "annual")) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
 ggsave(filename = "figures/flow_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)

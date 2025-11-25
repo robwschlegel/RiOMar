@@ -129,7 +129,8 @@ stl_single <- function(x_col, out_col, start_date, ts_freq = 365){
   
   # Create ts object and calculate stl
   ts_x <- ts(zoo::na.approx(x_col), frequency = ts_freq, start = c(year(start_date), quarter(start_date)))
-  stl_x <- stl(ts_x, s.window = "periodic", robust = TRUE)
+  stl_x <- stl(ts_x, s.window = "periodic", t.window = 20, inner = 10, outer = 0)
+  #, robust = TRUE) # rather allow outliers to influence results
   
   # Add NA to end if necessary
   if(length(stl_x$time.series[,2]) != length(x_col)){
