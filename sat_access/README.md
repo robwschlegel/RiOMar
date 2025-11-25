@@ -1,11 +1,11 @@
 # Overview
 
-This Python script allows you to download a series NetCDF files for chl a and/or SPM from an FTP server and visualize a specified variable as a geographical map. 
-It is designed specifically to work for the suite of ODATIS products put into production for/during the RiOMar project.
+The `sat_access.py` & `sat_access.R` scripts allow you to download a series NetCDF files for chl a and/or SPM from an FTP server and visualize one day of data on a map. 
+They are designed specifically to work for the suite of ODATIS products put into production for/during the RiOMar project.
 Note that while these scripts have been written so that they can be called from the command line, 
 they can also be opened in your IDE of choice (e.g. `VS Code`, `RStudio`, etc.) and the parameters set directly in the code. As you prefer.
 
-# features
+# Features
 
 - Uses argparse for easy command-line argument handling
 - Downloads a range of NetCDF file from an FTP server
@@ -81,7 +81,7 @@ Rscript -e "install.packages(c('argparse', 'ncdf4', 'curl', 'ggplot2', 'reshape2
 
 ### Linux/MacOS
 
-Make the script executable (run from the same location as the script):
+Finally, make the script executable (run from the same location as the script):
 
 ```
 chmod +x sat_access.R
@@ -107,16 +107,16 @@ Note that the argument `--outputdir .` specifies the current directory as the ou
 
 ### Python
 
-Download a single chl a file
+Download a single chl a file:
 
 ```
 python sat_access.py --variable chla --date 2025-10-15 --outputdir .
 ```
 
-Download multiple SPM files and plot one
+Download multiple SPM files and plot one:
  
 ```
-python sat_access.py --variable SPM --date 2025-10-15 2025-10-17 --outputdir . --plot = True --boundingbox 4 6 42 44
+python sat_access.py --variable spm --date 2025-10-15 2025-10-17 --outputdir . --plot = True --boundingbox 4 6 42 44
 ```
 
 ### R
@@ -132,7 +132,7 @@ Download a single chl a file and plot it:
 Download multiple SPM files but plot none:
 
 ```
-./sat_access.R --variable SPM --date 2025-11-15 2025-11-17 --outputdir . --plot FALSE
+./sat_access.R --variable spm --date 2025-11-15 2025-11-17 --outputdir . --plot FALSE
 ```
 
 __NB:__ The `./` before `sat_access.R` is necessary for bash to understand that this R script is meant to be run as an executable.
@@ -166,6 +166,8 @@ Rscript sat_access.R --variable chla --date 2025-09-15 --outputdir . --plot = TR
 
 ### Python
 
+#### Error: Python not found
+
 If this returns nothing:
 
 ```
@@ -179,7 +181,7 @@ But you are certain Python is installed (e.g. via anaconda), you may need to add
   - Click "Environment Variables".
 2. Edit the PATH Variable:
   - Under "User variables" or "System variables", find the Path variable and click "Edit".
-  - Add the following paths (adjust for your Anaconda installation):
+  - Add the following paths (adjust for your installation):
   - `C:\Users\YourUsername\anaconda3`
   - `C:\Users\YourUsername\anaconda3\Scripts`
   - `C:\Users\YourUsername\anaconda3\Library\bin`
@@ -193,21 +195,31 @@ To check the virtual environments installed on your system (with anaconda/minico
 
 ```
 conda env list
-
 ```
 
 To activate the environment of choice:
 
 ```
 conda activate your_env_name
+```
+
+#### Error: 'ScipyArrayWrapper' object has no attribute 'oindex'
+
+This error is related to the NetCDF file not being loaded correctly by `xarray`. 
+To address this issue one should update both `xarray` and `netCDF4` to the latest versions.
 
 ```
+pip install --upgrade xarray netCDF4
+```
+
 ### R
+
+#### Error: R not found
 
 If this returns nothing:
 
 ```
-R --version
+Rscript --version
 ```
 
 But you are certain R is installed, you may need to add R to your PATH.
@@ -248,6 +260,16 @@ Rscript -e "install.packages(c('argparse', 'ncdf4', 'curl', 'ggplot2', 'reshape2
 
 __NB:__ Regardless of what new alias you may have created for `R`, the installation of packages is still done from the PowerShell with the command `Rscript`.
 Or, you can also simply open `R`/`RStudio` and install the packages from there. Whatever is easiest for you.
+
+#### Error: Couldn't find sufficient Python binary
+
+This error is caused by the system not understanding how to find `Python` while calling scripts from `R`.
+To address this issue open the `sat_access.R` script in your IDE of choice (e.g. `RStudio`) 
+and uncomment the following line of code and change the file pathway to where you have `Python` installed:
+
+```
+options(python_cmd = "C:/Path/To/Your/Python/python.exe")
+```
 
 # License
 

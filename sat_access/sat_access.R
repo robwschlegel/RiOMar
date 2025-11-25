@@ -8,6 +8,9 @@ if (!all(c("argparse", "ncdf4", "curl", "reshape2", "ggplot2") %in% installed.pa
   install.packages(c("argparse", "ncdf4", "curl", "reshape2", "ggplot2"), repos = "https://cloud.r-project.org/")
 }
 
+# Uncomment this line if R cannot find python on Windows
+# options(python_cmd = "C:/Path/To/Your/Python/python.exe")
+
 # Activate libraries
 library(argparse) # For parsing arguments from the command line
 library(ncdf4)    # For reading NetCDF files
