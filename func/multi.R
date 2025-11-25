@@ -431,9 +431,9 @@ X11_flow <- map_dfr(zones, load_X11, type = "flow")
 
 # STL
 load("output/STATS/stl_all.RData")
-stl_sub <- dplyr::select(stl_all, zone, date, plume_seas:wind_resid) |> 
-  rename_with(~ paste0(.x, "_STL"), everything()) 
-colnames(stl_sub)[1:2] <- c("zone", "date")
+stl_sub <- dplyr::select(stl_all, zone, date, flow, tide_range, welling:wind_resid) |> 
+  rename_with(~ paste0(.x, "_STL"), everything())
+colnames(stl_sub)[1:7] <- c("zone", "date", "flow", "tide_range", "welling", "wind_spd", "wind_dir")
 
 # heatwaveR
 plume_clim <- map_dfr(zones, plume_clim_calc) |> 
@@ -849,29 +849,30 @@ plume_ts <- decomp_df |>
   pivot_longer(cols = plume_area:total_X11) |> 
   mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
   summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
-  mutate(decomp_group = case_when(name == "plume_area" ~ "raw",
+  mutate(decomp_group = case_when(name == "plume_area" ~ "base",
                                   name %in% c("total_STL", "plume_seas_STL", "plume_inter_STL", "plume_resid_STL") ~ "STL",
                                   name %in% c("total_X11", "Seasonal_signal_X11_plume", "Interannual_signal_X11_plume", "Residual_signal_X11_plume") ~ "X11"),
          component_group = case_when(name %in% c("plume_area", "total_STL", "total_X11") ~ "total",
                                      name %in% c("plume_seas_STL", "Seasonal_signal_X11_plume") ~ "seasonal",
                                      name %in% c("plume_inter_STL", "Interannual_signal_X11_plume") ~ "interannual",
                                      name %in% c("plume_resid_STL", "Residual_signal_X11_plume") ~ "residual")) |> 
-  mutate(decomp_group = factor(decomp_group, levels = c("raw", "STL", "X11")),
+  mutate(decomp_group = factor(decomp_group, levels = c("base", "STL", "X11")),
          component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
 
-ggplot(plume_ts, aes(x = date, y = value, colour = component_group, linetype = decomp_group)) +
-  geom_path(data = , linewidth = 1.0) +
+# Plot the time series' of values
+line_plume_comp_vs_raw <-ggplot(plume_ts, aes(x = date, y = value, colour = component_group, linetype = decomp_group)) +
+  geom_path(linewidth = 1.0) +
   labs(colour = NULL, x = NULL, y = "Plume area (km^2)",
-       title = "Decomposition components compared to raw plume area",
-       subtitle = "Gulf of Lion") +
+       title = "Decomposition components compared to base plume area (average mean values)") +
   scale_colour_brewer(palette = "Dark2") +
   scale_linetype(name = "Decomposition") +#,
                  # values = c("solid", "dotdash", "dashed", "dotted")) +
                  # values = c("total" = "solid", "seasonal" = "dotdash", "interannual" = "dashed", "residual" = "dotted")) +
+  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_components_vs_raw.png", plot = line_plume_inter_vs_raw, height = 6, width = 12)
+ggsave(filename = "figures/plume_components_vs_raw.png", plot = line_plume_comp_vs_raw, height = 6, width = 12)
 
 # Calculate proportion values
 plume_prop <- decomp_df |> 
@@ -882,62 +883,63 @@ plume_prop <- decomp_df |>
                 Interannual_signal_X11_plume, Seasonal_signal_X11_plume, Residual_signal_X11_plume) |> 
   mutate(date = as.Date(paste0(year(date),"-07-01"))) |>
   group_by(zone, plot_title, date) |> 
-  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)), .groups = "drop") #|>
-  # ungroup()
-  
-  # summarise(across(plume_area:Residual_signal_X11_plume), mean, na.rm = TRUE, .by = c("zone", "plot_title", "date"))
-  mutate(total_STL = plume_seas_STL + plume_inter_STL + plume_resid_STL,
-         prop_seas_STL = plume_seas_STL / total_STL,
-         prop_inter_STL = plume_inter_STL / total_STL,
-         prop_resid_STL = plume_resid_STL / total_STL,
-         total_X11 = Seasonal_signal_X11_plume + Interannual_signal_X11_plume + Residual_signal_X11_plume,
-         prop_seas_X11 = Seasonal_signal_X11_plume / total_X11,
-         prop_inter_X11 = Interannual_signal_X11_plume / total_X11,
-         prop_resid_X11 = Residual_signal_X11_plume / total_X11) |> 
-  dplyr::select(zone, plot_title, date, plume_area, total_STL, prop_seas_STL, prop_inter_STL, prop_resid_STL,
-                total_X11, prop_seas_X11, prop_inter_X11, prop_resid_X11) |>
-  pivot_longer(cols = total_STL:prop_resid_X11) |> 
-  mutate(decomp_group = case_when(name == "plume_area" ~ "raw",
-                                  name %in% c("total_STL", "prop_seas_STL", "prop_inter_STL", "prop_resid_STL") ~ "STL",
-                                  name %in% c("total_X11", "prop_seas_X11", "prop_inter_X11", "prop_resid_X11") ~ "X11"),
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)), .groups = "drop") |>
+  mutate(total_STL = plume_inter_STL + plume_seas_STL + plume_resid_STL,
+         prop_inter_STL = plume_inter_STL / plume_area,
+         prop_seas_STL = plume_seas_STL / plume_area,
+         prop_resid_STL = plume_resid_STL / plume_area,
+         total_X11 = Interannual_signal_X11_plume + Seasonal_signal_X11_plume + Residual_signal_X11_plume,
+         prop_inter_X11 = Interannual_signal_X11_plume / plume_area,
+         prop_seas_X11 = Seasonal_signal_X11_plume / plume_area,
+         prop_resid_X11 = Residual_signal_X11_plume / plume_area) |> 
+  dplyr::select(zone, plot_title, date, plume_area, plume_inter_STL, Interannual_signal_X11_plume,
+                total_STL, prop_inter_STL, prop_seas_STL, prop_resid_STL,
+                total_X11, prop_inter_X11, prop_seas_X11, prop_resid_X11) |>
+  pivot_longer(cols = plume_area:prop_resid_X11) |> 
+  mutate(decomp_group = case_when(name == "plume_area" ~ "base",
+                                  name %in% c("total_STL", "plume_inter_STL",
+                                              "prop_seas_STL", "prop_inter_STL", "prop_resid_STL") ~ "STL",
+                                  name %in% c("total_X11", "Interannual_signal_X11_plume",
+                                              "prop_seas_X11", "prop_inter_X11", "prop_resid_X11") ~ "X11"),
          component_group = case_when(name %in% c("plume_area", "total_STL", "total_X11") ~ "total",
-                               name %in% c("prop_seas_STL", "prop_seas_X11") ~ "seasonal",
-                               name %in% c("prop_inter_STL", "prop_inter_X11") ~ "interannual",
-                               name %in% c("prop_resid_STL", "prop_resid_X11") ~ "residual"))#,
-         # name = paste(component, decomp_group, sep = "_"))
+                                     name %in% c("prop_seas_STL", "prop_seas_X11") ~ "seasonal",
+                                     name %in% c("prop_inter_STL", "prop_inter_X11") ~ "interannual",
+                                     name %in% c("prop_resid_STL", "prop_resid_X11") ~ "residual"),
+         linear_plot = case_when(name %in% c("plume_area", "plume_inter_STL", "Interannual_signal_X11_plume") ~ "yes")) |> 
+  mutate(decomp_group = factor(decomp_group, levels = c("base", "STL", "X11")),
+         component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
 
-# Create monthly means for better comparison
-plume_prop_monthly <- plume_prop |> 
-  mutate(date = round_date(date, "month") + days(14)) |> 
-  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "decomp_group", "component_group", "name"))
+# Get scaling factors for dual axis plot
+scaling_factor_plume_prop <- sec_axis_adjustement_factors(plume_prop$value[plume_prop$component_group == "total"], 
+                                                          plume_prop$value[plume_prop$component_group != "total"])
 
-# Create annual means
-plume_prop_annual <- plume_prop |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
-  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "decomp_group", "component_group", "name"))
-
-scaling_factor <- sec_axis_adjustement_factors(df_sub$var_2, df_sub$var_1)
-df_scaling <- summarise(df_sub, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
+# Create scaled columns
+plume_prop <- plume_prop |> 
+  mutate(scaled_value = case_when(component_group != "total" ~ value,
+                                  linear_plot == "yes" ~ value * scaling_factor_plume_prop$diff + scaling_factor_plume_prop$adjust))
+                                  # component_group == "total" ~ value * scaling_factor_prop$diff + scaling_factor_prop$adjust))
 
 # Double y-axis plot that shows the total values on the second Y axis, and the proportion values on the first Y axis
-# line_plume_prop <- 
-ggplot(filter(plume_prop_annual, component_group != "total"), aes(x = date)) +
-  geom_col(aes(y = value, fill = component_group, colour = decomp_group), position = "dodge") +
-  geom_path(aes(y = value, colour = name), linewidth = 1.5) +
-  scale_y_continuous(
+line_plume_prop <- ggplot(filter(plume_prop, component_group != "total"), aes(x = date, y = scaled_value)) +
+  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "black", linewidth = 1.5) +
+  geom_path(data = filter(plume_prop, linear_plot == "yes"),#component_group == "total"),
+            aes(y = scaled_value, colour = decomp_group), linewidth = 1.5) +
+  geom_col(aes(fill = component_group, colour = decomp_group), linewidth = 1.0, position = "dodge", alpha = 0.5) +
+  scale_colour_brewer(palette = "Set1") +
+  scale_fill_manual(values = c("brown", "yellow", "purple")) +
+  scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00"),
     name = "Proportion of total plume area",
-    sec.axis = sec_axis(~ ., transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff
-                        name = "Total plume area (km^2)")
+    sec.axis = sec_axis(transform = ~ {. - scaling_factor_plume_prop$adjust} / scaling_factor_plume_prop$diff,
+                        name = "Average annual plume area (km^2)", breaks = c(600, 800, 1000), labels = c("600", "800", "1000"))
   ) +
-  labs(colour = NULL, x = NULL, 
-       title = "Proportion of total plume area by decomposition method",
-       subtitle = "Second axis shows mean monthly plume area per method") +
-  scale_colour_brewer(palette = "Dark2") +
+  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
+  labs(x = NULL, colour = "Decomposition", fill = "Component",
+       title = "Proportion of annual mean base plume area by decomposition method",
+       subtitle = "Second axis shows annual mean base plume area and the STL and X11 interannual values") +
+  # scale_colour_brewer(palette = "Dark2") +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  # ggplot_theme() +
-  theme(legend.position = "bottom")#, 
-        # panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        # panel.grid.major.x = element_line(colour = "black", linewidth = 2))
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
 ggsave(filename = "figures/plume_proportion_comparison.png", plot = line_plume_prop, height = 6, width = 12)
 
 
@@ -1201,4 +1203,97 @@ line_trend_inter <- ggplot(flow_inter, aes(x = date, y = value)) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
 ggsave(filename = "figures/flow_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
+
+
+### Proportion --------------------------------------------------------------
+
+# Calculate proportion values
+flow_prop <- decomp_df |> 
+  filter(zone == "GULF_OF_LION") |> 
+  filter(date >= as.Date("1999-01-01"), date <= as.Date("2024-12-31")) |> 
+  dplyr::select(zone, plot_title, date, flow,
+                flow_seas_STL, flow_inter_STL, flow_resid_STL,
+                Interannual_signal_X11_flow, Seasonal_signal_X11_flow, Residual_signal_X11_flow) |> 
+  mutate(date = as.Date(paste0(year(date),"-07-01"))) |>
+  group_by(zone, plot_title, date) |> 
+  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)), .groups = "drop") |>
+  mutate(total_STL = flow_seas_STL + flow_inter_STL + flow_resid_STL,
+         prop_seas_STL = flow_seas_STL / flow,
+         prop_inter_STL = flow_inter_STL / flow,
+         prop_resid_STL = flow_resid_STL / flow,
+         total_X11 = Seasonal_signal_X11_flow + Interannual_signal_X11_flow + Residual_signal_X11_flow,
+         prop_seas_X11 = Seasonal_signal_X11_flow / flow,
+         prop_inter_X11 = Interannual_signal_X11_flow / flow,
+         prop_resid_X11 = Residual_signal_X11_flow / flow) |> 
+  dplyr::select(zone, plot_title, date, flow, flow_inter_STL, Interannual_signal_X11_flow,
+                total_STL, prop_seas_STL, prop_inter_STL, prop_resid_STL,
+                total_X11, prop_seas_X11, prop_inter_X11, prop_resid_X11) |>
+  pivot_longer(cols = flow:prop_resid_X11) |> 
+  mutate(decomp_group = case_when(name == "flow" ~ "base",
+                                  name %in% c("total_STL", "flow_inter_STL",
+                                              "prop_seas_STL", "prop_inter_STL", "prop_resid_STL") ~ "STL",
+                                  name %in% c("total_X11", "Interannual_signal_X11_flow",
+                                              "prop_seas_X11", "prop_inter_X11", "prop_resid_X11") ~ "X11"),
+         component_group = case_when(name %in% c("flow", "total_STL", "total_X11") ~ "total",
+                                     name %in% c("prop_seas_STL", "prop_seas_X11") ~ "seasonal",
+                                     name %in% c("prop_inter_STL", "prop_inter_X11") ~ "interannual",
+                                     name %in% c("prop_resid_STL", "prop_resid_X11") ~ "residual"),
+         linear_plot = case_when(name %in% c("flow", "flow_inter_STL", "Interannual_signal_X11_flow") ~ "yes")) |> 
+  mutate(decomp_group = factor(decomp_group, levels = c("base", "STL", "X11")),
+         component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
+
+# Get scaling factors for dual axis plot
+scaling_factor_flow_prop <- sec_axis_adjustement_factors(flow_prop$value[flow_prop$component_group == "total"], 
+                                                          flow_prop$value[flow_prop$component_group != "total"])
+
+# Create scaled columns
+flow_prop <- flow_prop |> 
+  mutate(scaled_value = case_when(component_group != "total" ~ value,
+                                  linear_plot == "yes" ~ value * scaling_factor_flow_prop$diff + scaling_factor_flow_prop$adjust)) |> 
+  filter(date >= as.Date("1999-01-01"), date <= as.Date("2023-12-31"))
+
+# Double y-axis plot that shows the total values on the second Y axis, and the proportion values on the first Y axis
+line_flow_prop <- ggplot(filter(flow_prop, component_group != "total"), aes(x = date, y = scaled_value)) +
+  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "black", linewidth = 1.5) +
+  geom_path(data = filter(flow_prop, linear_plot == "yes"),#component_group == "total"),
+            aes(y = scaled_value, colour = decomp_group), linewidth = 1.5) +
+  geom_col(aes(fill = component_group, colour = decomp_group), linewidth = 1.0, position = "dodge", alpha = 0.5) +
+  scale_colour_brewer(palette = "Set1") +
+  scale_fill_manual(values = c("brown", "yellow", "purple")) +
+  scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00"),
+                     name = "Proportion of total river flow",
+                     sec.axis = sec_axis(transform = ~ {. - scaling_factor_flow_prop$adjust} / scaling_factor_flow_prop$diff,
+                                         name = "Average annual river flow (m^3 s-1)", 
+                                         breaks = c(1000, 1500, 2000), labels = c("1000", "1500", "2000"))
+  ) +
+  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
+  labs(x = NULL, colour = "Decomposition", fill = "Component",
+       title = "Proportion of annual mean base river flow by decomposition method",
+       subtitle = "Second axis shows annual mean base river flow and the STL and X11 interannual values") +
+  # scale_colour_brewer(palette = "Dark2") +
+  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/flow_proportion_comparison.png", plot = line_flow_prop, height = 6, width = 12)
+
+# Combine flow Prop and plume_prop dataframes
+plume_flow_prop <- rbind(mutate(plume_prop, var_name = "plume"),
+                         mutate(flow_prop, var_name = "flow")) |> 
+  filter(date >= as.Date("1999-01-01"), date <= as.Date("2023-12-31"))
+
+# Plot the proportion of each component of X11 for flow next to plume area
+bar_plume_flow_prop <-ggplot(filter(plume_flow_prop, component_group != "total", decomp_group == "X11"), aes(x = date, y = value)) +
+  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "black", linewidth = 1.5) +
+  geom_col(aes(fill = component_group, colour = var_name), linewidth = 1.0, position = "dodge", alpha = 0.5) +
+  scale_colour_brewer("Variable", palette = "Set2") +
+  scale_fill_manual("Component", values = c("brown", "yellow", "purple")) +
+  scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00")) +
+  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
+  labs(x = NULL, y = "Proportion of mean area/flow",
+       title = "Annual proportion of mean plume area and river flow by X11 decomposition components") +
+  # scale_colour_brewer(palette = "Dark2") +
+  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
+  theme(legend.position = "bottom",
+        panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/plume_flow_proportion_comparison.png", plot = bar_plume_flow_prop, height = 6, width = 12)
 
