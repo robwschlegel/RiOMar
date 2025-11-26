@@ -116,7 +116,7 @@ python sat_access.py --variable chla --date 2025-10-15 --outputdir .
 Download multiple SPM files and plot one:
  
 ```
-python sat_access.py --variable spm --date 2025-10-15 2025-10-17 --outputdir . --plot = True --boundingbox 4 6 42 44
+python sat_access.py --variable spm --date 2025-10-15 2025-10-17 --outputdir . --plot True --boundingbox 4 6 42 44
 ```
 
 ### R
@@ -126,7 +126,7 @@ python sat_access.py --variable spm --date 2025-10-15 2025-10-17 --outputdir . -
 Download a single chl a file and plot it:
 
 ```
-./sat_access.R --variable chla --date 2025-09-15 --outputdir . --plot = TRUE --boundingbox 4 6 42 44
+./sat_access.R --variable chla --date 2025-09-15 --outputdir . --plot TRUE --boundingbox 4 6 42 44
 ```
 
 Download multiple SPM files but plot none:
@@ -142,7 +142,7 @@ __NB:__ The `./` before `sat_access.R` is necessary for bash to understand that 
 Download a single chl a file and plot it:
 
 ```
-Rscript sat_access.R --variable chla --date 2025-09-15 --outputdir . --plot = TRUE --boundingbox 4 6 42 44
+Rscript sat_access.R --variable chla --date 2025-09-15 --outputdir . --plot TRUE --boundingbox 4 6 42 44
 ```
 
 # How It Works

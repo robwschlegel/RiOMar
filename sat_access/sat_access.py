@@ -156,13 +156,13 @@ def download_and_plot(dl_var, dl_dates, bbox, output_dir, plot_var, overwrite):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download SPM or chl a NetCDF files and plot them as a map.")
-    parser.add_argument("--variable", type=str, required=True, help="Variable to download (e.g., 'SPM', 'CHLA')")
-    parser.add_argument("--daterange", type=str, nargs='+', required=True, 
+    parser.add_argument("-v", "--variable", type=str, required=True, help="Variable to download (e.g., 'SPM', 'CHLA')")
+    parser.add_argument("-d", "--daterange", type=str, nargs='+', required=True, 
                         help="Date range for desired data in YYYY-MM-DD format. Provide only one or two values. Note that if two dates are provided, only the first will be used for plotting.")
-    parser.add_argument("--outputdir", type=str, required=True, help="Directory to save the downloaded file and plot")
-    parser.add_argument("--overwrite", type=bool, default=False, help="Overwrite existing files. Default = False")
-    parser.add_argument("--plot", type=bool, default=False, help="Whether or not to plot the downloaded data. Default = False")
-    parser.add_argument("--boundingbox", type=float, nargs=4, required=False, help="The bounding box for plotting. Must be given as: lonmin, lonmax, latmin, latmax")
+    parser.add_argument("-od", "--outputdir", type=str, required=True, help="Directory to save the downloaded file and plot")
+    parser.add_argument("-ov", "--overwrite", type=bool, default=False, help="Overwrite existing files. Default = False")
+    parser.add_argument("-p", "--plot", type=bool, default=False, help="Whether or not to plot the downloaded data. Default = False")
+    parser.add_argument("-bbox", "--boundingbox", type=float, nargs=4, required=False, help="The bounding box for plotting. Must be given as: lonmin, lonmax, latmin, latmax")
 
     args = parser.parse_args()
     download_and_plot(args.variable, args.daterange, args.boundingbox, args.outputdir, args.plot, args.overwrite)
