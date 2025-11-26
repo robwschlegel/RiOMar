@@ -1206,8 +1206,8 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;OUTPUT STRUCTURE DEFINITION
     
     ;PtStr = {	var_S:fbad , $ ; Percentage of variance of X due to the Seasonal component
-    ;            var_T:fbad , $; Percentage of variance of X due to the Trend component
-    ;            var_Y:fbad ,  $; Percentage of variance of X due to the Irregular component
+    ;           var_T:fbad , $; Percentage of variance of X due to the Trend component
+    ;           var_Y:fbad ,  $; Percentage of variance of X due to the Irregular component
     ;			covar: fbad, $; Percentage of variance of X related to the covariance terms
     ;
     ;			var_X: fbad, $;  variance of the original time series
@@ -1217,7 +1217,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;
     ;			S : make_array(N_months, value =fbad), $ ; vector of N months containing the Seasonal component
     ;			T : make_array(N_months, value =fbad), $ ; vector of N months containing the Trend component
-    ;			Y : make_array(N_months, value =fbad), $  ; vector of N months containing the Irregular component
+    ;			Y : make_array(N_months, value =fbad), $ ; vector of N months containing the Irregular component
     ;
     ;			year_n_months :fbad ,$ ; Number of months in 1 synthetic year
     ;			N_outlier: 0. ,$ ; Number of outlier
@@ -1230,8 +1230,8 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ;			Seasonal_Kendall_sen: make_array(5, value = fbad), $
     ;
     ;			slope_trend: fbad, $
-    ;            intercept_trend : fbad, $               .
-    ;            prob_Test_trend:fbad , $
+    ;           intercept_trend : fbad, $               .
+    ;           prob_Test_trend:fbad , $
     ;
     ;			flag: fbad  $; TEST the efficiency of the gap filling method
     ;		}
