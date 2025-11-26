@@ -34,6 +34,7 @@ library(tidyverse)
 library(tidync)
 library(heatwaveR) # For seasonal smoothing analysis
 library(seasonal) # For X11 analysis (currently not used)
+library(RcppRoll) # For running means to get STL interannual signals closer to X11
 library(patchwork)
 library(doParallel); doParallel::registerDoParallel(cores = 14)
 
@@ -144,7 +145,7 @@ plume_clim <- map_dfr(zones, plume_clim_calc)
 # Multi-driver comparison -------------------------------------------------
 
 # Plot the results 
-# df_stl <- stl_all
+df_stl <- stl_all
 multi_plot <- function(df_stl){
   
   # Make pretty plot titles
@@ -209,8 +210,19 @@ multi_plot <- function(df_stl){
   }
   plot_inter <- function(df, y_col, line_colour, y_label, file_stub){
     unique_years <- df$date |> year() |> unique()
-    pl_inter <- ggplot(data = df) + 
-      geom_path(aes_string(x = "date", y = y_col), color = line_colour, linewidth = 2) +
+    colnames(df)[which(colnames(df) == y_col)] <- "value"
+    df_sub <- df |> 
+      dplyr::select(plot_title, date, value) |>
+      mutate(date = date - lubridate::days(lubridate::wday(date)-1)) |>
+      # mutate(date = round_date(date, unit = "months")) |>
+      filter(date >= min(df$date)) |> 
+      group_by(plot_title, date) |>
+      summarise(value = mean(value, na.rm = TRUE), .groups = "keep") |> 
+      group_by(plot_title) |>
+      mutate(running_mean = roll_mean(value, n = 48, fill = NA, align = "center")) |> 
+      ungroup()
+    pl_inter <- ggplot(data = df_sub) + 
+      geom_path(aes(x = date, y = running_mean), color = line_colour, linewidth = 2) +
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
       scale_x_date(name = "", 
                    breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
@@ -281,6 +293,17 @@ multi_plot <- function(df_stl){
         scale_x_continuous(expand = c(0, 0), breaks = 1:12, labels = month.abb)
     } else {
       unique_years <- df_scale$date |> year() |> unique()
+      df_scale <- df_scale |> 
+        mutate(date = date - lubridate::days(lubridate::wday(date)-1)) |>
+        # mutate(date = round_date(date, unit = "months")) |>
+        filter(date >= min(df$date)) |> 
+        group_by(plot_title, date) |>
+        summarise(var_1 = mean(var_1, na.rm = TRUE),
+                  var_2_scaled = mean(var_2_scaled, na.rm = TRUE), .groups = "keep") |> 
+        group_by(plot_title) |>
+        mutate(var_1 = roll_mean(var_1, n = 48, fill = NA, align = "center"),
+               var_2_scaled = roll_mean(var_1, n = 48, fill = NA, align = "center")) |> 
+        ungroup()
       pl_base <- ggplot(data = df_scale) +
         # Var 1 data
         geom_point(aes(x = date, y = var_1), color = colour_1) +
@@ -345,10 +368,22 @@ multi_plot <- function(df_stl){
            flow_scaled = flow_inter/max(flow_inter, na.rm = TRUE),
            tide_scaled = tide_inter/max(tide_inter, na.rm = TRUE),
            wind_scaled = wind_inter/max(wind_inter, na.rm = TRUE)) |> 
+    mutate(plum_scaled = plum_scaled/mean(plum_scaled, na.rm = TRUE),
+           flow_scaled = flow_scaled/mean(flow_scaled, na.rm = TRUE),
+           tide_scaled = tide_scaled/mean(tide_scaled, na.rm = TRUE),
+           wind_scaled = wind_scaled/mean(wind_scaled, na.rm = TRUE)) |>
     dplyr::select(plot_title, date, plum_scaled:wind_scaled) |> 
-    pivot_longer(plum_scaled:wind_scaled)
+    pivot_longer(plum_scaled:wind_scaled) |> 
+    mutate(date = date - lubridate::days(lubridate::wday(date)-1)) |>
+    # mutate(date = round_date(date, unit = "months")) |>
+    filter(date >= min(df_pretty$date)) |> 
+    group_by(plot_title, name, date) |>
+    summarise(value = mean(value, na.rm = TRUE), .groups = "keep") |> 
+    group_by(plot_title, name) |>
+    mutate(running_mean = roll_mean(value, n = 48, fill = NA, align = "center")) |> 
+    ungroup()
   
-  all_plot <- ggplot(df_all_scaled, aes(x = date, y = value)) +
+  all_plot <- ggplot(df_all_scaled, aes(x = date, y = running_mean)) +
     geom_path(aes(colour = name), linewidth = 2) +
     facet_wrap(~plot_title, ncol = 1) +
     ggplot_theme()
@@ -839,13 +874,14 @@ plume_inter_timesteps <- mutate(plume_inter, timestep = "daily") |>
   rbind(plume_inter_annual) |> 
   mutate(timestep = factor(timestep, levels = c("daily", "monthly", "annual")))
 
+# Plot interannual trends
 line_trend_inter <- ggplot(plume_inter_timesteps, aes(x = date, y = value)) +
   geom_line(data = filter(plume_inter_timesteps, timestep == "daily"), 
-            aes(colour = name, linetype = timestep), alpha = 0.9) +
+            aes(colour = name, linetype = timestep), alpha = 0.7) +
   geom_line(data = filter(plume_inter_timesteps, timestep == "monthly"), 
-            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 1.5) +
+            aes(colour = name, linetype = timestep), alpha = 0.8, linewidth = 1.5) +
   geom_line(data = filter(plume_inter_timesteps, timestep == "annual"), 
-            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 2.0) +
+            aes(colour = name, linetype = timestep), alpha = 0.9, linewidth = 2.0) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
   labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume interannual components") +
   geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
@@ -1237,11 +1273,11 @@ flow_inter_timesteps <- mutate(flow_inter, timestep = "daily") |>
 
 line_trend_inter <- ggplot(flow_inter_timesteps, aes(x = date, y = value)) +
   geom_line(data = filter(flow_inter_timesteps, timestep == "daily"), 
-            aes(colour = name, linetype = timestep), alpha = 0.9) +
+            aes(colour = name, linetype = timestep), alpha = 0.7) +
   geom_line(data = filter(flow_inter_timesteps, timestep == "monthly"), 
-            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 1.5) +
+            aes(colour = name, linetype = timestep), alpha = 0.8, linewidth = 1.5) +
   geom_line(data = filter(flow_inter_timesteps, timestep == "annual"), 
-            aes(colour = name, linetype = timestep), alpha = 0.5, linewidth = 2.0) +
+            aes(colour = name, linetype = timestep), alpha = 0.9, linewidth = 2.0) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
   labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for river flow interannual components") +
   geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
