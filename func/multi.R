@@ -145,7 +145,7 @@ plume_clim <- map_dfr(zones, plume_clim_calc)
 # Multi-driver comparison -------------------------------------------------
 
 # Plot the results 
-df_stl <- stl_all
+# df_stl <- stl_all
 multi_plot <- function(df_stl){
   
   # Make pretty plot titles
@@ -262,14 +262,14 @@ multi_plot <- function(df_stl){
       colnames(df_sub) <- c("plot_title", "date", "var_1", "var_2")
     }
     
-    # Scaling factor
-    scaling_factor <- sec_axis_adjustement_factors(df_sub$var_2, df_sub$var_1)
-    df_scaling <- summarise(df_sub, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
-    df_scale <- left_join(df_sub, df_scaling, by = "plot_title") |>
-      mutate(var_2_scaled = var_2 * diff + adjust, .after = "var_2")
-    
     # Plot base
     if(grepl("seas", var_1)){
+      
+      # Scaling factor
+      scaling_factor <- sec_axis_adjustement_factors(df_sub$var_2, df_sub$var_1)
+      df_scaling <- summarise(df_sub, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
+      df_scale <- left_join(df_sub, df_scaling, by = "plot_title") |>
+        mutate(var_2_scaled = var_2 * diff + adjust, .after = "var_2")
       
       # Get range for ribbon plot
       df_scale_sub <- df_scale |> 
@@ -292,18 +292,27 @@ multi_plot <- function(df_stl){
         facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
         scale_x_continuous(expand = c(0, 0), breaks = 1:12, labels = month.abb)
     } else {
-      unique_years <- df_scale$date |> year() |> unique()
-      df_scale <- df_scale |> 
+      
+      # Perform rolling mean
+      df_roll_mean <- df_sub |>
         mutate(date = date - lubridate::days(lubridate::wday(date)-1)) |>
         # mutate(date = round_date(date, unit = "months")) |>
-        filter(date >= min(df$date)) |> 
+        filter(date >= min(df$date)) |>
         group_by(plot_title, date) |>
         summarise(var_1 = mean(var_1, na.rm = TRUE),
-                  var_2_scaled = mean(var_2_scaled, na.rm = TRUE), .groups = "keep") |> 
+                  var_2 = mean(var_2, na.rm = TRUE), .groups = "keep") |>
         group_by(plot_title) |>
         mutate(var_1 = roll_mean(var_1, n = 48, fill = NA, align = "center"),
-               var_2_scaled = roll_mean(var_1, n = 48, fill = NA, align = "center")) |> 
+               var_2 = roll_mean(var_2, n = 48, fill = NA, align = "center")) |>
         ungroup()
+      
+      # Then get the scaling factor
+      scaling_factor <- sec_axis_adjustement_factors(df_roll_mean$var_2, df_roll_mean$var_1)
+      df_scaling <- summarise(df_roll_mean, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
+      df_scale <- left_join(df_roll_mean, df_scaling, by = "plot_title") |>
+        mutate(var_2_scaled = var_2 * diff + adjust, .after = "var_2")
+      unique_years <- df_scale$date |> year() |> unique()
+      
       pl_base <- ggplot(data = df_scale) +
         # Var 1 data
         geom_point(aes(x = date, y = var_1), color = colour_1) +
