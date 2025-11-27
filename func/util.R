@@ -14,6 +14,47 @@ river_mouths <- data.frame(row_name = 1:4,
 
 # Loading -----------------------------------------------------------------
 
+# Load time series of plume values
+load_plume_ts <- function(zone){
+  file_name <- paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")
+  suppressMessages(
+    df_plume <- read_csv(file_name) |> 
+      dplyr::select(date:confidence_index_in_perc) |>
+      complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+      dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
+      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area),) |> 
+      zoo::na.trim() |> 
+      mutate(zone = zone, .before = "date")
+  )
+  return(df_plume)
+}
+
+# Get the date of the plume data from the file name while loading
+load_plume_surface <- function(zone){
+  # Detect all plume surface csv files
+  plume_files <- dir(paste0("output/REGIONAL_PLUME_DETECTION/",zone,"/SEXTANT/SPM/merged/Standard/PLUME_DETECTION/DAILY"), 
+                     pattern = ".csv", recursive = TRUE, full.names = TRUE)
+  
+  # The function to be ply'd across all files
+  load_plume_1 <- function(file_name, zone){
+    # Get date
+    file_date <- as.Date(gsub(".csv", "", basename(file_name)))
+    # Load data and switch columns
+    df <- read_csv(file_name) |> 
+      mutate(zone = zone,
+             date = file_date) |> 
+      dplyr::select(zone, date, lon, lat) |> 
+      filter(!is.na(lon) & !is.na(lat))
+    return(df)
+  }
+  
+  # Load all daily maps into one data.frame
+  ## NB: There are a lot of files to load, need some heavy lifting to get it done
+  df_plume_surface <- plyr::ldply(plume_files, load_plume_1, .parallel = TRUE, zone = zone)
+  message(paste0("Loaded ", nrow(df_plume_surface), " plume surface points for zone ", zone))
+  return(df_plume_surface)
+}
+
 # Load river flow data
 # dir_name <- "data/RIVER_FLOW/BAY_OF_SEINE"
 load_river_flow <- function(dir_name){
@@ -107,6 +148,28 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
   return(wind_df)
 }
 
+# Load ROFI surface NetcDF
+load_ROFI <- function(file_name){
+  # Get zone from file name
+  if(grepl("Seine", file_name)){
+    zone <- "BAY_OF_SEINE"
+  } else if (grepl("Gironde", file_name)){
+    zone <- "BAY_OF_BISCAY"
+  } else if (grepl("Loire", file_name)){
+    zone <- "SOUTHERN_BRITTANY"
+  } else if (grepl("Rhone", file_name)){
+    zone <- "GULF_OF_LION"
+  } else {
+    stop("Zone not recognised from ROFI file name")
+  }
+  df_ROFI <- tidync(file_name) |> 
+    tidync::hyper_tibble() |> 
+    mutate(zone = zone,
+           date = as.Date(parse_date_time(time_counter, "Ymd HMS"))) |> 
+    dplyr::select(zone, date, ROFI_surface)
+  return(df_ROFI)
+}
+
 
 # Statistics --------------------------------------------------------------
 
@@ -122,6 +185,16 @@ adjust_doy <- function(year, doy) {
   } else {
     doy
   }
+}
+
+# Lagged correlations
+# NB: The x vector is lagged, meaning it is effectively pushed forward in time
+lagged_correlation <- function(x, y, max_lag) {
+  df_cor <- tibble(
+    lag = 0:max_lag,
+    cor = map_dbl(0:max_lag, ~ cor(y, lag(x, .), use = "pairwise.complete.obs"))
+  )
+  return(df_cor)
 }
 
 # Calculate STL
@@ -173,6 +246,17 @@ plume_clim_calc <- function(zone){
 
 
 # Plotting ----------------------------------------------------------------
+
+# Create pretty plot labels from zone values
+make_pretty_title <- function(df){
+  df <- df |> 
+    mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
+                                  zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
+                                  zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
+                                  zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
+    mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion")))
+  return(df)
+}
 
 # Scale one value to another for tidier double-y-axis plots
 sec_axis_adjustement_factors <- function(var_to_scale, var_ref) {

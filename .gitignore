@@ -9,6 +9,7 @@ data/DOWNLOAD_REPORTS
 data/INSITU_data
 data/RIVER_FLOW
 data/TIDES
+data/ROFI
 
 # Large outputs
 output/MATCH_UP_DATA

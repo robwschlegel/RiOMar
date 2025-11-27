@@ -24,17 +24,6 @@ zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
 
 # Functions ---------------------------------------------------------------
 
-# Get the date of the plume data from the file name while loading
-load_plume <- function(file_name){
-  # Get date
-  file_date <- as.Date(gsub(".csv", "", basename(file_name)))
-  # Load data and switch columns
-  df <- read_csv(file_name) |> 
-    mutate(date = file_date) |> 
-    dplyr::select(date, lon, lat)
-  return(df)
-}
-
 # Load all surface data for a RiOMar and plot the surface relation to drivers
 surface_plot <- function(zone){
   
@@ -67,7 +56,8 @@ surface_plot <- function(zone){
   
   # Load all daily maps into one data.frame
   ## NB: There are a lot of files to load, need some heavy lifting to get it done
-  df_plume <- plyr::ldply(plume_files, load_plume, .parallel = TRUE)
+  # TODO: Check that the addition of the 'zone' column here doesn' cause issues later on
+  df_plume <- plyr::ldply(plume_files, load_plume_surface, .parallel = TRUE)
   
   # Load river flow data
   df_river_flow <- load_river_flow(paste0("data/RIVER_FLOW/",zone))

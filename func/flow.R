@@ -65,7 +65,7 @@ flow_calc <- function(mouth_info){
   # Lagged correlations
   flow_plume_lag_cor <- tibble(
     lag = 0:30,
-    cor = map_dbl(0:30, ~ cor(flow_plume_df$flow, lag(flow_plume_df$area_of_the_plume_mask_in_km2, .), use = "complete.obs"))
+    cor = map_dbl(0:30, ~ cor(flow_plume_df$flow, lag(flow_plume_df$area_of_the_plume_mask_in_km2, .), use = "pairwise.complete.obs"))
   )
   
   # Plot wind speed and up/downwelling times
