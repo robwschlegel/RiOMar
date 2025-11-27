@@ -166,7 +166,8 @@ load_ROFI <- function(file_name){
     tidync::hyper_tibble() |> 
     mutate(zone = zone,
            date = as.Date(parse_date_time(time_counter, "Ymd HMS"))) |> 
-    dplyr::select(zone, date, ROFI_surface)
+    dplyr::select(zone, date, ROFI_surface) |> 
+    summarise(ROFI_surface = mean(ROFI_surface, na.rm = TRUE), .by = c("zone", "date"))
   return(df_ROFI)
 }
 
