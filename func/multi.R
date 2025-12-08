@@ -1395,3 +1395,43 @@ bar_plume_flow_prop <-ggplot(filter(plume_flow_prop, component_group != "total",
         panel.border = element_rect(fill = NA, colour = "black"))
 ggsave(filename = "figures/plume_flow_proportion_comparison.png", plot = bar_plume_flow_prop, height = 6, width = 12)
 
+
+
+# EMD example -------------------------------------------------------------
+
+# The needed package
+library(EMD)
+library(ggplot2)
+
+# Generate some dummy data
+set.seed(13)
+t <- seq(0, 10, by = 0.1)
+signal <- sin(2 * pi * t) + 0.5 * sin(2 * pi * 5 * t) + 0.2 * rnorm(length(t))
+
+# Perform EMD
+emd_result <- emd(signal, t)
+
+# Extract IMFs
+imfs <- emd_result$imf
+
+# Create a data frame for the original signal
+df_signal <- data.frame(Time = t, Signal = signal, Type = "Original")
+
+# Create a data frame for the IMFs
+df_imfs <- data.frame(Time = rep(t, times = ncol(imfs)),
+                      Signal = as.vector(t(imfs)),
+                      Type = rep(paste0("IMF ", 1:ncol(imfs)), each = length(t)))
+
+# Combine the data frames
+df_combined <- rbind(df_signal, df_imfs)
+
+# Plot the original signal and IMFs
+ggplot(df_combined, aes(x = Time, y = Signal, color = Type)) +
+  geom_line() +
+  facet_wrap(~ Type, ncol = 1, scales = "free_y") +
+  labs(title = "Empirical Mode Decomposition (EMD)",
+       x = "Time",
+       y = "Amplitude") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
