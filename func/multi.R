@@ -1435,3 +1435,10 @@ ggplot(df_combined, aes(x = Time, y = Signal, color = Type)) +
   theme_minimal() +
   theme(legend.position = "none")
 
+
+# BEAST example -----------------------------------------------------------
+
+library(Rbeast)
+
+# TODO: Create example
+
