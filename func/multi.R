@@ -25,7 +25,28 @@
 
 # Other analyses
 ## Get mean offshore distance of centroid
+## when creating GIFs, would be cool to have the centroid visualised as a 21 dot
+### it could leave a trail of 1 dots behind it per day
+### or fill colour could be left to show tide, wind, etc. on that day
 
+# More ideas
+## nmds of mean characteristics during plume events
+## extreme event analysis
+### need to establish a reasonable baseline, and go from there
+### could be interesting to use the time varying X11 seasonality
+### but then is it relevant to calculate event stats from the median signal?
+  ### one could modify the analysis to always take from the base, being zero
+### how would one establish the 90th percentile? Or rather, just always take everything over the seasonal signal
+## EMD - see Vincent email
+### percent contribution of each component to time series
+### changes over time as well
+## like a CTD cast, figure out a way to measure from when a plume peaks and then goes down below a certain threshold as a way of determining if it is an individual event
+### and then get statistics from that
+### also add up number of days with onshore wind, neap tide, etc.
+### the spatial threshold could be based on the percentile of the total plume area over the full time series
+### start searching by creating a contour plot of every 10th percentile
+## also account for the lon/lat of the centroid and how that relates to the other drivers
+# be able to say if the plume is increasing or decreasing in size so that the drivers on that day can be categorised under what the plume is doing
 
 # Libraries ---------------------------------------------------------------
 
