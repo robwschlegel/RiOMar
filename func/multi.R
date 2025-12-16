@@ -14,6 +14,7 @@
 ### how do X11 and STL differ?
 ## Look at seasonal Trends per month, not long term
 ## Get correlations of interannual and seasonal time series
+## Dynamic Linear Models (DLM) is another option: library(dlm)
 
 # Treat each pixel like its own time series and see what is happening with the forces when the pixel is triggered as a panache
 ## also how high SPM is while all this is happening
@@ -47,6 +48,9 @@
 ### start searching by creating a contour plot of every 10th percentile
 ## also account for the lon/lat of the centroid and how that relates to the other drivers
 # be able to say if the plume is increasing or decreasing in size so that the drivers on that day can be categorised under what the plume is doing
+
+# 
+
 
 # Libraries ---------------------------------------------------------------
 
