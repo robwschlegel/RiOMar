@@ -1,6 +1,7 @@
 # func/surface.R
 # Analyses specifically of surface data
 
+
 # Libraries ---------------------------------------------------------------
 
 source("func/util.R")
@@ -56,7 +57,6 @@ surface_plot <- function(zone){
   
   # Load all daily maps into one data.frame
   ## NB: There are a lot of files to load, need some heavy lifting to get it done
-  # TODO: Check that the addition of the 'zone' column here doesn' cause issues later on
   df_plume <- plyr::ldply(plume_files, load_plume_surface, .parallel = TRUE)
   
   # Load river flow data
