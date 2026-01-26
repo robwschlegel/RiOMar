@@ -22,6 +22,7 @@ output/ETANG_DE_BERRE
 
 # Figures
 figures/ARTICLE/FIGURES/*/DATA
+figures/surface_daily_maps*
 
 # C extensions
 *.so

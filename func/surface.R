@@ -2,7 +2,7 @@
 # Analyses specifically of surface data
 
 
-# Libraries ---------------------------------------------------------------
+# Setup ------------------------------------------------------------------
 
 source("func/util.R")
 library(tidyverse)
@@ -223,7 +223,55 @@ surface_plot <- function(zone){
 }
 
 
-# Run ---------------------------------------------------------------------
+# Plot surface analyses ---------------------------------------------------
 
 plyr::l_ply(zones, surface_plot)
+
+
+# Plot daily surface shapes -----------------------------------------------
+
+# Load all daily surface image csv files for the different plumes and plot them as facets per month and year
+# zone <- zones[4]
+surface_plot_daily_maps <- function(zone){
+  
+  # Set plume dir
+  # plume_dir <- paste0("output/REGIONAL_PLUME_DETECTION/",zone,"/SEXTANT/SPM/merged/Standard/PLUME_DETECTION/DAILY")
+  
+  # Detect all csv files
+  # plume_files <- dir(plume_dir, pattern = ".csv", recursive = TRUE, full.names = TRUE)
+  
+  # Load all daily maps into one data.frame
+  ## NB: There are a lot of files to load, need some heavy lifting to get it done
+  ## NB: Do not run in parallel. It is done elsewhere.
+  df_plume <- plyr::ldply(zone, load_plume_surface, .parallel = FALSE)
+  
+  # Add year and month
+  df_plume <- df_plume |> 
+    mutate(year = year(date),
+           month = month(date),
+           doy = yday(date),
+           day = day(date))
+  
+  # Plot per year and month
+  years <- sort(unique(df_plume$year))
+  months <- sort(unique(df_plume$month))
+  
+  # 
+  plot_daily <- ggplot(df_plume, aes(x = lon, y = lat)) +
+    # annotation_borders(regions = "France", fill = "grey70") +
+    geom_tile(aes(fill = day), alpha = 0.3) +
+    scale_fill_viridis_c(option = "A", na.value = "transparent") +
+    # coord_quickmap() +
+    labs(x = NULL, y = NULL, fill = "Day of month",
+         title = paste0("Daily plume maps per month and year for ",zone)) +
+    facet_grid(year~month) +
+    theme_bw() +
+    theme(legend.position = "bottom")
+  ggsave(filename = paste0("figures/surface_daily_maps_",zone,".png"), 
+         plot = plot_daily, height = 34, width = 36)
+  return()
+}
+
+# Plot daily surface maps for all zones
+plyr::l_ply(zones, surface_plot_daily_maps)
 
