@@ -159,7 +159,11 @@ flow_trend <- function(mouth_info){
   # Calculate trend 
   trend_daily_all <- flow_plume_daily_all |> 
     summarise(plume_slope = coef(lm(plume_area ~ date))["date"] * 365.25,
-              flow_slope = coef(lm(flow ~ date))["date"] * 365.25)
+              plume_perc = round((plume_slope/mean(flow_plume_daily_all$plume_area, na.rm = TRUE))*100, 2),
+              plume_p = round(summary(lm(plume_area ~ date))[["coefficients"]][2,4], 4),
+              flow_slope = coef(lm(flow ~ date))["date"] * 365.25,
+              flow_perc = round((flow_slope/mean(flow_plume_daily_all$flow, na.rm = TRUE))*100, 2),
+              flow_p = round(summary(lm(flow ~ date))[["coefficients"]][2,4], 4),)
   trend_monthly_all <- flow_plume_monthly_all |> 
     summarise(plume_slope = coef(lm(plume_area ~ date))["date"] * 365.25,
               flow_slope = coef(lm(flow ~ date))["date"] * 365.25)
@@ -168,8 +172,8 @@ flow_trend <- function(mouth_info){
               flow_slope = coef(lm(flow ~ date))["date"] * 365.25)
   trend_labels_all <- trend_daily_all |> 
     reshape2::melt() |> 
-    mutate(x = c(as.Date("2000-01-01"), as.Date("2015-01-01")),
-           y = round(max(flow_plume_daily_all$plume_area, na.rm = TRUE), -2))
+    mutate(x = c(rep(as.Date("1999-01-01"), 3), rep(as.Date("2012-01-01"), 3)),
+           y = round(max(flow_plume_daily_all$plume_area, na.rm = TRUE)-quantile(flow_plume_daily_all$plume_area, 0.1, na.rm = TRUE), -2))
   
   # Scale river flow to plume size
   scaling_factor <- sec_axis_adjustement_factors(flow_plume_daily_all$flow, flow_plume_daily_all$plume_area)
@@ -189,17 +193,21 @@ flow_trend <- function(mouth_info){
     geom_smooth(method = "lm", colour = "brown", linewidth = 1.8) +
     geom_smooth(aes(y = flow_scaled), method = "lm", colour = "black", linewidth = 2) +
     geom_smooth(aes(y = flow_scaled), method = "lm", colour = "blue", linewidth = 1.8) +
-    geom_hline(yintercept = plume_90, linetype = "dashed", colour = "brown", linewidth = 1) +
-    geom_hline(yintercept = flow_scaled_90, linetype = "dashed", colour = "blue", linewidth = 1) +
-    geom_label(data = filter(trend_labels_all, variable == "plume_slope"), size = 5, hjust = 0,
-               aes(x = x, y = y, label = paste0("Plume area slope = ", round(value[1], 2), " km^2 yr-1", sep = ""))) +
-    geom_label(data = filter(trend_labels_all, variable == "flow_slope"), size = 5, hjust = 0,
-                 aes(x = x, y = y, label = paste0("River flow slope = ", round(value[1], 2), " m^3 s-1 y-1", sep = ""))) +
+    # geom_hline(yintercept = plume_90, linetype = "dashed", colour = "brown", linewidth = 1) +
+    # geom_hline(yintercept = flow_scaled_90, linetype = "dashed", colour = "blue", linewidth = 1) +
+    geom_label(data = filter(trend_labels_all, x == "1999-01-01"), size = 5, hjust = 0,
+               aes(x = x[1], y = y[1], label = paste0("Plume area slope = ", round(value[variable == "plume_slope"], 2), " km^2 yr-1\n",
+                                                "Change per year = ",round(value[variable == "plume_perc"], 2), "% ; ",
+                                                "p-value = ",round(value[variable == "plume_p"], 2), "", sep = ""))) +
+    geom_label(data = filter(trend_labels_all, x == "2012-01-01"), size = 5, hjust = 0,
+                 aes(x = x, y = y, label = paste0("River flow slope = ", round(value[variable == "flow_slope"], 2), " m^3 s-1 y-1\n", 
+                                                  "Change per year = ",round(value[variable == "flow_perc"], 2), "% ; ",
+                                                  "p-value = ",round(value[variable == "flow_p"], 2), "", sep = ""))) +
     scale_y_continuous(name = "Plume area (km^2)",
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
                                            name = "River flow (m^3 s-1)")) +
     labs(x = NULL, title = paste(mouth_info$mouth_name,": Trends for daily plume area and river flow"),
-         subtitle = "Solid line = linear trend; dashed line = 90th percentile") +
+         subtitle = "Solid line = linear trend") +#; dashed line = 90th percentile") +
     scale_color_manual(name = "Variable",
                        values = c("plume" = "brown", "flow" = "blue"),
                        breaks = c("plume", "flow")) +
@@ -208,49 +216,50 @@ flow_trend <- function(mouth_info){
   # line_trend_base_all
   
   # Get the count of the 90th percentile days changing over time
-  flow_plume_90th_all <- flow_plume_daily_all |> 
-    mutate(plume_90th = ifelse(plume_area >= plume_90, 1, 0),
-           flow_90th = ifelse(flow >= flow_90, 1, 0),
-           year = year(date),
-           date = round_date(date, "month") + days(14)) |> 
-    summarise(plume_90th_count = sum(plume_90th, na.rm = TRUE),
-              flow_90th_count = sum(flow_90th, na.rm = TRUE), .by = c("date"))
+  # flow_plume_90th_all <- flow_plume_daily_all |> 
+  #   mutate(plume_90th = ifelse(plume_area >= plume_90, 1, 0),
+  #          flow_90th = ifelse(flow >= flow_90, 1, 0),
+  #          year = year(date),
+  #          date = round_date(date, "month") + days(14)) |> 
+  #   summarise(plume_90th_count = sum(plume_90th, na.rm = TRUE),
+  #             flow_90th_count = sum(flow_90th, na.rm = TRUE), .by = c("date"))
   
   # The trends in 90th percentile exceedance
-  trend_90th_all <- flow_plume_90th_all |> 
-    summarise(plume_90th_slope = coef(lm(plume_90th_count ~ date))["date"] * 365.25,
-              flow_90th_slope = coef(lm(flow_90th_count ~ date))["date"] * 365.25)
-  trend_90th_labels_all <- trend_90th_all |> 
-    reshape2::melt() |> 
-    mutate(x = c(as.Date("2000-01-01"), as.Date("2015-01-01")),
-           y = max(flow_plume_90th_all$flow_90th_count, na.rm = TRUE))
+  # trend_90th_all <- flow_plume_90th_all |> 
+  #   summarise(plume_90th_slope = coef(lm(plume_90th_count ~ date))["date"] * 365.25,
+  #             flow_90th_slope = coef(lm(flow_90th_count ~ date))["date"] * 365.25)
+  # trend_90th_labels_all <- trend_90th_all |> 
+  #   reshape2::melt() |> 
+  #   mutate(x = c(as.Date("2000-01-01"), as.Date("2015-01-01")),
+  #          y = max(flow_plume_90th_all$flow_90th_count, na.rm = TRUE))
   
   # Plot the 90th perc. exceedances as barplots
-  line_trend_90th_all <-  flow_plume_90th_all |>
-    dplyr::rename(plume = plume_90th_count, flow = flow_90th_count) |> 
-    pivot_longer(plume:flow) |> 
-    ggplot(aes(x = date, y = value)) +
-    geom_col(alpha = 0.5, aes(fill = name), position = "dodge") +
-    geom_smooth(method = "lm", linewidth = 2, se = FALSE, colour = "black", aes(group = name)) +
-    geom_smooth(method = "lm", linewidth = 1.8, se = FALSE, aes(colour = name)) +
-    # geom_hline(yintercept = mean(flow_plume_90th_all$plume_90th_count), linetype = "dashed", colour = "brown", linewidth = 1) +
-    # geom_hline(yintercept = mean(flow_plume_90th_all$flow_90th_count), linetype = "dashed", colour = "blue", linewidth = 1) +
-    geom_label(data = filter(trend_90th_labels_all, variable == "plume_90th_slope"), size = 5, hjust = 0,
-               aes(x = x, y = y, label = paste0("Plume 90th slope = ", round(value[1], 2), " days yr-1", sep = ""))) +
-    geom_label(data = filter(trend_90th_labels_all, variable == "flow_90th_slope"), size = 5, hjust = 0,
-               aes(x = x, y = y, label = paste0("River flow 90th slope = ", round(value[1], 2), " days yr-1", sep = ""))) +
-    labs(x = NULL, y = "Days per month above 90th perc. thresh. (n)",
-         title = paste(mouth_info$mouth_name,": Trends for daily exceedance of 90th percentile"),
-         subtitle = "Solid line = linear trend") +
-    scale_color_manual(name = "Variable",
-                       values = c("plume" = "brown", "flow" = "blue"),
-                       breaks = c("plume", "flow"), aesthetics = c("colour", "fill")) +
-    theme(legend.position = "bottom",
-          panel.border = element_rect(fill = NA, colour = "black"))
+  # line_trend_90th_all <-  flow_plume_90th_all |>
+  #   dplyr::rename(plume = plume_90th_count, flow = flow_90th_count) |> 
+  #   pivot_longer(plume:flow) |> 
+  #   ggplot(aes(x = date, y = value)) +
+  #   geom_col(alpha = 0.5, aes(fill = name), position = "dodge") +
+  #   geom_smooth(method = "lm", linewidth = 2, se = FALSE, colour = "black", aes(group = name)) +
+  #   geom_smooth(method = "lm", linewidth = 1.8, se = FALSE, aes(colour = name)) +
+  #   # geom_hline(yintercept = mean(flow_plume_90th_all$plume_90th_count), linetype = "dashed", colour = "brown", linewidth = 1) +
+  #   # geom_hline(yintercept = mean(flow_plume_90th_all$flow_90th_count), linetype = "dashed", colour = "blue", linewidth = 1) +
+  #   geom_label(data = filter(trend_90th_labels_all, variable == "plume_90th_slope"), size = 5, hjust = 0,
+  #              aes(x = x, y = y, label = paste0("Plume 90th slope = ", round(value[1], 2), " days yr-1", sep = ""))) +
+  #   geom_label(data = filter(trend_90th_labels_all, variable == "flow_90th_slope"), size = 5, hjust = 0,
+  #              aes(x = x, y = y, label = paste0("River flow 90th slope = ", round(value[1], 2), " days yr-1", sep = ""))) +
+  #   labs(x = NULL, y = "Days per month above 90th perc. thresh. (n)",
+  #        title = paste(mouth_info$mouth_name,": Trends for daily exceedance of 90th percentile"),
+  #        subtitle = "Solid line = linear trend") +
+  #   scale_color_manual(name = "Variable",
+  #                      values = c("plume" = "brown", "flow" = "blue"),
+  #                      breaks = c("plume", "flow"), aesthetics = c("colour", "fill")) +
+  #   theme(legend.position = "bottom",
+  #         panel.border = element_rect(fill = NA, colour = "black"))
   
   # Combine plots and save
-  flow_plume_combi <- line_trend_base_all / line_trend_90th_all
-  ggsave(filename = paste0("figures/trends_plume_flow_",mouth_info$mouth_name,".png"), width = 12, height = 8, dpi = 600)
+  # flow_plume_combi <- line_trend_base_all / line_trend_90th_all
+  ggsave(filename = paste0("figures/trends_plume_flow_",mouth_info$mouth_name,".png"), 
+         line_trend_base_all, width = 12, height = 6, dpi = 600)
 }
 
 
@@ -259,6 +268,6 @@ flow_trend <- function(mouth_info){
 # Compare panache size and river flow data
 plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_comp)
 
-# Calculate the linear trends and 90th percentile days for panache and river flow
+# Calculate the linear trends for panache and river flow
 plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_trend, .parallel = TRUE)
 

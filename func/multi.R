@@ -1467,3 +1467,44 @@ library(Rbeast)
 
 # TODO: Create example
 
+
+# POC/DOC -----------------------------------------------------------------
+
+# Load MOOSE data
+rhone_moose <- read_csv("~/Downloads/Water_sample_analyses_-_MOOSE_-_Rhone_river/SEDOO-MOOSE-Rhone  Biogenic data-2005-2022.csv")
+
+# Melt and columns of interest
+rhone_moose_long <- rhone_moose |> 
+  dplyr::rename(debit_m3s = `Débit  moyen – m3/s`,
+                SPM_mgL = `Matière en suspension – mg/litre`,
+                DOC_µmCL = `carbone organique dissous – µmoles(C)/litre`,
+                POC_µmCL = `Carbone organique particulaire – µmoles(C)/litre`) |>
+  mutate(debit_m3s = as.numeric(debit_m3s),
+         SPM_mgL = as.numeric(SPM_mgL),
+         DOC_µmCL = as.numeric(DOC_µmCL),
+         POC_µmCL = as.numeric(POC_µmCL)) |>
+  dplyr::select(date, debit_m3s, SPM_mgL, DOC_µmCL, POC_µmCL) |>
+  pivot_longer(cols = c(debit_m3s, SPM_mgL, DOC_µmCL, POC_µmCL), names_to = "variable", values_to = "value") |> 
+  mutate(date = as.Date(date, format = "%d/%m/%Y")) |> 
+  mutate(variable = factor(variable, levels = c("debit_m3s", "SPM_mgL", "DOC_µmCL", "POC_µmCL"),
+                           labels = c("River discharge (m3 s-1)", "Suspended particulate matter (mg L-1)",
+                                      "Dissolved organic carbon (µmol C L-1)", "Particulate organic carbon (µmol C L-1)"))) |> 
+  mutate(date = case_when(year(date) < 2005 ~ date + years(2000),
+                          TRUE ~ date))
+
+# Get linear model stats
+rhone_moose_lm_stats <- rhone_moose_long |> 
+  summarise(var_slope = coef(lm(value ~ date))["date"] * 365.25,
+            # var_perc = round((value/mean(rhone_moose_long$value, na.rm = TRUE))*100, 2),
+            var_p = round(summary(lm(value ~ date))[["coefficients"]][2,4], 4), .by = "variable")
+
+# Quick line plot faceted by variable
+line_rhone_moose <- ggplot(rhone_moose_long, aes(x = date, y = value)) +
+  geom_line() +
+  geom_smooth(method = "lm") +
+  facet_wrap(~variable, scales = "free_y", ncol = 1) +
+  labs(x = NULL, y = NULL, title = "Rhône river (MOOSE)") +
+  ggplot_theme() +
+  theme(panel.border = element_rect(fill = NA, colour = "black"))
+ggsave(filename = "figures/rhone_moose_biogenic_timeseries.png",
+       plot = line_rhone_moose, height = 12, width = 12)
