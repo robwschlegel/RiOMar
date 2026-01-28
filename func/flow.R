@@ -8,6 +8,8 @@ source("func/util.R")
 library(tidyverse)
 library(tidync)
 library(seasonal)
+library(sandwich) # For HAC covariance tests
+library(lmtest) # For more detailed linear model tests
 library(patchwork)
 library(doParallel); doParallel::registerDoParallel(cores = 4)
 
@@ -163,7 +165,7 @@ flow_trend <- function(mouth_info){
               plume_p = round(summary(lm(plume_area ~ date))[["coefficients"]][2,4], 4),
               flow_slope = coef(lm(flow ~ date))["date"] * 365.25,
               flow_perc = round((flow_slope/mean(flow_plume_daily_all$flow, na.rm = TRUE))*100, 2),
-              flow_p = round(summary(lm(flow ~ date))[["coefficients"]][2,4], 4),)
+              flow_p = round(summary(lm(flow ~ date))[["coefficients"]][2,4], 4))
   trend_monthly_all <- flow_plume_monthly_all |> 
     summarise(plume_slope = coef(lm(plume_area ~ date))["date"] * 365.25,
               flow_slope = coef(lm(flow ~ date))["date"] * 365.25)
@@ -270,4 +272,126 @@ plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_comp)
 
 # Calculate the linear trends for panache and river flow
 plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_trend, .parallel = TRUE)
+
+
+# Trends and components ---------------------------------------------------
+
+# TODO: Decompose flow and panache time series with STL and X11 and then fit linear trends
+
+# Linear and seasonal decomposition matching Toulouse workflow
+# https://www.frontiersin.org/journals/marine-science/articles/10.3389/fmars.2022.1045667/full
+# https://github.com/NOAA-PMEL/TOATS/blob/main/TOATS.ipynb
+
+# Choose zone
+zone <- "GULF_OF_LION"
+
+# Load river flow data
+flow_df <- load_river_flow(paste0("data/RIVER_FLOW/",zone))
+
+# Load panache time series based on river mouth name
+plume_df <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")) |> 
+  dplyr::select(date:path_to_file) |> dplyr::select(-path_to_file) |> 
+  mutate(area_of_the_plume_mask_in_km2 = ifelse(area_of_the_plume_mask_in_km2 > 20000, NA, area_of_the_plume_mask_in_km2))
+
+# Combine
+flow_plume_df <- left_join(plume_df, flow_df, join_by(date)) |> 
+  zoo::na.trim() |> 
+  dplyr::select(date, area_of_the_plume_mask_in_km2, flow) |> 
+  dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
+  mutate(month = month(date),
+         year = year(date))
+
+# Calculate residuals and de-trend
+flow_plume_resids_df <- flow_plume_df |> 
+  mutate(flow_resid = residuals(lm(flow ~ as.numeric(date), na.action = na.exclude)),
+         flow_flat = flow_resid,
+         plume_area_resid = residuals(lm(plume_area ~ as.numeric(date), na.action = na.exclude)),
+         plume_area_flat = plume_area_resid)
+
+# Test visual
+ggplot(data = flow_plume_resids_df, aes(x = date, y = plume_area)) +
+  geom_point() +
+  # geom_point(aes(y = flow_resid), colour = "red") +
+  geom_point(aes(y = plume_area_flat), colour = "blue") +
+  # geom_smooth(method = "lm") #+
+  geom_smooth(aes(y = plume_area_flat), method = "lm", colour = "purple")
+
+# Calculate monthly and annual clims
+flow_plume_clim_df <- flow_plume_resids_df |> 
+  summarise(flow_flat_monthly = mean(flow_flat, na.rm = TRUE),
+            plume_area_flat_monthly = mean(plume_area_flat, na.rm = TRUE), .by = "month") |> 
+  mutate(flow_flat_clim = flow_flat_monthly-mean(flow_flat_monthly),
+         plume_area_flat_clim = plume_area_flat_monthly-mean(plume_area_flat_monthly))
+
+# Calculate seasonal amplitudes
+# NB: Not used for final stats
+flow_plume_seas_amp <- flow_plume_clim_df |> 
+  summarise(flow_flat_min = min(flow_flat_clim, na.rm = TRUE),
+            flow_flat_max = max(flow_flat_clim, na.rm = TRUE),
+            plume_area_flat_min = min(plume_area_flat_clim, na.rm = TRUE),
+            plume_area_flat_max = max(plume_area_flat_clim, na.rm = TRUE))
+
+# Get annual averages
+# NB: Not used for final stats
+flow_plume_annual_df <- flow_plume_resids_df |> 
+  summarise(flow_resid_annual = mean(flow_resid, na.rm = TRUE),
+            plume_area_resid_annual = mean(plume_area_resid, na.rm = TRUE), .by = "year")
+
+# Calculate non-de-trended monthly means and apply monthly clim correction
+flow_plume_monthly_df <- flow_plume_df |> 
+  mutate(date = floor_date(date, "month")) |> 
+  summarise(flow_monthly = mean(flow, na.rm = TRUE),
+            plume_area_monthly = mean(plume_area, na.rm = TRUE), .by = c("year", "month", "date")) |> 
+  left_join(flow_plume_clim_df, by = join_by(month)) |> 
+  mutate(flow_monthly_adj = flow_monthly-flow_flat_clim,
+         plume_area_monthly_adj = plume_area_monthly-plume_area_flat_clim) |> 
+  # TODO: Make this dynamic based on input data
+  # To update once the newer flow data have been added
+  filter(date <= as.Date("2023-12-31")) |> 
+  mutate(date_int = seq(1:n()), .after = "date") # Necessary for linear model
+
+# Fit Ar(1) model to residuals to get autocorrelation structure
+plume_area_resid_ts <- ts(zoo::na.approx(flow_plume_resids_df$plume_area_resid), 
+                          frequency = 365, start = c(year(min(flow_plume_resids_df$date)), 1))
+plume_area_ar_model <- ar(plume_area_resid_ts, order.max = 1)
+plume_area_phi_est <- plume_area_ar_model$ar  # Estimated AR(1) coefficient
+
+# Construct the autocorrelation matrix (simplified)
+rho <- function(k, phi) phi^abs(k)
+n <- nrow(flow_plume_monthly_df)
+Sigma_inv <- matrix(0, n, n)
+for (i in 1:n) {
+  for (j in 1:n) {
+    Sigma_inv[i, j] <- rho(i - j, plume_area_phi_est)
+  }
+}
+Sigma_inv <- solve(Sigma_inv) # Inverse of the autocorrelation matrix
+weights <- diag(Sigma_inv)
+
+# Or more directly get the variance of the residulas after STL decomposition
+stl_plume <- stl(ts(zoo::na.approx(flow_plume_monthly_df$flow_monthly_adj), 
+                    frequency = 12, start = c(year(min(flow_plume_monthly_df$date)), 1)), s.window = "periodic")
+stl_plume_var <- as.vector(stl_plume$time.series[,"remainder"])
+stl_weights <- 1 / (stl_plume_var^2)
+
+# Calculate WLS of de-seasoned monthly values with Ar(1) method
+model_wls <- lm(flow_plume_monthly_df$plume_area_monthly_adj~flow_plume_monthly_df$date, weights = weights)
+summary(model_wls)
+
+# Calculate WLS of de-seasoned monthly values with STL remainder method
+model_stl_wls <- lm(flow_plume_monthly_df$plume_area_monthly_adj~flow_plume_monthly_df$date, weights = stl_weights)
+summary(model_stl_wls)
+
+# Calculate OLS of de-seasoned monthly values
+model_ols <- lm(flow_plume_monthly_df$plume_area_monthly_adj~flow_plume_monthly_df$date)
+summary(model_ols)
+
+# Plot the results
+ggplot(data = flow_plume_df, aes(x = date, y = plume_area)) +
+  geom_point(colour = "sienna", alpha = 0.3) +
+  geom_point(data = flow_plume_monthly_df, aes(y = plume_area_monthly), colour = "black", alpha = 0.6, size = 3) +
+  geom_point(data = flow_plume_monthly_df, aes(y = plume_area_monthly_adj), colour = "red", size = 3) +
+  # geom_smooth(method = "lm", se = FALSE, colour = "red")
+  geom_abline(intercept = coef(model_wls)[1], slope = coef(model_wls)[2], linewidth = 2, colour = "hotpink") +
+  geom_abline(intercept = coef(model_stl_wls)[1], slope = coef(model_stl_wls)[2], linewidth = 2, colour = "magenta")
 
