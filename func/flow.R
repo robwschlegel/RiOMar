@@ -265,7 +265,8 @@ flow_trend <- function(mouth_info){
 }
 
 
-# Run ---------------------------------------------------------------------
+
+# Calculate flow analyses -------------------------------------------------
 
 # Compare panache size and river flow data
 plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_comp)
@@ -351,40 +352,39 @@ flow_plume_monthly_df <- flow_plume_df |>
   mutate(date_int = seq(1:n()), .after = "date") # Necessary for linear model
 
 # Fit Ar(1) model to residuals to get autocorrelation structure
-plume_area_resid_ts <- ts(zoo::na.approx(flow_plume_resids_df$plume_area_resid), 
-                          frequency = 365, start = c(year(min(flow_plume_resids_df$date)), 1))
+plume_area_resid_ts <- ts(zoo::na.approx(flow_plume_monthly_df$flow_monthly_adj), 
+                          frequency = 12, start = c(year(min(flow_plume_monthly_df$date)), 1))
 plume_area_ar_model <- ar(plume_area_resid_ts, order.max = 1)
 plume_area_phi_est <- plume_area_ar_model$ar  # Estimated AR(1) coefficient
+plume_area_sigma_est <- sqrt(plume_area_ar_model$var.pred)  # Estimated noise variance
+plume_area_error_variance <- plume_area_sigma_est^2 / (1 - plume_area_phi_est^2)
+ar_weights <- rep(1 / (plume_area_error_variance^2), nrow(flow_plume_monthly_df))
 
-# Construct the autocorrelation matrix (simplified)
-rho <- function(k, phi) phi^abs(k)
-n <- nrow(flow_plume_monthly_df)
-Sigma_inv <- matrix(0, n, n)
-for (i in 1:n) {
-  for (j in 1:n) {
-    Sigma_inv[i, j] <- rho(i - j, plume_area_phi_est)
-  }
-}
-Sigma_inv <- solve(Sigma_inv) # Inverse of the autocorrelation matrix
-weights <- diag(Sigma_inv)
-
-# Or more directly get the variance of the residulas after STL decomposition
+# Or more directly get the variance of the residuals after STL decomposition
 stl_plume <- stl(ts(zoo::na.approx(flow_plume_monthly_df$flow_monthly_adj), 
                     frequency = 12, start = c(year(min(flow_plume_monthly_df$date)), 1)), s.window = "periodic")
 stl_plume_var <- as.vector(stl_plume$time.series[,"remainder"])
 stl_weights <- 1 / (stl_plume_var^2)
 
 # Calculate WLS of de-seasoned monthly values with Ar(1) method
-model_wls <- lm(flow_plume_monthly_df$plume_area_monthly_adj~flow_plume_monthly_df$date, weights = weights)
-summary(model_wls)
+model_ar_wls <- lm(flow_plume_monthly_df$plume_area_monthly_adj~flow_plume_monthly_df$date, weights = ar_weights)
+summary(model_ar_wls)
+coef(model_ar_wls)[2]*365
 
 # Calculate WLS of de-seasoned monthly values with STL remainder method
 model_stl_wls <- lm(flow_plume_monthly_df$plume_area_monthly_adj~flow_plume_monthly_df$date, weights = stl_weights)
 summary(model_stl_wls)
+coef(model_stl_wls)[2]*365
 
 # Calculate OLS of de-seasoned monthly values
 model_ols <- lm(flow_plume_monthly_df$plume_area_monthly_adj~flow_plume_monthly_df$date)
 summary(model_ols)
+coef(model_ols)[2]*365
+
+# Compute Newey-West standard errors and display coefficients and Newey-West standard errors
+coeftest(model_ar_wls, vcov = vcovHAC(model_ar_wls))
+coeftest(model_stl_wls, vcov = vcovHAC(model_stl_wls))
+coeftest(model_ols, vcov = vcovHAC(model_ols))
 
 # Plot the results
 ggplot(data = flow_plume_df, aes(x = date, y = plume_area)) +
@@ -392,6 +392,10 @@ ggplot(data = flow_plume_df, aes(x = date, y = plume_area)) +
   geom_point(data = flow_plume_monthly_df, aes(y = plume_area_monthly), colour = "black", alpha = 0.6, size = 3) +
   geom_point(data = flow_plume_monthly_df, aes(y = plume_area_monthly_adj), colour = "red", size = 3) +
   # geom_smooth(method = "lm", se = FALSE, colour = "red")
-  geom_abline(intercept = coef(model_wls)[1], slope = coef(model_wls)[2], linewidth = 2, colour = "hotpink") +
-  geom_abline(intercept = coef(model_stl_wls)[1], slope = coef(model_stl_wls)[2], linewidth = 2, colour = "magenta")
+  geom_abline(intercept = coeftest(model_ar_wls, vcov = vcovHAC(model_ar_wls))[1,1],
+              slope = coeftest(model_ar_wls, vcov = vcovHAC(model_ar_wls))[2,1], linewidth = 2, colour = "darkblue") +
+  geom_abline(intercept = coeftest(model_stl_wls, vcov = vcovHAC(model_stl_wls))[1,1],
+              slope = coeftest(model_stl_wls, vcov = vcovHAC(model_stl_wls))[2,1], linewidth = 2, colour = "darkgreen") +
+  geom_abline(intercept = coeftest(model_ols, vcov = vcovHAC(model_ols))[1,1],
+              slope = coeftest(model_ols, vcov = vcovHAC(model_ols))[2,1], linewidth = 2, colour = "darkred")
 
