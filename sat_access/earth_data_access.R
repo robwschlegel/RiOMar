@@ -41,33 +41,8 @@ earth_up <- read_csv("~/pCloudDrive/Documents/info/earthdata_pswd.csv")
 
 # Functions ---------------------------------------------------------------
 
-# rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD09GA\\.", full.names = TRUE))
-# mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44W\\.", full.names = TRUE))
-
-# study_coords <- matrix(c(
-#   6.9, 43.4,  # Bottom-left corner
-#   7.7, 43.4, # Bottom-right corner
-#   7.7, 43.8, # Top-right corner
-#   6.9, 43.8,  # Top-left corner
-#   6.9, 43.4   # Close the polygon (same as first point)
-# ), ncol = 2, byrow = TRUE)
-# study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
-
-# Raster tests
-# file_name_df <- rast_files[rast_files$date == "2020-10-01",]
-# bbox = study_bbox
-# out_dir = "~/data/MODIS/"
-# band_num = 2
-# land_mask = FALSE
-
-# Mask tests
-# file_name_df <- mask_files[mask_files$date == "2020-01-01",]
-# bbox = study_bbox
-# out_dir = "~/data/MODIS/"
-# land_mask = TRUE
-# band_num = 2
-
 # Process MODIS data in a batch
+# Doesn't work well with L1 products or very large study areas
 MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE){
   
   # Get date from filenames
@@ -92,7 +67,6 @@ MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE)
   }
   
   # Load  and merge the files with desired layers etc.
-  # NB: If run in parallel this will cause a crash to desktop
   if(grepl("MYD01|MYD02", file_product)){
     
     stop("MODIS L1 data are not currently working with this processing workflow. Rather use a different software.")
@@ -115,7 +89,6 @@ MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE)
       # Run and merge each individual file
       data_step <- 2
       while(data_step <= length(file_name_df$filename)){
-        # data_base_i <- rectify(data_layers[[data_step]])
         data_proj_i <- project(rast(file_name_df$filename[1], lyrs = band_num), y = data_proj)
         data_crop_i <- crop(data_proj_i, bbox)
         data_crop <- terra::merge(data_crop, data_crop_i)
@@ -132,14 +105,6 @@ MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE)
     data_base <- terra::ifel(data_base %in% c(1, 2, 3, 4, 5), NA, data_base)
     # plot(data_base)
   }
-  
-  # Project to EPSG:4326
-  # data_base_proj <- project(data_base, y = "EPSG:4326")
-  # plot(data_base_proj)
-  
-  # Crop to bbox and exit
-  # data_crop <- crop(data_base_proj, bbox)
-  # plot(data_crop)
   
   # Save and quit
   writeRaster(data_base, file_name_out, overwrite = TRUE)
@@ -210,13 +175,6 @@ study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
 plot(study_coords)
 
 # Chose the product ID you want to download
-# product_ID <- "MYD09A1" # MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
-# product_ID <- "MYD01" # MODIS/Aqua Level 1
-# product_ID <- "MYD021KM" # Level 1B 1 KM
-# product_ID <- "MYD02HKM" # Level 1B 500 m
-# product_ID <- "MYD02QKM" # Level 1B 250 m
-# product_ID <- "MYD09" # Level 2 daily
-# product_ID <- "MYD09GHK" # L2G 500 m
 product_ID <- "MYD09GA" # L2G 500 m
 
 # Look at the server and version info for the product of choice
@@ -225,12 +183,8 @@ earth_data_catalogue[earth_data_catalogue$short_name == product_ID,]
 # Then choose the server and version number
 # NB: 'LPCLOUD' is the preferred server, but is not always available
 # NB: One should generally choose the newest version, i.e. the biggest number
-# product_server <- "LPCLOUD" # NB: Change this if not shown in the output shown above
-# product_version <- "061" # NB: Change this if not shown in the output shown above
-
-# For example:
-product_server <- "LPCLOUD"
-product_version <- "061"
+product_server <- "LPCLOUD" # NB: Change this if not shown in the output shown above
+product_version <- "061" # NB: Change this if not shown in the output shown above
 
 
 ## 2) Download files -------------------------------------------------------
@@ -243,7 +197,7 @@ luna::getNASA(product_ID, start_date, end_date, aoi = study_bbox, download = FAL
               server = product_server, version = product_version)
 
 # If that looks reasonable, download them
-# NB: If this doesn;t work, then the product ID, even if it is listed, may not be findable by the luna package
+# NB: If this doesn't work, then the product ID, even if it is listed, may not be findable by the luna package
 luna::getNASA(product_ID, start_date, end_date, aoi = study_bbox, download = TRUE, overwrite = FALSE, 
               server = product_server, version = product_version,
               path = dl_dir, username = earth_up$usrname, password = earth_up$psswrd)
@@ -258,14 +212,12 @@ luna::getNASA("MOD44W", start_date, end_date, aoi = study_bbox, download = TRUE,
 # Set file pathways
 # NB: Change the directory to where you saved the files if it was changed
 # NB: Change the pattern in rast_files to match the product ID you used if it is different
-# rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD09A1", full.names = TRUE)) # Level 3 8-day
 rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD09GA\\.", full.names = TRUE)) # Level 2 daily
 mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44W\\.", full.names = TRUE))
 
 # Process all of the water mask files
 # NB: This requires that this folder exists: ~/data/MODIS
 # IF not, create it or change the directories below as desired
-# NB: this file only needs to be created once
 plyr::d_ply(.data = mask_files, .variables = c("date"), .fun = MODIS_proc, .parallel = FALSE,
             bbox = study_bbox, out_dir = "~/data/MODIS", band_num = 2, land_mask = TRUE)
 
@@ -278,7 +230,6 @@ plot(MODIS_mask)
 # Prep one day of MODIS data
 # NB: This requires that this folder exists: ~/data/MODIS
 # IF not, create it or change the directories below to match 
-# NB: this file only needs to be created once
 plyr::d_ply(.data = rast_files, .variables = c("date"), .fun = MODIS_proc, .parallel = FALSE,
             bbox = study_bbox, out_dir = "~/data/MODIS", band_num = 1, land_mask = FALSE)
 
@@ -302,7 +253,7 @@ plot(MODIS_water)
 
 # Convert to data.frame for easy plotting
 MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |> 
-  # NB: Change 'sur_refl_b01' to match the correct column name in your data
+  # NB: Change 'sur_refl_b01_1' to match the correct column name in your data
   dplyr::rename(Rrs = sur_refl_b01_1)
 
 
@@ -311,8 +262,8 @@ MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |>
 # Map
 pl_map <- MODIS_water_df |> 
   # Round all surface reflectance values greater than 0.1 down to 0.1 for better plotting
-  mutate(Rrs = case_when(Rrs > 0.1 ~ 0.1, 
-                         Rrs < 0 ~ 0, TRUE ~ Rrs)) |> 
+  # mutate(Rrs = case_when(Rrs > 0.1 ~ 0.1, 
+  #                        Rrs < 0 ~ 0, TRUE ~ Rrs)) |> 
   ggplot() +
   annotation_borders(fill = "grey80") +
   geom_tile(aes(x = x, y = y, fill = Rrs)) +
