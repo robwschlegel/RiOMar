@@ -11,15 +11,15 @@
 
 # Luna package is used to access large spatial data products
 # NB: It is not available on r-universe not CRAN
-if (!"luna" %in% installed.packages()) {
-  install.packages('luna', repos = 'https://rspatial.r-universe.dev')
-}
+# if (!"luna" %in% installed.packages()) {
+#   install.packages('luna', repos = 'https://rspatial.r-universe.dev')
+# }
 
 # Check for missing libraries and install them if necessary
 # We will use th plyr package, but we will not load it explicitly
-if (!all(c("maps", "tidyverse", "ncdf4", "terra", "doParallel", "plyr") %in% installed.packages())) {
-  install.packages(c("maps", "tidyverse", "ncdf4", "terra", "doParallel", "plyr"), repos = "https://cloud.r-project.org/")
-}
+# if (!all(c("maps", "tidyverse", "ncdf4", "terra", "doParallel", "plyr") %in% installed.packages())) {
+#   install.packages(c("maps", "tidyverse", "ncdf4", "terra", "doParallel", "plyr"), repos = "https://cloud.r-project.org/")
+# }
 
 library(tidyverse)
 library(ncdf4)
@@ -41,11 +41,31 @@ earth_up <- read_csv("~/pCloudDrive/Documents/info/earthdata_pswd.csv")
 
 # Functions ---------------------------------------------------------------
 
+rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD021KM", full.names = TRUE)) # Level 1B
+mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44W", full.names = TRUE))
+
+study_coords <- matrix(c(
+  6.9, 43.4,  # Bottom-left corner
+  7.7, 43.4, # Bottom-right corner
+  7.7, 43.8, # Top-right corner
+  6.9, 43.8,  # Top-left corner
+  6.9, 43.4   # Close the polygon (same as first point)
+), ncol = 2, byrow = TRUE)
+study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
+
+# Raster tests
 file_name_df <- rast_files[rast_files$date == "2020-10-01",]
 bbox = study_bbox
 out_dir = "~/data/MODIS/"
 band_num = 1
 land_mask = FALSE
+
+# Mask tests
+file_name_df <- mask_files[mask_files$date == "2020-01-01",]
+bbox = study_bbox
+out_dir = "~/data/MODIS/"
+land_mask = TRUE
+band_num = 2
 
 # Process MODIS data in a batch
 MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE){
@@ -74,41 +94,53 @@ MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE)
   # Load  and merge the files with desired layers etc.
   # NB: If run in parallel this will cause a crash to desktop
   # TODO: Get this to detect if it should use 'subds' or 'lyrs'
-  # data_layers <- rast(file_name_df$filename[1:2], subds = band_num)
-  data_layers <- lapply(file_name_df$filename[1:2], rast, subds = band_num)
-  # data_layers_rectify <- lapply(data_layers, rectify)
-  data_extents <- lapply(data_layers, ext)
-  extents_matrix <- do.call(flatten, data_extents)
-  extents_matrix <- do.call(rbind, data_extents)
-  extents_matrix <- do.call(terra::merge, data_extents)
-  extents_matrix <- lapply(terra::merge, data_extents)
-  extents_matrix <- union(data_extents)
-  
-  # TODO: Improve this so it can run on a list and doesn't require a loop
-  data_extent <- ext(data_layers[[1]])
-  for(i in 1:length(data_layers)){
-    data_extent_i <- ext(data_layers[[i]])
-    data_extent <- union(data_extent, data_extent_i)
+  if(file_product %in% c("MYD021KM")){
+    data_layers <- lapply(file_name_df$filename, rast, subds = 1, lyrs = band_num)
+    data_layers <- lapply(data_layers, rectify)
+  } else {
+    data_layers <- lapply(file_name_df$filename, rast, subds = band_num)
   }
+
+  # Rectify to even north/south grid
+  # data_layers_rectify <- lapply(data_layers, rectify)
   
-  data_extents[1]
-  # data_layers <- lapply(file_name_df$filename, rast, lyrs = band_num) # Chose the band number (e.g. wavelength range)
-  # data_layers <- lapply(file_name_df$filename, rast) 
-  # plot(data_layers[1][[1]])
+  # get all extents
+  # data_extents <- lapply(data_layers_rectify, ext)
   
-  test1 <- rast(file_name_df$filename[1], subds = band_num)
-  union_extent <- ext(test1)
-  union_extent <- ext(c(data_layers_rectify))
-  # plot(test1)
+  # Get the full extent of the files being loaded
+  # TODO: Improve this so it can run on a list and doesn't require a loop
+  # data_extent <- ext(data_layers[[1]])
+  # for(i in 1:length(data_layers)){
+  #   data_extent_i <- ext(data_layers[[i]])
+  #   data_extent <- union(data_extent, data_extent_i)
+  # }
+  # rm(data_extent_i); gc()
+  
+  # Extend all rasters to the total extent
+  # aligned_rasters <- lapply(data_layers, function(r) extend(r, data_extent))
+  
+  # Stack them now that they should match up
+  # data_stack <- rast(aligned_rasters)
+  
+  # test1 <- rast(file_name_df$filename[1], subds = band_num)
+  # union_extent <- ext(test1)
+  # union_extent <- ext(c(data_layers_rectify))
+  # # plot(test1)
   
   # Calculate the union of all extents
-  
-  union_extent <- ext(do.call(ext, data_layers))
+    # union_extent <- ext(do.call(ext, data_layers))
   
   # Extend all rasters to this union
-  aligned_rasters <- lapply(rasters, function(r) extend(r, union_extent, na.value = NA))
+  # aligned_rasters <- lapply(rasters, function(r) extend(r, union_extent, na.value = NA))
   
-  data_base <- do.call(merge, data_layers)
+  if(length(data_layers) > 1){
+    data_sprc <- sprc(data_layers)
+    data_base <- merge(data_sprc)
+  } else {
+    data_base <- data_layers[[1]]
+  }
+
+  # data_base <- do.call(mosaic, data_layers)
   # plot(data_base)
 
   # Remove unneeded mask layers if compiling the water/land mask
@@ -128,7 +160,7 @@ MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE)
   # Save and quit
   writeRaster(data_crop, file_name_out, overwrite = TRUE)
 }
-
+#
 
 # MODIS data --------------------------------------------------------------
 
@@ -169,24 +201,21 @@ dl_dir <- "~/data/MODIS"
 start_date <- "2020-10-01"; end_date <- "2020-10-05"
 
 # Determine what you want your bounding box to be
-# This is the majority of the Med
+# NB: The processing functions will fail if too much data are loaded at once
+# Here is the area surrounding the Bay of Angels
 study_coords <- matrix(c(
-  3, 32,  # Bottom-left corner
-  27, 32, # Bottom-right corner
-  27, 45, # Top-right corner
-  3, 45,  # Top-left corner
-  3, 32   # Close the polygon (same as first point)
+  6.9, 43.4,  # Bottom-left corner
+  7.7, 43.4, # Bottom-right corner
+  7.7, 43.8, # Top-right corner
+  6.9, 43.8,  # Top-left corner
+  6.9, 43.4   # Close the polygon (same as first point)
 ), ncol = 2, byrow = TRUE)
-
-# Or try something smaller, like the Bay of Angels
-# ...
 
 # Turn it into the necessary SpatVector object type
 study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
 
 # Print the object to verify it worked
-# print(study_coords)
-# plot(study_coords)
+plot(study_coords)
 
 # Chose the product ID you want to download
 # product_ID <- "MYD09A1" # MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
@@ -240,7 +269,7 @@ mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44
 # NB: This requires that this folder exists: ~/data/MODIS
 # IF not, create it or change the directories below as desired
 # NB: this file only needs to be created once
-plyr::d_ply(.data = mask_files, .variables = c("date"), .fun = MODIS_proc, .parallel = TRUE,
+plyr::d_ply(.data = mask_files, .variables = c("date"), .fun = MODIS_proc, .parallel = FALSE,
             bbox = study_bbox, out_dir = "~/data/MODIS/", band_num = 2, land_mask = TRUE)
 
 # Load the desired mask file
