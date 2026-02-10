@@ -41,31 +41,31 @@ earth_up <- read_csv("~/pCloudDrive/Documents/info/earthdata_pswd.csv")
 
 # Functions ---------------------------------------------------------------
 
-rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD021KM", full.names = TRUE)) # Level 1B
-mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44W", full.names = TRUE))
+# rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD09GA\\.", full.names = TRUE))
+# mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44W\\.", full.names = TRUE))
 
-study_coords <- matrix(c(
-  6.9, 43.4,  # Bottom-left corner
-  7.7, 43.4, # Bottom-right corner
-  7.7, 43.8, # Top-right corner
-  6.9, 43.8,  # Top-left corner
-  6.9, 43.4   # Close the polygon (same as first point)
-), ncol = 2, byrow = TRUE)
-study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
+# study_coords <- matrix(c(
+#   6.9, 43.4,  # Bottom-left corner
+#   7.7, 43.4, # Bottom-right corner
+#   7.7, 43.8, # Top-right corner
+#   6.9, 43.8,  # Top-left corner
+#   6.9, 43.4   # Close the polygon (same as first point)
+# ), ncol = 2, byrow = TRUE)
+# study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
 
 # Raster tests
-file_name_df <- rast_files[rast_files$date == "2020-10-01",]
-bbox = study_bbox
-out_dir = "~/data/MODIS/"
-band_num = 1
-land_mask = FALSE
+# file_name_df <- rast_files[rast_files$date == "2020-10-01",]
+# bbox = study_bbox
+# out_dir = "~/data/MODIS/"
+# band_num = 2
+# land_mask = FALSE
 
 # Mask tests
-file_name_df <- mask_files[mask_files$date == "2020-01-01",]
-bbox = study_bbox
-out_dir = "~/data/MODIS/"
-land_mask = TRUE
-band_num = 2
+# file_name_df <- mask_files[mask_files$date == "2020-01-01",]
+# bbox = study_bbox
+# out_dir = "~/data/MODIS/"
+# land_mask = TRUE
+# band_num = 2
 
 # Process MODIS data in a batch
 MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE){
@@ -88,61 +88,45 @@ MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE)
   file_name_out <- file.path(out_dir, paste0("study_area_",file_product,"_",unique(files_date$date),".tif"))
   if(file.exists(file_name_out)){
     message(file_name_out, " already exists. Delete it if you want to reprocess the data. Otherwise, all good.")
-    return()
+    return(NULL)
   }
   
   # Load  and merge the files with desired layers etc.
   # NB: If run in parallel this will cause a crash to desktop
-  # TODO: Get this to detect if it should use 'subds' or 'lyrs'
-  if(file_product %in% c("MYD021KM")){
-    data_layers <- lapply(file_name_df$filename, rast, subds = 1, lyrs = band_num)
-    data_layers <- lapply(data_layers, rectify)
+  if(grepl("MYD01|MYD02", file_product)){
+    
+    stop("MODIS L1 data are not currently working with this processing workflow. Rather use a different software.")
+    
   } else {
-    data_layers <- lapply(file_name_df$filename, rast, subds = band_num)
+    
+    # TODO: Get this to detect if it should use 'subds' or 'lyrs'
+    data_layer <- rast(file_name_df$filename[1], lyrs = band_num)
+    # data_layer
+    # plot(data_layer)
+    
+    # Project to EPSG:4326 and crop
+    # data_rectify <- rectify(data_layers[[1]])
+    data_proj <- project(data_layer, y = "EPSG:4326")
+    # plot(data_proj)
+    data_crop <- crop(data_proj, bbox)
+    # plot(data_crop)
+    
+    if(length(file_name_df$filename) > 1){
+      # Run and merge each individual file
+      data_step <- 2
+      while(data_step <= length(file_name_df$filename)){
+        # data_base_i <- rectify(data_layers[[data_step]])
+        data_proj_i <- project(rast(file_name_df$filename[1], lyrs = band_num), y = data_proj)
+        data_crop_i <- crop(data_proj_i, bbox)
+        data_crop <- terra::merge(data_crop, data_crop_i)
+        data_step <- data_step+1
+        # plot(data_base)
+      }
+      rm(data_base_i, data_proj_i, data_crop_i); gc()
+    }
+    data_base <- data_crop
   }
-
-  # Rectify to even north/south grid
-  # data_layers_rectify <- lapply(data_layers, rectify)
   
-  # get all extents
-  # data_extents <- lapply(data_layers_rectify, ext)
-  
-  # Get the full extent of the files being loaded
-  # TODO: Improve this so it can run on a list and doesn't require a loop
-  # data_extent <- ext(data_layers[[1]])
-  # for(i in 1:length(data_layers)){
-  #   data_extent_i <- ext(data_layers[[i]])
-  #   data_extent <- union(data_extent, data_extent_i)
-  # }
-  # rm(data_extent_i); gc()
-  
-  # Extend all rasters to the total extent
-  # aligned_rasters <- lapply(data_layers, function(r) extend(r, data_extent))
-  
-  # Stack them now that they should match up
-  # data_stack <- rast(aligned_rasters)
-  
-  # test1 <- rast(file_name_df$filename[1], subds = band_num)
-  # union_extent <- ext(test1)
-  # union_extent <- ext(c(data_layers_rectify))
-  # # plot(test1)
-  
-  # Calculate the union of all extents
-    # union_extent <- ext(do.call(ext, data_layers))
-  
-  # Extend all rasters to this union
-  # aligned_rasters <- lapply(rasters, function(r) extend(r, union_extent, na.value = NA))
-  
-  if(length(data_layers) > 1){
-    data_sprc <- sprc(data_layers)
-    data_base <- merge(data_sprc)
-  } else {
-    data_base <- data_layers[[1]]
-  }
-
-  # data_base <- do.call(mosaic, data_layers)
-  # plot(data_base)
-
   # Remove unneeded mask layers if compiling the water/land mask
   if(land_mask){
     data_base <- terra::ifel(data_base %in% c(1, 2, 3, 4, 5), NA, data_base)
@@ -150,17 +134,17 @@ MODIS_proc <- function(file_name_df, bbox, band_num, out_dir, land_mask = FALSE)
   }
   
   # Project to EPSG:4326
-  data_base_proj <- project(data_base, y = "EPSG:4326")
+  # data_base_proj <- project(data_base, y = "EPSG:4326")
   # plot(data_base_proj)
   
   # Crop to bbox and exit
-  data_crop <- crop(data_base_proj, bbox)
+  # data_crop <- crop(data_base_proj, bbox)
   # plot(data_crop)
   
   # Save and quit
-  writeRaster(data_crop, file_name_out, overwrite = TRUE)
+  writeRaster(data_base, file_name_out, overwrite = TRUE)
 }
-#
+
 
 # MODIS data --------------------------------------------------------------
 
@@ -171,19 +155,27 @@ earth_data_catalogue <- luna::getProducts()
 # Filter out just the MODIS products
 MODIS_catalogue <- earth_data_catalogue[grepl("MOD|MYD", earth_data_catalogue$short_name),]
 
+# MODIS directory that lists all products
+# https://nrt3.modaps.eosdis.nasa.gov/archive/allData/61
+
 # Uncomment and run any of these lines to open the product page in your web browser
 # MODIS/Aqua Surface Reflectance Daily L2G Global 250m SIN Grid V061
 # productInfo("MYD09GQ")
 
 # Level 1
+# NB: L1 products are often very difficult to work with in R
 # productInfo("MYD01")
 # productInfo("MYD021KM")
+# productInfo("MYD02HKM")
+# productInfo("MYD02QKM")
 
-# MODIS/Aqua Surface Reflectance 8-Day L3 Global 250m SIN Grid V006
-# productInfo("MYD09Q1")
+# Level 2
+# productInfo("MYD09GHK") #L2G 500 m
+# "MYD09"
 
-# MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
-# moproductInfo("MYD09A1")
+# Level 3
+# productInfo("MYD09Q1" # MODIS/Aqua Surface Reflectance 8-Day L3 Global 250m SIN Grid V006
+# moproductInfo("MYD09A1") # MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
 
 # MODIS/Terra Land Water Mask Derived from MODIS and SRTM L3 Global 250m SIN Grid V061
 # https://lpdaac.usgs.gov/documents/1915/MOD44W_User_Guide_ATBD_V61.pdf
@@ -214,13 +206,18 @@ study_coords <- matrix(c(
 # Turn it into the necessary SpatVector object type
 study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
 
-# Print the object to verify it worked
+# Print the object to verify it worked - should be four points that make a box
 plot(study_coords)
 
 # Chose the product ID you want to download
 # product_ID <- "MYD09A1" # MODIS/Aqua Surface Reflectance 8-Day L3 Global 500m SIN Grid V006
 # product_ID <- "MYD01" # MODIS/Aqua Level 1
-product_ID <- "MYD021KM" # Level 1B
+# product_ID <- "MYD021KM" # Level 1B 1 KM
+# product_ID <- "MYD02HKM" # Level 1B 500 m
+# product_ID <- "MYD02QKM" # Level 1B 250 m
+# product_ID <- "MYD09" # Level 2 daily
+# product_ID <- "MYD09GHK" # L2G 500 m
+product_ID <- "MYD09GA" # L2G 500 m
 
 # Look at the server and version info for the product of choice
 earth_data_catalogue[earth_data_catalogue$short_name == product_ID,]
@@ -231,9 +228,9 @@ earth_data_catalogue[earth_data_catalogue$short_name == product_ID,]
 # product_server <- "LPCLOUD" # NB: Change this if not shown in the output shown above
 # product_version <- "061" # NB: Change this if not shown in the output shown above
 
-# For example, the info for MODIS L1B
-product_server <- "LAADS"
-product_version <- "6.1"
+# For example:
+product_server <- "LPCLOUD"
+product_version <- "061"
 
 
 ## 2) Download files -------------------------------------------------------
@@ -262,20 +259,20 @@ luna::getNASA("MOD44W", start_date, end_date, aoi = study_bbox, download = TRUE,
 # NB: Change the directory to where you saved the files if it was changed
 # NB: Change the pattern in rast_files to match the product ID you used if it is different
 # rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD09A1", full.names = TRUE)) # Level 3 8-day
-rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD021KM", full.names = TRUE)) # Level 1B
-mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44W", full.names = TRUE))
+rast_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MYD09GA\\.", full.names = TRUE)) # Level 2 daily
+mask_files <- luna::modisDate(list.files(path = "~/data/MODIS", pattern = "MOD44W\\.", full.names = TRUE))
 
 # Process all of the water mask files
 # NB: This requires that this folder exists: ~/data/MODIS
 # IF not, create it or change the directories below as desired
 # NB: this file only needs to be created once
 plyr::d_ply(.data = mask_files, .variables = c("date"), .fun = MODIS_proc, .parallel = FALSE,
-            bbox = study_bbox, out_dir = "~/data/MODIS/", band_num = 2, land_mask = TRUE)
+            bbox = study_bbox, out_dir = "~/data/MODIS", band_num = 2, land_mask = TRUE)
 
 # Load the desired mask file
 MODIS_mask <- rast("~/data/MODIS/study_area_MOD44W_2020-01-01.tif")
 
-# Check that it looks correct
+# Check that it looks correct - should show white where land would be
 plot(MODIS_mask)
 
 # Prep one day of MODIS data
@@ -283,10 +280,10 @@ plot(MODIS_mask)
 # IF not, create it or change the directories below to match 
 # NB: this file only needs to be created once
 plyr::d_ply(.data = rast_files, .variables = c("date"), .fun = MODIS_proc, .parallel = FALSE,
-            bbox = study_bbox, out_dir = "~/data/MODIS/", band_num = 1, land_mask = FALSE)
+            bbox = study_bbox, out_dir = "~/data/MODIS", band_num = 1, land_mask = FALSE)
 
 # Load the file
-MODIS_rast <- rast("~/data/MODIS/study_area_rast.tif")
+MODIS_rast <- rast("~/data/MODIS/study_area_MYD09GA_2020-10-01.tif")
 
 # Check that it looks correct
 plot(MODIS_rast)
@@ -294,16 +291,19 @@ plot(MODIS_rast)
 # Project the 250 m mask to the same grid as the 500 m raster data
 MODIS_mask_proj <- project(MODIS_mask, MODIS_rast)
 
+# Check that it worked
+plot(MODIS_mask_proj)
+
 # Mask the raster data
 MODIS_water <- mask(MODIS_rast, MODIS_mask_proj)
 
-# Check to see if it looks correct
+# Check to see if it looks correct - should show white where land is
 plot(MODIS_water)
 
 # Convert to data.frame for easy plotting
 MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |> 
   # NB: Change 'sur_refl_b01' to match the correct column name in your data
-  dplyr::rename(Rrs = sur_refl_b01)
+  dplyr::rename(Rrs = sur_refl_b01_1)
 
 
 # 4) Plot data ------------------------------------------------------------
@@ -311,7 +311,8 @@ MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |>
 # Map
 pl_map <- MODIS_water_df |> 
   # Round all surface reflectance values greater than 0.1 down to 0.1 for better plotting
-  mutate(Rrs = case_when(Rrs > 0.1 ~ 0.1, TRUE ~ Rrs)) |> 
+  mutate(Rrs = case_when(Rrs > 0.1 ~ 0.1, 
+                         Rrs < 0 ~ 0, TRUE ~ Rrs)) |> 
   ggplot() +
   annotation_borders(fill = "grey80") +
   geom_tile(aes(x = x, y = y, fill = Rrs)) +
@@ -319,7 +320,7 @@ pl_map <- MODIS_water_df |>
   guides(fill = guide_colorbar(barwidth = 20, barheight = 2)) +
   # NB: Change fill label to correctly indicate which band width was used
   labs(x = "Longitude (°E)", y = "Latitude (°N)", fill = "Surface reflectance (459-479 nm) ") +
-  coord_quickmap(xlim = c(7, 25), ylim = c(35, 42)) +
+  coord_quickmap(xlim = range(MODIS_water_df$x), ylim = range(MODIS_water_df$y)) +
   theme(panel.border = element_rect(colour = "black", fill = NA),
         legend.position = "top", 
         legend.box = "vertical",
