@@ -1,10 +1,15 @@
-# earth_data_access
+# earth_data_access.R
+
 # This script provides the functions, workflow, and examples 
-# to download any data product from the earth data server:
+# to download any data product from the NASA earth data server:
 # https://www.earthdata.nasa.gov/
 
 # The user guide for MODIS products may be found here :
 # https://lpdaac.usgs.gov/documents/925/MOD09_User_Guide_V61.pdf
+
+# NB: While this works well for MODIS and Landsat data, it cannot access Sentinel
+# For a more thorough methodology rather see this script:
+# ...
 
 
 # Libraries ---------------------------------------------------------------
@@ -24,7 +29,7 @@
 library(tidyverse)
 library(ncdf4)
 library(terra)
-library(luna)
+library(luna) # Used to access NASA data
 library(doParallel); registerDoParallel(cores = detectCores() - 2)
 
 
@@ -35,8 +40,7 @@ library(doParallel); registerDoParallel(cores = detectCores() - 2)
 # It contains one row of data, which is the username and password for an account on earth data
 # An account can be created here: https://urs.earthdata.nasa.gov/
 # Once you have your account details, create the .csv file shown here and store in a secure location
-# earth_up <- read_csv("path/to/file/earthdata_pswd.csv")
-earth_up <- read_csv("~/pCloudDrive/Documents/info/earthdata_pswd.csv")
+earth_up <- read_csv("path/to/file/earthdata_pswd.csv")
 
 
 # Functions ---------------------------------------------------------------
@@ -146,13 +150,17 @@ MODIS_catalogue <- earth_data_catalogue[grepl("MOD|MYD", earth_data_catalogue$sh
 # https://lpdaac.usgs.gov/documents/1915/MOD44W_User_Guide_ATBD_V61.pdf
 # productInfo("MOD44W")
 
+# Sentinel-3 products
+S3_catalogue <- earth_data_catalogue[grepl("OLCI|Sentinel|SENTINEL", earth_data_catalogue$short_name, fixed = FALSE),]
+
 
 # Workflow ----------------------------------------------------------------
 
 ## 1) Setup ---------------------------------------------------------------
 
 # Chose where you would like to save the files
-dl_dir <- "~/data/MODIS"
+# dl_dir <- "~/data/MODIS"
+dl_dir <- "~/data/S3"
 
 # Chosen start and end dates for downloading
 start_date <- "2020-10-01"; end_date <- "2020-10-05"
@@ -173,9 +181,11 @@ study_bbox <- vect(study_coords, crs = "EPSG:4326", type = "polygons")
 
 # Print the object to verify it worked - should be four points that make a box
 plot(study_coords)
+maps::map(add = TRUE)
 
 # Chose the product ID you want to download
-product_ID <- "MYD09GA" # L2G 500 m
+product_ID <- "MYD09GA" # MODIS-AQUA L2G 500 m
+# product_ID <- "OLCIS3A_L3b_CYAN" # Sentinel-3A L3
 
 # Look at the server and version info for the product of choice
 earth_data_catalogue[earth_data_catalogue$short_name == product_ID,]
@@ -226,6 +236,7 @@ MODIS_mask <- rast("~/data/MODIS/study_area_MOD44W_2020-01-01.tif")
 
 # Check that it looks correct - should show white where land would be
 plot(MODIS_mask)
+maps::map(add = TRUE)
 
 # Prep one day of MODIS data
 # NB: This requires that this folder exists: ~/data/MODIS
@@ -238,18 +249,21 @@ MODIS_rast <- rast("~/data/MODIS/study_area_MYD09GA_2020-10-01.tif")
 
 # Check that it looks correct
 plot(MODIS_rast)
+maps::map(add = TRUE)
 
 # Project the 250 m mask to the same grid as the 500 m raster data
 MODIS_mask_proj <- project(MODIS_mask, MODIS_rast)
 
 # Check that it worked
 plot(MODIS_mask_proj)
+maps::map(add = TRUE)
 
 # Mask the raster data
 MODIS_water <- mask(MODIS_rast, MODIS_mask_proj)
 
 # Check to see if it looks correct - should show white where land is
 plot(MODIS_water)
+maps::map(add = TRUE)
 
 # Convert to data.frame for easy plotting
 MODIS_water_df <- as.data.frame(MODIS_water, xy = TRUE, na.rm = TRUE) |> 
