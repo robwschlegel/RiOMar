@@ -989,7 +989,8 @@ def download_cmems_subset(
     variables,
     start_datetime,
     end_datetime,
-    output_directory
+    output_directory,
+    overwrite = False
 ):
     """
     Download a subset of CMEMS data using the copernicusmarine module.
@@ -1019,7 +1020,10 @@ def download_cmems_subset(
 
     # Create output filename based on dataset_id and date range
     if "cmems_mod_glo_phy" in dataset_id:
-        dataset_label = 'glorys'
+        if len(variables) > 5 :
+            dataset_label = "glorys"
+        else :
+            dataset_label = f"glorys_{'_'.join(variables)}"
     elif "cmems_obs-wind_glo" in dataset_id:
         dataset_label = 'wind'
     else:
@@ -1028,6 +1032,13 @@ def download_cmems_subset(
     start_str = pd.to_datetime(start_datetime).strftime('%Y%m')
     end_str = pd.to_datetime(end_datetime).strftime('%Y%m')
     output_filename = f"{dataset_label}_{start_str}_{end_str}.nc"
+
+    # Skip the rest if not overwrite and the file already exists
+    output_path = os.path.join(output_directory, output_filename)
+    if not overwrite: 
+        if os.path.exists(output_path):
+            print(f"File already exists and overwrite is False: {output_path}")
+            return
 
     # Get zone boundaries
     zone_boundaries = define_parameters(zone)
@@ -1057,7 +1068,8 @@ def download_cmems_subset(
             start_datetime=start_datetime,
             end_datetime=end_datetime,
             output_filename=output_filename,
-            output_directory=output_directory
+            output_directory=output_directory,
+            overwrite=overwrite
         )
     except ImportError:
         raise ImportError("copernicusmarine package is required. Install with 'conda install copernicusmarine'.")

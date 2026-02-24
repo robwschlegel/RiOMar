@@ -107,6 +107,7 @@ for zone in zones_list:
 # =============================================================================
 
 # The historic GLORYS data (1993-2024)
+# NB: In the hitoric GLORYS bottom temp. is given as 'bottomT', but in the recent GLORYS it is given as 'tob'
 for zone in zones_list:
     download_cmems_subset(
         zone,
@@ -116,17 +117,41 @@ for zone in zones_list:
         f'../pCloudDrive/data/GLORYS/{zone}'
     )
 
-# NB: The individual variables are now being split up into different Product IDs in the recent GLORYS data, so we need to loop over the variables as well
-# This requires that the download_cmems_subset function is updated to handle this case (i.e., when the list of variables contains only one variable, it should rename the file accordingly)
 # The recent GLORYS data (2024-2025)
-# for zone in zones_list:
-#     download_cmems_subset(
-#         zone,
-#         'cmems_mod_glo_phy_anfc_0.083deg_P1D-m',
-#         ['uo', 'vo', 'zos', 'thetao', 'bottomT', 'mlotst', 'so'],
-#         '2025-01-01T00:00:00', '2025-12-31T00:00:00',
-#         f'../pCloudDrive/data/GLORYS/{zone}'
-#     )
+# NB: The individual variables are now being split up into different Product IDs in the recent GLORYS data, so we need to loop over the variables as well
+for zone in zones_list:
+    download_cmems_subset(
+        zone,
+        'cmems_mod_glo_phy_anfc_0.083deg_P1D-m',
+        ['zos', 'mlotst', 'tob'], # Sea surface height [zos] and mixed layer depth [mlotst], and bottom temperature [tob]
+        '2025-01-01T00:00:00', '2025-12-31T00:00:00',
+        f'../pCloudDrive/data/GLORYS/{zone}'
+    )
+for zone in zones_list:
+    download_cmems_subset(
+        zone,
+        'cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m',
+        ['uo', 'vo'], # Surface currents (eastward [uo] and northward [vo])
+        '2025-01-01T00:00:00', '2025-12-31T00:00:00',
+        f'../pCloudDrive/data/GLORYS/{zone}'
+    )
+for zone in zones_list:
+    download_cmems_subset(
+        zone,
+        'cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m',
+        ['so'], # Salinity [so]
+        '2025-01-01T00:00:00', '2025-12-31T00:00:00',
+        f'../pCloudDrive/data/GLORYS/{zone}'
+    )
+for zone in zones_list:
+    download_cmems_subset(
+        zone,
+        'cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m',
+        ['thetao'], # Temperature [thetao]
+        '2025-01-01T00:00:00', '2025-12-31T00:00:00',
+        f'../pCloudDrive/data/GLORYS/{zone}'
+    )
+
 
 # =============================================================================
 #### Create daily integrals of hourly wind data
@@ -142,7 +167,7 @@ for zone in zones_list:
 # =============================================================================
 
 # Plot everything in one go (this takes a while)
-for year in range(1998, 2025):
+for year in range(1998, 2026):
     Plot_and_Save_the_map(
         sextant_chla_all,
         nb_of_cores_to_use = 14,
@@ -153,7 +178,7 @@ for year in range(1998, 2025):
     print(f'Year {year} done!')
 
 # Plot everything in one go (this takes a while)
-for year in range(1998, 2025):
+for year in range(1998, 2026):
     Plot_and_Save_the_map(
         sextant_spm_all,
         nb_of_cores_to_use = 14,

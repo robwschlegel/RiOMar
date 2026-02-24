@@ -44,7 +44,7 @@ for zone in zones_list:
                          overwrite_existing_regional_maps = True, # For the moment this must be set to True as it does not detect the correct files
                          save_map_plots_of_which_time_frequency = {'DAILY' : True, 'WEEKLY' : True, 'MONTHLY' : True, 'ANNUAL' : True},
                          nb_of_cores_to_use = 14,
-                         where_are_saved_satellite_data = "data",
+                         where_are_saved_satellite_data = "../pCloudDrive/data",
                          where_to_save_regional_maps = "output/REGIONAL_MAPS")
 
 # All years of SPM data
@@ -61,7 +61,7 @@ for zone in zones_list:
                          overwrite_existing_regional_maps = True, # For the moment this must be set to True as it does not detect the correct files
                          save_map_plots_of_which_time_frequency = {'DAILY' : True, 'WEEKLY' : True, 'MONTHLY' : True, 'ANNUAL' : True},
                          nb_of_cores_to_use = 14,
-                         where_are_saved_satellite_data = "data",
+                         where_are_saved_satellite_data = "../pCloudDrive/data",
                          where_to_save_regional_maps = "output/REGIONAL_MAPS")
     
 
