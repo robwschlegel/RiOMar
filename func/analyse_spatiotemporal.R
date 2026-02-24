@@ -50,24 +50,26 @@ load_sextant <- function(file_name, lon_range, lat_range){
 
 # Download data -----------------------------------------------------------
 
+# NB: Uncomment and run the following lines to download data
+
 # A few days of SEXTANT data
-download_nc(
-  dl_var = "SPM",
-  dl_dates = c("2024-09-01", "2024-09-05"),
-  output_dir = "~/Downloads/SEXTANT", # Change as desired/required
-  overwrite = FALSE # Change to TRUE to force downloads
-)
+# download_nc(
+#   dl_var = "SPM",
+#   dl_dates = c("2024-09-01", "2024-09-05"),
+#   output_dir = "~/Downloads/SEXTANT", # Change as desired/required
+#   overwrite = FALSE # Change to TRUE to force downloads
+# )
 
 # A few days of MODIS data, cut to a bounding box
-download_nc(
-  dl_var = "SPM",
-  dl_dates = c("2008-12-12", "2008-12-31"),
-  dl_product = "ODATIS-MR",
-  dl_sensor = "MODIS",
-  dl_bbox = c(3, 4, 42.5, 44),
-  output_dir = "~/Downloads/MODIS", # Change as desired/required
-  overwrite = TRUE # Change to TRUE to force downloads
-)
+# download_nc(
+#   dl_var = "SPM",
+#   dl_dates = c("2008-12-12", "2008-12-31"),
+#   dl_product = "ODATIS-MR",
+#   dl_sensor = "MODIS",
+#   dl_bbox = c(3, 4, 42.5, 44),
+#   output_dir = "~/Downloads/MODIS", # Change as desired/required
+#   overwrite = TRUE # Change to TRUE to force downloads
+# )
 
 
 # Load data ---------------------------------------------------------------
@@ -98,7 +100,7 @@ sextant_1998_monthly <- sextant_1998 |>
          month = lubridate::month(date)) |> 
   summarise(mean_spm = mean(analysed_spim, na.rm = TRUE), .by = c("lon", "lat", "year", "month"))
 
-# Map of the 12 moves
+# Map of the 12 months
 ggplot(data = sextant_1998_monthly, aes(x = lon, y = lat)) +
   geom_raster(aes(fill = mean_spm)) +
   # annotation_borders(fill = "black", colour = "lightgreen") +
@@ -164,7 +166,5 @@ animated_plot <- p_map +
 animate(animated_plot, fps = 10, duration = 10, 
         renderer = gifski_renderer(file = "animations/sextant_1998.gif",
                                    width = 1200,    # Increase width in pixels
-                                   height = 1000   # Increase height in pixels
-                                   )
-        )
+                                   height = 1000))   # Increase height in pixels
 
