@@ -20,12 +20,44 @@ The output of the code in this repository is primarily a series of figures and d
 
 #### SOMLIT
 
+There is a public request for access form available directly on the [SOMLIT](https://www.somlit.fr/demande-de-donnees/) website.
+The following data were requested for all available SOMLIT sites:
+- Type de série: SÉRIE HYDRO
+- Paramètres: T (temperature), S (salinity), COP (POC; particulate organic matter), MES (SPM; suspended particulate matter), CHLA (chlorophyl a)
+- Choix de la marée: PLEINE MER, BASSE MER, PAS DE MARÉE
+- Profondeur: SURFACE, NIVEAU INTERMÉDIARE, FOND
+- Dates: 1998-01-01 to 2025-12-31
+
 #### REPHY
+
+The full REPHY dataset from 1987 - 2022 is openly available on [SEANOE](https://www.seanoe.org/data/00361/47248/).
+These data were downloaded in their entirety then processed for further use in this project.
 
 ### River discharge
 
 The primary public source of river discharge data is [HydroPortail](https://hydro.eaufrance.fr/).
 On this site one can create lists of river flow gauges of interest, query the sites, and download data.
+It is also possible to access this database via an API at [hub'eau](https://hubeau.eaufrance.fr/page/api-ecoulement#/ecoulement/getResultats)
+
+It is also possible to access data via [Ifremer](https://co-en.ifremer.fr/eulerianNetwork?lang=en&contextId=386).
+
+Note that while many of the river gauges have data going back decades, 
+we only use data from 1998-01-01 onward as this is the beginning of the SEXTANT data product used for the plume analyses.
+
+NB: In order to see the range of dates available for a station, click the 'statistiques' tab, then 'Débits classés'.
+
+### Rhône
+
+Multiple stations were accessed to summarise the river flow as close to the mouth of the Rhône as possible.
+
+- Le Rhône à Arles - CNR (V730 0003 02): 1998 - 2023
+  - This was used as the closest approximation of the river flow for the Grand Rhône.
+- Le Rhône à Fourques - CNR (V730 0002 02): 1998 - 2023
+  - This was used as the closest approximation of the river flow for the Petit Rhône.
+- Le Rhône à Tarascon - CNR (V720 0010 01): 1998-2023
+  - Not used as it is further from the mouth and does not have data for the period 2024-2025.
+- Le Rhône à Beaucaire (V720 0005 01):
+  - Not used as it does not appear to have any data.
 
 ### Wind
 

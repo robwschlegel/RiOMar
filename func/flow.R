@@ -11,7 +11,7 @@ library(seasonal)
 library(sandwich) # For HAC covariance tests
 library(lmtest) # For more detailed linear model tests
 library(patchwork)
-library(doParallel); doParallel::registerDoParallel(cores = 4)
+library(doParallel); doParallel::registerDoParallel(cores = 14)
 
 
 # Functions ---------------------------------------------------------------
