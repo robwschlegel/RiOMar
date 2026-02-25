@@ -328,7 +328,7 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
                                                         parameters,
                                                         plume_name,
                                                         inside_polygon_mask,
-                                                        use_dynamic_threshold=use_dynamic_threshold)
+                                                        dynamic_thresh=use_dynamic_threshold)
 
             thresholds[plume_name] = the_plume.SPM_threshold
             all_mask_area.append(the_plume.plume_mask)

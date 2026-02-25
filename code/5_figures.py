@@ -27,7 +27,7 @@ mpl.use('agg')
 # ### Create figures
 # =============================================================================
 
-Figure_1(where_are_saved_satellite_data = "data",
+Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
          where_to_save_the_figure = "figures")
 
 Figure_2(where_are_saved_regional_maps = "output",
