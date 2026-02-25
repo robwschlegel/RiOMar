@@ -40,7 +40,7 @@ Match_up_with_insitu_measurements(sextant_chla_all,
                                   # zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
                                   redo_the_MU_database = False, # Change to True is running for the first time 
                                   nb_of_cores_to_use = 14,
-                                  where_are_saved_satellite_data = 'data',
+                                  where_are_saved_satellite_data = '../pCloudDrive/data',
                                   where_to_save_Match_Up_data = 'output')
 
 # Match up in situ and satellite SPM data
@@ -56,7 +56,7 @@ Match_up_with_insitu_measurements(sextant_spm_all,
                                   # zones = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY'],
                                   redo_the_MU_database = True, # Change to True is running for the first time 
                                   nb_of_cores_to_use = 14,
-                                  where_are_saved_satellite_data = 'data',
+                                  where_are_saved_satellite_data = '../pCloudDrive/data',
                                   where_to_save_Match_Up_data = 'output')
 
 
