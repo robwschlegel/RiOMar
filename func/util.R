@@ -133,8 +133,6 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
   wind_df <- tidync(file_name) |> 
     hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
                  latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |> 
-    # hyper_filter(longitude = longitude >= lon_range[1] & longitude <= lon_range[2],
-    #              latitude = latitude >= lat_range[1] & latitude <= lat_range[2]) |> 
     hyper_tibble() |> 
     dplyr::rename(u = eastward_wind, v = northward_wind, lon = longitude, lat = latitude) |> 
     mutate(date = as.Date(time)) |> 
