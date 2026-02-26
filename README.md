@@ -74,9 +74,9 @@ either directly cause the main river plume, or can connect to them in normal cir
 To this end, La Seine is the main river of interest, with L'Orne playing a contributing role.
 
 - La Seine à Vernon - H320 0001 01 : 1998 - 2006
-  - This appears to be one of the closest flow gauges to the mouth of the Seine.
+  - This is the closest station to the mouth of the Seine with a complete time series.
 - La Seine à Vernon - H320 0001 04 : 2006 - 2025
-  - Active flow gauge to present date.
+  - The active flow gauge to present date for the same station.
 - La Seine à Poses - H322 0110 03 : 1998-2006
   - Closer than Vernon, but only data to 2006.
 - L'Orne à May-sur-Orne - I362 1010 01 : 1998-2025
@@ -93,12 +93,10 @@ pushes the plume up against the smaller plumes from these rivers, causing them t
 - La Loire à Saumur - L800 0010 20 : 1998 - 2025
   - Far from the mouth, but the only available flow gauge on the river.
 - Le Lay à la Bretonnière-la-Claye - N351 1610 : 2003 - 2025
-  - A non-negligible input into the waters of Southern Brittany.
-  - This area frequently connects to the Loire plume.
+  - The closest gauge to the mouth, but with a limited time series.
 - Le Lay à Mareuil-sur-Lay-Dissais - N330 1610 10 : 1998 - 2025
   - Further from the mouth of the river, but with a complete time series.
 - La Vilaine à Rieux - J930 0611 01 : 2002 - 2025
-  - Another important river contributing to the southern coast of Brittany.
   - This is the closest flow gauge to the mouth.
 - La Vilaine à Guipry - J770 0610 02 : 1998 - 2025
   - Further from the mouth, but complete time series.
@@ -111,18 +109,24 @@ it was necessary to combine the RiOMars of La Gironde and Sea of Pertuis into on
 Therefore, we also account for the inputs of La Charente and La Sèvre niortaise (not to be confused with La Sèvre nantaise).
 
 - La Garonne à Marmande - O909 0010 01 : 1998  - 2025
-  - One of the two major contributing rivers to the Gironde.
   - This gauge is far from the mouth, but appears to be the closest.
 - La Garonne à Tonneins - O900 0010 02 : 1998 - 2025
   - Another complete time series for comparison.
 - La Dordogne à Pessac-sur-Dordogne - P555 0010 01 : 1998 - 2025
-  - The second of the two major contributors to the Gironde.
+  - This is the closest and most complete gauge to the river mouth.
 - La Charente : 1998 - 2025
-  - There are no clear best gauges to use for this river, so a mix of them were amalgamated.
-  - ...
+  - There are no clear best gauges to use for this river, so a mix of them were investigated.
+  - They are listed here from closest to furthest from the river mouth, and are weighted according to the closest.
+  - R523 0010 01 : 2002 - 2005
+  - R520 0010 01 : 2013 - 2025 - used as current gauge
+  - R423 0010 01 : 2004 - 2025
+  - R314 0010 01 : 2013 - 2025
+  - R222 0010 01 : 1998 - 2025 - used as historic gauge
 - La Sèvre niortaise : 1998 - 2025
-  - Similarly to La Charente, a mix of gauges was used.
-  - ...
+  - Similarly to La Charente, a mix of gauges was used and weighted accordingly.
+  - N611 0610 01 : 2004 - 2025 - used as current gauge
+  - N430 0010 01 : 2012 - 2021 - used as filler
+  - N401 0610 01 : 1998 - 2025 - used as historic gauge
   
 ##### Gulf of Lion
 

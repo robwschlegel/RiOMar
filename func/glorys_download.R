@@ -26,24 +26,26 @@ if (!require("CopernicusMarine")) {
 # Set your Copernicus Marine credentials
 # You can get these by registering at https://marine.copernicus.eu/
 # It's recommended to store credentials securely, not in the script
-Sys.setenv(COPERNICUS_MARINE_USERNAME = "your_username")
-Sys.setenv(COPERNICUS_MARINE_PASSWORD = "your_password")
+Sys.setenv(COPERNICUS_MARINE_USERNAME = "rschlegel1")
+Sys.setenv(COPERNICUS_MARINE_PASSWORD = "RobertCMEMS2018")
 
 # GLORYS dataset parameters - modify these according to your needs
 # Dataset ID for GLORYS global reanalysis (example for physics)
-dataset_id <- "global-reanalysis-phys-001-030"
+dataset_id <- "GLOBAL_MULTIYEAR_PHY_001_030"
+layer_id <- "cmems_mod_glo_phy_my_0.083deg_P1D-m"
 
 # Time range for data download (format: "YYYY-MM-DD")
 start_date <- "2023-01-01"
-end_date <- "2023-01-31"
+end_date <- "2023-01-07"
 
 # Geographic bounding box (min_longitude, max_longitude, min_latitude, max_latitude)
 # Example: Bay of Biscay region
-longitude_range <- c(-10, 0)    # Western to Eastern longitude
-latitude_range <- c(40, 50)     # Southern to Northern latitude
+longitude_range <- c(4, 8)    # Western to Eastern longitude
+latitude_range <- c(42, 44)     # Southern to Northern latitude
+range_lonlat <- c(longitude_range[1], latitude_range[1], longitude_range[2], latitude_range[2]) # (min_lon, min_lat, max_lon, max_lat1])
 
 # Depth range (in meters)
-depth_range <- c(0, 100)        # Surface to 100m depth
+depth_range <- c(0, 0)        # Surface
 
 # Variables to download (available variables depend on the dataset)
 # Common GLORYS variables include:
@@ -56,8 +58,8 @@ depth_range <- c(0, 100)        # Surface to 100m depth
 variables <- c("thetao", "so", "uo", "vo")
 
 # Output directory and filename
-download_dir <- "/home/calanus/RiOMar/data/GLORYS"
-output_filename <- "glorys_data_202301.nc"
+# download_dir <- "/home/calanus/RiOMar/data/GLORYS"
+# output_filename <- paste("glorys_", start_date, "_to_", end_date, ".nc", sep = "")
 
 # Create download directory if it doesn't exist
 if (!dir.exists(download_dir)) {
@@ -65,47 +67,19 @@ if (!dir.exists(download_dir)) {
 }
 
 # Download GLORYS data
-tryCatch({
-  # Set up the download request
-  download_request <- cm_download(
-    dataset_id = dataset_id,
-    username = Sys.getenv("COPERNICUS_MARINE_USERNAME"),
-    password = Sys.getenv("COPERNICUS_MARINE_PASSWORD"),
-    minimum_longitude = longitude_range[1],
-    maximum_longitude = longitude_range[2],
-    minimum_latitude = latitude_range[1],
-    maximum_latitude = latitude_range[2],
-    start_datetime = start_date,
-    end_datetime = end_date,
-    minimum_depth = depth_range[1],
-    maximum_depth = depth_range[2],
-    force_download = TRUE,
-    output_filename = file.path(download_dir, output_filename),
-    variables = variables
-  )
+# Set up the download request
+download_request <- CopernicusMarine::cms_download_subset(
+  product = dataset_id,
+  layer = layer_id,
+  variable = variables,
+  region = range_lonlat,
+  time = c(start_date, end_date),
+  verticalrange = depth_range,
+  progress = TRUE
+)
 
-  # Execute the download
-  print(paste("Starting download of GLORYS data for", start_date, "to", end_date))
-  print(paste("Region:", longitude_range[1], "to", longitude_range[2], "longitude,", 
-              latitude_range[1], "to", latitude_range[2], "latitude"))
-  print(paste("Depth range:", depth_range[1], "to", depth_range[2], "meters"))
-  print(paste("Variables:", paste(variables, collapse = ", ")))
-
-  # This will download the data and save it to the specified location
-  result <- download_request
-
-  print(paste("Download completed successfully!"))
-  print(paste("Data saved to:", file.path(download_dir, output_filename)))
-
-}, error = function(e) {
-  print(paste("Error downloading GLORYS data:", e))
-  # Print more detailed error information
-  print("Please check:")
-  print("1. Your Copernicus Marine credentials are correct")
-  print("2. The dataset ID is valid and available")
-  print("3. Your internet connection is working")
-  print("4. The date range and geographic area are valid")
-})
+# Plot
+plot(download_request["thetao", drop = TRUE], col = hcl.colors(100), axes = TRUE)
 
 # Additional information about GLORYS datasets:
 # GLORYS12V1: global-reanalysis-phys-001-030 (1993-present, 1/12° resolution)

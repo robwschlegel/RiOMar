@@ -11,6 +11,9 @@ river_mouths <- data.frame(row_name = 1:4,
                            mouth_lon = c(0.145, -1.05, -2.10, 4.83),
                            mouth_lat = c(49.43, 45.59, 47.29, 43.41))
 
+# The zones en large
+zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
+
 
 # Loading -----------------------------------------------------------------
 
