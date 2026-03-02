@@ -7,7 +7,6 @@
 
 # Needed libraries
 library(tidyverse)
-# library(mgcv) # For GAM model fits between gauge stations
 
 # The zones
 zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
@@ -16,13 +15,20 @@ zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITT
 sites_HP <- read_csv("metadata/HydroPortail_station_list.csv")
 
 # Log-log linear model prediction function
-predict_loglog <- function(pred_base, pred_short){
-  df <- data.frame(pred_base = pred_base, pred_short = pred_short) |> 
-    mutate(log_base = log(pred_base), log_fix = log(pred_short))
+predict_loglog <- function(pred_base, pred_fix, base_long = TRUE){
+  df <- data.frame(pred_base = pred_base, pred_fix = pred_fix) |> 
+    filter(pred_base > 0, pred_fix > 0) |>
+    mutate(log_base = log(pred_base), log_fix = log(pred_fix))
   lm_fit <- lm(log_fix ~ log_base, data = df)
-  df <- df |> mutate(pred_long = exp(predict(lm_fit, newdata = data.frame(log_base = log(pred_base)))))
-  # df$pred_new <- exp(predict(lm_fit, newdata = data.frame(pred_new = log(pred_base))))
-  return(df$pred_long)
+  if(base_long == TRUE){
+    df_res <- data.frame(pred_long = exp((log(pred_base)*coef(lm_fit)[2])-coef(lm_fit)[1]))
+    # df_res <- data.frame(pred_long = exp(predict(lm_fit, newdata = data.frame(log_base = log(pred_base)))))
+  } else {
+    df_res <- data.frame(pred_long = exp((log(pred_fix)/coef(lm_fit)[2])+coef(lm_fit)[1]))
+    # lm_fit <- lm(log_base ~ log_fix, data = df)
+    # df_res <- data.frame(pred_long = exp(predict(lm_fit, newdata = data.frame(log_fix = log(pred_fix)))))
+  }
+  return(df_res$pred_long)
 }
 
 # HydroPortail loading function
@@ -35,6 +41,7 @@ load_HP <- function(file_name){
 }
 
 # HydroPortail preparation function
+# zone <- zones_list[4]
 prep_HP <- function(zone){
   
   # Automagic directory names
@@ -65,16 +72,13 @@ prep_HP <- function(zone){
     # ggplot(rhone_g_4, aes(x = date, y = prop_dif)) + geom_col() + geom_smooth(method = "lm")
     
     # Log-log transform data and run linear model to find a correction between gauges
-    rhone_g_5 <- rhone_g_4 |> filter(all > 0, grand > 0) |> mutate(log_all = log(all), log_grand = log(grand))
-    lm_5 <- lm(log_grand ~ log_all, data = rhone_g_5); summary(lm_5)
     rhone_g_5 <- rhone_g_5 |> 
-      # mutate(grand_pred = exp(predict(lm_5, newdata = data.frame(log_all = log(all)))),
-      mutate(grand_pred = predict_loglog(pred_base = all, pred_short = grand),
-                                     grand_90 = all*0.9) |> 
+      mutate(grand_pred = predict_loglog(pred_base = all, pred_fix = grand),
+             grand_90 = all*0.9) |> 
       mutate(prop_dif_pred = grand_pred/all,
              prop_dif_90 = grand_90/all)
-    mean(rhone_g_5$prop_dif_pred, na.rm = TRUE)
-    mean(rhone_g_5$prop_dif_90, na.rm = TRUE)
+    # mean(rhone_g_5$prop_dif_pred, na.rm = TRUE)
+    # mean(rhone_g_5$prop_dif_90, na.rm = TRUE)
     # ggplot(rhone_g_5, aes(x = grand, y = grand_pred)) + geom_point() + geom_smooth(method = "lm") + geom_abline(slope = 1, intercept = 0, linetype = "dashed")
     # ggplot(rhone_g_5, aes(x = grand, y = grand_90)) + geom_point() + geom_smooth(method = "lm") + geom_abline(slope = 1, intercept = 0, linetype = "dashed")
     # rhone_g_5 |> pivot_longer(cols = c(all, grand, grand_pred, grand_90), names_to = "site", values_to = "debit") |>
@@ -84,13 +88,13 @@ prep_HP <- function(zone){
     # The linear model method seems to work better than a flat conversion rate, especially during periods of crue
     
     # Correct current data based on the linear model match
-    rhone_g_6 <- rhone_g_2 |> mutate(debit = exp(predict(lm_5, newdata = data.frame(log_all = log(debit))))) |> 
-      filter(date >= "2023-01-01")
+    rhone_g_6 <- left_join(rhone_g_2, rhone_g_1, by = "date") |> mutate(debit = predict_loglog(debit.x, debit.y)) |> 
+      filter(date >= "2023-01-01") |> dplyr::select(date, debit, site.x) |> rename(site = site.x)
     
     # Combine and save
     grand_rhone <- rbind(rhone_g_1, rhone_g_6) |> complete(date = seq.Date(min(date), max(date), by = "day")) |> arrange(date) |> dplyr::select(date, debit)
-    # ggplot(grand_rhone, aes(x = date, y = debit)) + 
-      # geom_line(aes(colour = site)) + geom_smooth(method = "lm", aes(colour = site))
+    # ggplot(grand_rhone, aes(x = date, y = debit)) +
+    # geom_line(aes(colour = site)) + geom_smooth(method = "lm", aes(colour = site))
       # geom_line() + geom_smooth(method = "lm")
     write_csv(grand_rhone, file.path(dir_main, "grand_rhone.csv"))
     
@@ -112,26 +116,31 @@ prep_HP <- function(zone){
     # ggplot(rhone_p_3, aes(x = site, y = debit)) + geom_boxplot(aes(fill = site))
     # ggplot(rhone_p_4, aes(x = date, y = prop_dif)) + geom_col() + geom_smooth(method = "lm") + geom_smooth(method = "lm")
     
+    # Correct current data based on the linear model match
+    rhone_p_5 <- left_join(rhone_p_2, rhone_p_1, by = "date") |> mutate(debit = predict_loglog(debit.x, debit.y)) |> 
+      filter(date >= "2023-01-01") |> dplyr::select(date, debit, site.x) |> rename(site = site.x)
+    # ggplot(rbind(rhone_p_1, rhone_p_5), aes(x = date, y = debit)) + geom_line(aes(colour = site)) + geom_smooth(method = "lm", aes(colour = site))
+    
     # Combine and save
-    petit_rhone <- rbind(rhone_p_1, rhone_p_2) |>  summarise(debit = mean(debit, na.rm = TRUE), .by = date) |>
-      complete(date = seq.Date(min(date), max(date), by = "day")) |> arrange(date)
+    petit_rhone <- rbind(rhone_p_1, rhone_p_5) |> complete(date = seq.Date(min(date), max(date), by = "day")) |> arrange(date) |> dplyr::select(date, debit)
     write_csv(petit_rhone, file.path(dir_main, "petit_rhone.csv"))
+    
   } else if(zone == "BAY_OF_SEINE"){
     
     # Seine
     seine_1 <- rbind(map_dfr(dir(dir_HP, pattern = "H320000101", full.names = TRUE), load_HP),
                      map_dfr(dir(dir_HP, pattern = "H320000104", full.names = TRUE), load_HP)) |> 
       # There is one day of overlap at 2006-08-16
-      summarise(debit = mean(debit, na.rm = TRUE), .by = "date") |> #mutate(site = "complete") |> 
-      mutate(debit = debit*1.1) # Correction based on closest gauge to river mouth
+      summarise(debit = mean(debit, na.rm = TRUE), .by = "date") |> mutate(site = "complete")# |> 
+      # mutate(debit = debit*1.1) # Correction based on closest gauge to river mouth
     
     # Compare
-    # seine_2 <- map_dfr(dir(dir_HP, pattern = "H322011003", full.names = TRUE), load_HP) |>  mutate(site = "closest")
-    # seine_3 <- rbind(seine_1, seine_2) |> 
-    #   filter(date >= "1998-01-01", date <= "2005-12-31")
-    # seine_4 <- seine_3 |>
-    #   pivot_wider(values_from = debit, names_from = site) |> 
-    #   mutate(prop_dif = closest/complete)
+    seine_2 <- map_dfr(dir(dir_HP, pattern = "H322011003", full.names = TRUE), load_HP) |> mutate(site = "closest")
+    seine_3 <- rbind(seine_1, seine_2) |>
+      filter(date >= "1998-01-01", date <= "2005-12-31")
+    seine_4 <- seine_3 |>
+      pivot_wider(values_from = debit, names_from = site) |>
+      mutate(prop_dif = closest/complete)
     # mean(seine_4$prop_dif, na.rm = TRUE)
     # NB: The closest gauge is 1.10 times the complete gauge.
     # The peaks are noticeably higher in the closest gauge
@@ -139,8 +148,13 @@ prep_HP <- function(zone){
     # ggplot(seine_3, aes(x = site, y = debit)) + geom_boxplot(aes(fill = site))
     # ggplot(seine_4, aes(x = date, y = prop_dif)) + geom_col() + geom_smooth(method = "lm")
     
+    # Log-log transform data and run linear model to find a correction between gauges
+    seine_5 <- left_join(seine_1, seine_2, by = "date") |> mutate(debit = predict_loglog(debit.y, debit.x, base_long = FALSE)) |> 
+      dplyr::select(date, debit, site.x) |> rename(site = site.x) |> mutate(site = "closest_pred")
+    # ggplot(rbind(seine_1, seine_5), aes(x = date, y = debit)) + geom_line(aes(colour = site)) + geom_smooth(method = "lm", aes(colour = site))
+    
     # Combine and save
-    seine <- seine_1 |> complete(date = seq.Date(min(date), max(date), by = "day")) |> arrange(date)
+    seine <- seine_5 |> complete(date = seq.Date(min(date), max(date), by = "day")) |> arrange(date) |> dplyr::select(date, debit)
     write_csv(seine, file.path(dir_main, "seine.csv"))
     
     # Orne
@@ -166,18 +180,18 @@ prep_HP <- function(zone){
     write_csv(loire, file.path(dir_main, "loire.csv"))
     
     # Lay
-    lay_1 <- map_dfr(dir(dir_HP, pattern = "N3511610", full.names = TRUE), load_HP)# |> mutate(site = "closest") 
-    lay_2 <- map_dfr(dir(dir_HP, pattern = "N330161010", full.names = TRUE), load_HP) |> #mutate(site = "complete") |> 
+    lay_1 <- map_dfr(dir(dir_HP, pattern = "N3511610", full.names = TRUE), load_HP) |> mutate(site = "closest") 
+    lay_2 <- map_dfr(dir(dir_HP, pattern = "N330161010", full.names = TRUE), load_HP) |> mutate(site = "complete") #|> 
       # filter(date >= "2023-01-01") |> 
-      mutate(debit = debit*2.33)
+      # mutate(debit = debit*2.33)
     
     # Compare
-    # lay_3 <- rbind(lay_1, lay_2) |> 
-    #   filter(date >= "2004-01-01", date <= "2025-12-31")
-    # lay_4 <- lay_3 |>
-    #   pivot_wider(values_from = debit, names_from = site) |>
-    #   mutate(prop_dif = closest/complete)
-    # mean(lay_4$prop_dif, na.rm = TRUE)
+    lay_3 <- rbind(lay_1, lay_2) |>
+      filter(date >= "2004-01-01", date <= "2025-12-31")
+    lay_4 <- lay_3 |>
+      pivot_wider(values_from = debit, names_from = site) |>
+      mutate(prop_dif = closest/complete)
+    mean(lay_4$prop_dif, na.rm = TRUE)
     # NB: The closest gauge is 2.33 times the complete gauge.
     # This may warrant a more sophisticated correction than a flat conversion rate
     # For example, more accurately track the proportion ration based on how large the debit values are
@@ -185,6 +199,11 @@ prep_HP <- function(zone){
     # ggplot(lay_3, aes(x = date, y = debit)) + geom_line(aes(colour = site)) + geom_smooth(method = "lm", aes(colour = site))
     # ggplot(lay_3, aes(x = site, y = debit)) + geom_boxplot(aes(fill = site))
     # ggplot(lay_4, aes(x = date, y = prop_dif)) + geom_col() + geom_smooth(method = "lm")
+    
+    # Log-log transform data and run linear model to find a correction between gauges
+    lay_5 <- left_join(lay_2, lay_1, by = "date") |> mutate(debit = predict_loglog(debit.y, debit.x, base_long = FALSE)) |> 
+      dplyr::select(date, debit, site.x) |> rename(site = site.x) |> mutate(site = "complete_pred")
+    ggplot(rbind(lay_1, lay_2, lay_5), aes(x = date, y = debit)) + geom_line(aes(colour = site)) + geom_smooth(method = "lm", aes(colour = site))
     
     # Combine and save
     lay <- rbind(lay_1, lay_2) |> summarise(debit = mean(debit, na.rm = TRUE), .by = date) |>
