@@ -1468,6 +1468,12 @@ library(Rbeast)
 # TODO: Create example
 
 
+# makicoint example -------------------------------------------------------
+
+# TODO: Work through this approach to see if it would be useful
+# https://cran.r-project.org/web/packages/makicoint/vignettes/introduction.html
+
+
 # POC/DOC -----------------------------------------------------------------
 
 # Load MOOSE data
