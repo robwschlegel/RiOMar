@@ -55,6 +55,12 @@ Once granted, the data used in this project were:
 
 ### River discharge
 
+#### Coriolis
+
+An ODATIS managed UI to access the data repository for a number of current and recent _in situ_ data sources.
+It does not appear possible to download historic data, but it is useful to see where the currently active river flow gauges are.
+This is helpful for searching through the database for HydroPortail as this is not made readily clear there.
+
 #### HydroPortail
 
 The primary public source of river discharge data is [HydroPortail](https://hydro.eaufrance.fr/).

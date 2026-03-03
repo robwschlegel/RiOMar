@@ -1,6 +1,5 @@
 # func/util.R
 # The storage point for many functions re-used by other scripts
-# TODO: test that python calls to other scripts correctly source this one
 
 
 # Meta-data ---------------------------------------------------------------
@@ -14,6 +13,12 @@ river_mouths <- data.frame(row_name = 1:4,
 # The zones en large
 zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
 
+# Zone bounding boxes
+zones_bbox <- data.frame(zone = zones_list,
+                         lon_min = c(3.5, -1.5, -3, -4.5),
+                         lon_max = c(6, 2, -0.5, -1),
+                         lat_min  = c(42.25, 49, 45, 46),
+                         lat_max = c(44, 50.5, 46.75, 48))
 
 # Loading -----------------------------------------------------------------
 
