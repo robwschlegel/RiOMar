@@ -15,10 +15,11 @@ zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITT
 
 # Zone bounding boxes
 zones_bbox <- data.frame(zone = zones_list,
-                         lon_min = c(3.5, -1.5, -3, -4.5),
-                         lon_max = c(6, 2, -0.5, -1),
-                         lat_min  = c(42.25, 49, 45, 46),
-                         lat_max = c(44, 50.5, 46.75, 48))
+                         lon_min = c(3.50, -1.50, -4.00, -5.00),
+                         lon_max = c(6.00, 0.50, -0.50, -1.50),
+                         lat_min  = c(42.25, 49.25, 44.50, 46.5),
+                         lat_max = c(44.00, 50.25, 46.50, 48.00))
+
 
 # Loading -----------------------------------------------------------------
 

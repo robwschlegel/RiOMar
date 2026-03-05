@@ -37,6 +37,9 @@ vars_polymer <- c("CDOM", "CHL", "SPM", "TUR", "RRS")
 
 ## MODIS ------------------------------------------------------------------
 
+# NB: Realistically this can't all be run in one go
+# It takes multiple days and will require caching multiple hndreds of Gigs of RAM
+# But one can stop the process whenever necessary and relaunch without issue
 for(i in 1:nrow(zones_bbox)){
   # Get the target zone
   zone <- zones_bbox[i,]
