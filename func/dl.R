@@ -18,7 +18,9 @@ source("~/sat_access/sat_access_script.R")
 aviso_plus_cred <- read.csv("~/pCloudDrive/Documents/info/aviso_plus_pswd.csv")
 
 # Time steps to walk through
-vec_time_steps <- c("daily", "weekly")#, "monthly")
+vec_time_steps <- c("daily")#, "weekly")#, "monthly")
+# NB: Not enough HDD space for the weekly data
+# NB: Monthly is too coarse for validation and TS analyses
 
 # The variables we want in the two different ODATIS-MR correction types
 vars_nirswir <- c("CDOM", "CHL", "SPM", "TUR", "RRS", "SST")
@@ -35,33 +37,95 @@ vars_polymer <- c("CDOM", "CHL", "SPM", "TUR", "RRS")
 
 ## MODIS ------------------------------------------------------------------
 
-# TODO: Could convert this to it's own wrapper function for convenience and to reduce lines of code / complexity
-# OR just the whole thing into a massive ridiculous nested for loop...
-for(i in nrow(zones_bbox)){
-  
+for(i in 1:nrow(zones_bbox)){
   # Get the target zone
   zone <- zones_bbox[i,]
-  
-  for(j in length(vec_time_steps)){
-    for(k in length(vars_nirswir)){
-      
+  for(j in 1:length(vec_time_steps)){
+    # Pick one time step
+    time_step <- vec_time_steps[j]
+    for(k in 1:length(vars_nirswir)){
       # Download the data
       download_nc(
         dl_var = vars_nirswir[k],
-        dl_dates = c("2002-07-04"), # TODO: THis will need to be handled differently for monthly data
-        # dl_dates = c("2002-07-04", "2024-12-31"),
-        dl_product = "ODATIS-MR",
-        dl_sensor = "MODIS",
-        dl_correction = "nirswir", 
-        dl_time_step = vec_time_steps[j],
-        dl_bbox = c(zone$lon_min, zone$lon_max, 
-                    zone$lat_min, zone$lat_max),
-        username = aviso_plus_cred$usrname,
-        password = aviso_plus_cred$psswrd,
-        output_dir = file.path("~/data/ODATIS-MR/MODIS", zone$zone, vec_time_steps[j]),
+        dl_dates = c("2002-07-04", "2024-12-31"), dl_time_step = time_step,
+        dl_product = "ODATIS-MR", dl_sensor = "MODIS", dl_correction = "nirswir", 
+        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
+        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS", zone$zone, time_step),
         overwrite = FALSE
       )
-      
+    }
+  }
+}
+
+
+## MERIS -------------------------------------------------------------------
+
+for(i in 1:nrow(zones_bbox)){
+  # Get the target zone
+  zone <- zones_bbox[i,]
+  for(j in 1:length(vec_time_steps)){
+    # Pick one time step
+    time_step <- vec_time_steps[j]
+    for(k in 1:length(vars_polymer)){
+      # Download the data
+      download_nc(
+        dl_var = vars_polymer[k],
+        dl_dates = c("2002-06-19", "2012-04-08"), dl_time_step = time_step,
+        dl_product = "ODATIS-MR", dl_sensor = "MERIS", dl_correction = "polymer", 
+        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
+        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS", zone$zone, time_step),
+        overwrite = FALSE
+      )
+    }
+  }
+}
+
+
+## OLCI-A ------------------------------------------------------------------
+
+for(i in 1:nrow(zones_bbox)){
+  # Get the target zone
+  zone <- zones_bbox[i,]
+  for(j in 1:length(vec_time_steps)){
+    # Pick one time step
+    time_step <- vec_time_steps[j]
+    for(k in 1:length(vars_polymer)){
+      # Download the data
+      download_nc(
+        dl_var = vars_polymer[k],
+        dl_dates = c("2016-04-26", "2024-12-31"), dl_time_step = time_step,
+        dl_product = "ODATIS-MR", dl_sensor = "OLCI-A", dl_correction = "polymer", 
+        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
+        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A", zone$zone, time_step),
+        overwrite = FALSE
+      )
+    }
+  }
+}
+
+
+## OLCI-B ------------------------------------------------------------------
+
+for(i in 1:nrow(zones_bbox)){
+  # Get the target zone
+  zone <- zones_bbox[i,]
+  for(j in 1:length(vec_time_steps)){
+    # Pick one time step
+    time_step <- vec_time_steps[j]
+    for(k in 1:length(vars_polymer)){
+      # Download the data
+      download_nc(
+        dl_var = vars_polymer[k],
+        dl_dates = c("2018-05-15", "2024-12-31"), dl_time_step = time_step,
+        dl_product = "ODATIS-MR", dl_sensor = "OLCI-B", dl_correction = "polymer", 
+        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
+        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B", zone$zone, time_step),
+        overwrite = FALSE
+      )
     }
   }
 }
