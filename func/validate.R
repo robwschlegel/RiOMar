@@ -514,26 +514,19 @@ Summarize_statistics_in_a_table <- function(where_to_save_MU_results) {
 REPHY <- read.csv2("data/INSITU_data/REPHY/Table1_REPHY_hydro_20250408.csv", fileEncoding = "ISO-8859-1")
 
 # SOMLIT
+# "data/INSITU_data/SOMLIT/SOMLIT_prep.R"
+SOMLIT <- read_csv("data/INSITU_data/SOMLIT/Somlit_clean.csv")
+
+# Filter out sites that are within the RiOMar regions
 
 
 # Nearest sat -------------------------------------------------------------
 
-# Quick tests to ensure the data are downloading the correct bboxs etc.
+# Create indexes of which pixels match the 3x3 grid around the in situ sites
 
-# Get the study site bbox
-zone <- zones_bbox[3,]
+# Function that loads each day of sat data to match against in situ and create a big file
 
-test1 <- tidync::tidync("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_BISCAY/daily/L3m_20020704__FRANCE_03_MOD_CDOM-NS_DAY_00.nc") |> 
-  tidync::hyper_tibble() |>
-  mutate(lon = as.numeric(lon), lat = as.numeric(lat)) |> 
-  filter(lon >= zone$lon_min, lon <= zone$lon_max, lat >= zone$lat_min, lat <= zone$lat_max) |> 
-  filter(`CDOM-NS_mean` >= 0)
-
-ggplot(test1, aes(x = lon, y = lat)) +
-  annotation_borders(fill = "grey80") +
-  geom_raster(aes(fill = `CDOM-NS_mean`)) +
-  scale_fill_viridis_c() +
-  coord_quickmap(xlim = c(zone$lon_min, zone$lon_max), ylim = c(zone$lat_min, zone$lat_max))
+# With this data frame then perform the necessary stats
 
 
 # SOMLIT map --------------------------------------------------------------

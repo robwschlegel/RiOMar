@@ -56,7 +56,7 @@ for(i in 1:nrow(zones_bbox)){
         username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
         output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS", zone$zone, time_step),
         overwrite = FALSE
-      )
+      ); gc()
     }
   }
 }
@@ -80,7 +80,7 @@ for(i in 1:nrow(zones_bbox)){
         username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
         output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS", zone$zone, time_step),
         overwrite = FALSE
-      )
+      ); gc()
     }
   }
 }
@@ -104,7 +104,7 @@ for(i in 1:nrow(zones_bbox)){
         username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
         output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A", zone$zone, time_step),
         overwrite = FALSE
-      )
+      ); gc()
     }
   }
 }
@@ -128,7 +128,7 @@ for(i in 1:nrow(zones_bbox)){
         username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
         output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B", zone$zone, time_step),
         overwrite = FALSE
-      )
+      ); gc()
     }
   }
 }
