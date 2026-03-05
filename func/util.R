@@ -294,6 +294,7 @@ sec_axis_adjustement_factors <- function(var_to_scale, var_ref) {
 ggplot_theme <-   function() {
   theme(text = element_text(size = 35, colour = "black"),
         plot.title = element_text(hjust = 0.5, size = 55),
+        plot.subtitle = element_text(hjust = 0.5, size = 30),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),

@@ -450,7 +450,7 @@ class MU_database_processing :
         grid_size = 9 # 9x9
         
         path_to_MU_of_the_zone = os.path.join(where_to_save_Match_Up_data, "MATCH_UP_DATA", "_&_".join(zones))
-        os.makedirs( path_to_MU_of_the_zone , exist_ok=True)
+        os.makedirs( path_to_MU_of_the_zone , exist_ok = True)
                      
         path_to_the_MU_database = os.path.join(path_to_MU_of_the_zone, "MU_database.joblib")
         
