@@ -106,7 +106,7 @@ for(i in 1:nrow(zones_bbox)){
   download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
                       dl_product = "ODATIS-MR", dl_sensor = "MODIS", dl_correction = "nirswir",
                       date_start = "2002-07-04", date_end = "2024-12-31", time_step = "daily",
-                      zone_info = zones_bbox[i,], dl_var = vars_nirswir[1]) # NB: Just getting SPM for the moment
+                      zone_info = zones_bbox[i,], dl_var = vars_nirswir)
 }
 
 
@@ -117,7 +117,7 @@ for(i in 1:nrow(zones_bbox)){
   download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
                       dl_product = "ODATIS-MR", dl_sensor = "MERIS", dl_correction = "polymer",
                       date_start = "2002-06-19", date_end = "2012-04-08", time_step = "daily",
-                      zone_info = zones_bbox[i,], dl_var = vars_polymer[1]) # NB: Just getting SPM for the moment
+                      zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
 
 
@@ -128,7 +128,7 @@ for(i in 1:nrow(zones_bbox)){
   download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
                       dl_product = "ODATIS-MR", dl_sensor = "OLCI-A", dl_correction = "polymer",
                       date_start = "2016-04-26", date_end = "2024-12-31", time_step = "daily",
-                      zone_info = zones_bbox[i,], dl_var = vars_polymer[1]) # NB: Just getting SPM for the moment
+                      zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
 
 
@@ -139,6 +139,6 @@ for(i in 1:nrow(zones_bbox)){
   download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
                       dl_product = "ODATIS-MR", dl_sensor = "OLCI-B", dl_correction = "polymer",
                       date_start = "2018-05-15", date_end = "2024-12-31", time_step = "daily",
-                      zone_info = zones_bbox[i,], dl_var = vars_polymer[1]) # NB: Just getting SPM for the moment
+                      zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
 
