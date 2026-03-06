@@ -102,107 +102,43 @@ download_study_area <- function(username, password,
 
 # Run a loop across all sites
 # NB: The multi-core is targeted at running one core for each year of data in the subset by variable
-for(i in 1:nrow(zones_bbox[3:4,])){
+for(i in 1:nrow(zones_bbox)){
   download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
                       dl_product = "ODATIS-MR", dl_sensor = "MODIS", dl_correction = "nirswir",
                       date_start = "2002-07-04", date_end = "2024-12-31", time_step = "daily",
-                      zone_info = zones_bbox[3:4,][i,], dl_var = vars_nirswir[1]) # NB: Just getting SPM for the moment
-}
-
-
-# NB: Realistically this can't all be run in one go
-# It takes multiple days and will require caching multiple hundreds of Gigs of RAM
-# But one can stop the process whenever necessary and relaunch without issue
-for(i in 1:nrow(zones_bbox)){
-  # Get the target zone
-  zone <- zones_bbox[3:4,][i,]
-  for(j in 1:length(vec_time_steps)){
-    # Pick one time step
-    time_step <- vec_time_steps[j]
-    for(k in 1:length(vars_nirswir[1])){
-      # Download the data
-      download_nc(
-        dl_var = vars_nirswir[k],
-        dl_dates = c("2002-07-04", "2024-12-31"), dl_time_step = time_step,
-        dl_product = "ODATIS-MR", dl_sensor = "MODIS", dl_correction = "nirswir", 
-        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
-        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
-        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS", zone$zone, time_step),
-        overwrite = FALSE
-      ); gc()
-    }
-  }
+                      zone_info = zones_bbox[i,], dl_var = vars_nirswir[1]) # NB: Just getting SPM for the moment
 }
 
 
 ## MERIS -------------------------------------------------------------------
 
+# Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
-  # Get the target zone
-  zone <- zones_bbox[i,]
-  for(j in 1:length(vec_time_steps)){
-    # Pick one time step
-    time_step <- vec_time_steps[j]
-    for(k in 1:length(vars_polymer[1])){
-      # Download the data
-      download_nc(
-        dl_var = vars_polymer[k],
-        dl_dates = c("2002-06-19", "2012-04-08"), dl_time_step = time_step,
-        dl_product = "ODATIS-MR", dl_sensor = "MERIS", dl_correction = "polymer", 
-        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
-        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
-        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS", zone$zone, time_step),
-        overwrite = FALSE
-      ); gc()
-    }
-  }
+  download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+                      dl_product = "ODATIS-MR", dl_sensor = "MERIS", dl_correction = "polymer",
+                      date_start = "2002-06-19", date_end = "2012-04-08", time_step = "daily",
+                      zone_info = zones_bbox[i,], dl_var = vars_polymer[1]) # NB: Just getting SPM for the moment
 }
 
 
 ## OLCI-A ------------------------------------------------------------------
 
+# Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
-  # Get the target zone
-  zone <- zones_bbox[i,]
-  for(j in 1:length(vec_time_steps)){
-    # Pick one time step
-    time_step <- vec_time_steps[j]
-    for(k in 1:length(vars_polymer[1])){
-      # Download the data
-      download_nc(
-        dl_var = vars_polymer[k],
-        dl_dates = c("2016-04-26", "2024-12-31"), dl_time_step = time_step,
-        dl_product = "ODATIS-MR", dl_sensor = "OLCI-A", dl_correction = "polymer", 
-        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
-        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
-        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A", zone$zone, time_step),
-        overwrite = FALSE
-      ); gc()
-    }
-  }
+  download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+                      dl_product = "ODATIS-MR", dl_sensor = "OLCI-A", dl_correction = "polymer",
+                      date_start = "2016-04-26", date_end = "2024-12-31", time_step = "daily",
+                      zone_info = zones_bbox[i,], dl_var = vars_polymer[1]) # NB: Just getting SPM for the moment
 }
 
 
 ## OLCI-B ------------------------------------------------------------------
 
+# Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
-  # Get the target zone
-  zone <- zones_bbox[i,]
-  for(j in 1:length(vec_time_steps)){
-    # Pick one time step
-    time_step <- vec_time_steps[j]
-    for(k in 1:length(vars_polymer[1])){
-      # Download the data
-      download_nc(
-        dl_var = vars_polymer[k],
-        dl_dates = c("2018-05-15", "2024-12-31"), dl_time_step = time_step,
-        dl_product = "ODATIS-MR", dl_sensor = "OLCI-B", dl_correction = "polymer", 
-        dl_bbox = c(zone$lon_min, zone$lon_max, zone$lat_min, zone$lat_max),
-        username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
-        output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B", zone$zone, time_step),
-        overwrite = FALSE
-      ); gc()
-    }
-  }
+  download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+                      dl_product = "ODATIS-MR", dl_sensor = "OLCI-B", dl_correction = "polymer",
+                      date_start = "2018-05-15", date_end = "2024-12-31", time_step = "daily",
+                      zone_info = zones_bbox[i,], dl_var = vars_polymer[1]) # NB: Just getting SPM for the moment
 }
 
