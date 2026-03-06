@@ -36,11 +36,10 @@ vars_polymer <- c("SPM", "CHL", "TUR", "CDOM", "RRS")
 # Functions ---------------------------------------------------------------
 
 # Convenience wrapper to help plyr::m_ply
-download_nc_ply <- function(username, password, 
+download_nc_ply <- function(username, password,
                             dl_product, dl_sensor, dl_correction, 
-                            date_start, date_end, time_step, 
-                            zone, lon_min, lon_max, lat_min, lat_max, 
-                            dl_var){
+                            time_step, zone, lon_min, lon_max, lat_min, lat_max,
+                            dl_var, date_start, date_end){
   download_nc(
     dl_var = dl_var,
     dl_dates = c(date_start, date_end), dl_time_step = time_step,
@@ -49,6 +48,45 @@ download_nc_ply <- function(username, password,
     username = username, password = password,
     output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/", dl_sensor, zone, time_step),
     overwrite = FALSE)
+}
+
+# Another wrapper that calls this one... probably a better way to do this
+# NB: It is assumed that all arguments are one value except zone and dl_var
+# username = aviso_plus_cred$usrname; password = aviso_plus_cred$psswrd 
+# dl_product = "ODATIS-MR"; dl_sensor = "MODIS"; dl_correction = "nirswir" 
+# date_start = "2002-07-04"; date_end = "2024-12-31"; time_step = "daily"
+# zone_info = zones_bbox[4,]; dl_var = vars_nirswir
+download_study_area <- function(username, password, 
+                                dl_product, dl_sensor, dl_correction, 
+                                date_start, date_end, time_step, 
+                                zone_info, dl_var){
+  
+  # Get a dataframe of download dates by year
+  year_range <- year(date_start):year(date_end)
+  date_df <- data.frame(date_start = paste0(year_range,"-01-01"),
+                        date_end = paste0(year_range,"-12-31"))
+  
+  # Correct start and end dates accordingly
+  date_df$date_start[1] <- ifelse(date_df$date_start[1] < date_start, date_start, date_df$date_start[1])
+  date_df$date_end[nrow(date_df)] <- ifelse(date_df$date_end[nrow(date_df)] > date_end, date_end, date_df$date_end[nrow(date_df)])
+  
+  # Create the full ply dataframe
+  ply_df <- data.frame(username = username, password = password,
+                       dl_product = dl_product, dl_sensor = dl_sensor, dl_correction = dl_correction,
+                       # date_start = date_start, date_end = date_end, 
+                       time_step = time_step,
+                       zone = rep(zone_info$zone, each = length(dl_var)),
+                       lon_min = rep(zone_info$lon_min, each = length(dl_var)),
+                       lon_max = rep(zone_info$lon_max, each = length(dl_var)),
+                       lat_min = rep(zone_info$lat_min, each = length(dl_var)),
+                       lat_max = rep(zone_info$lat_max, each = length(dl_var)),
+                       dl_var = dl_var)
+  
+  # Bigger grid
+  ply_date_df <- expand_grid(ply_df, date_df)
+  
+  # Ply it
+  plyr::m_ply(.data = ply_date_df, .fun = download_nc_ply, .parallel = TRUE); gc()
 }
 
 
@@ -62,19 +100,14 @@ download_nc_ply <- function(username, password,
 
 ## MODIS ------------------------------------------------------------------
 
-# Create a stack of arguments for download_nc_ply that can be fed via plyr::m_ply()
-modis_ply_df <- data.frame(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
-                           dl_product = "ODATIS-MR", dl_sensor = "MODIS", dl_correction = "nirswir", 
-                           date_start = "2002-07-04", date_end = "2024-12-31", time_step = "daily", # NB: Eventually we may want the 8-day data as well
-                           zone = rep(zones_bbox$zone, each = 6),
-                           lon_min = rep(zones_bbox$lon_min, each = 6),
-                           lon_max = rep(zones_bbox$lon_max, each = 6),
-                           lat_min = rep(zones_bbox$lat_min, each = 6),
-                           lat_max = rep(zones_bbox$lat_max, each = 6),
-                           dl_var = vars_nirswir)
-
-# Run them all
-plyr::m_ply(.data = modis_ply_df[1:2,], .fun = download_nc_ply, .parallel = TRUE)
+# Run a loop across all sites
+# NB: The multi-core is targeted at running one core for each year of data in the subset by variable
+for(i in 1:nrow(zones_bbox[3:4,])){
+  download_study_area(username = aviso_plus_cred$usrname, password = aviso_plus_cred$psswrd,
+                      dl_product = "ODATIS-MR", dl_sensor = "MODIS", dl_correction = "nirswir",
+                      date_start = "2002-07-04", date_end = "2024-12-31", time_step = "daily",
+                      zone_info = zones_bbox[3:4,][i,], dl_var = vars_nirswir[1]) # NB: Just getting SPM for the moment
+}
 
 
 # NB: Realistically this can't all be run in one go
