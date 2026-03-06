@@ -206,7 +206,7 @@ lagged_correlation <- function(x, y, max_lag) {
 }
 
 # Calculate STL
-stl_single <- function(x_col, out_col, start_date, ts_freq = 365){
+stl_single <- function(x_col, out_col, start_date, ts_freq = 365.25){
   
   # Create ts object and calculate stl
   ts_x <- ts(zoo::na.approx(x_col), frequency = ts_freq, start = c(year(start_date), quarter(start_date)))
