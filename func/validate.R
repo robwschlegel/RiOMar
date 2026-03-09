@@ -15,10 +15,16 @@ library(Metrics)
 library(gt)
 library(MASS)
 library(geosphere) # For pixel distances
+library(doParallel); registerDoParallel(cores = detectCores()-2)
 
 # The shared functions
 source("func/util.R")
 
+# Get all SEXTANT file names
+files_SEXTANT_SPM <- dir("~/pCloudDrive/data/SEXTANT/SPM", pattern = ".nc", full.names = TRUE, recursive = TRUE)
+files_SEXTANT_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", full.names = TRUE, recursive = TRUE)
+
+# Get all MODIS file names
 
 # Functions ---------------------------------------------------------------
 
@@ -539,58 +545,78 @@ SOMLIT <- read_csv("data/INSITU_data/SOMLIT/Somlit_clean.csv") |>
 # write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
 in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
 
+# Filter in situ stations to just those within a zone
+zone_sites <- in_situ_site_list |> filter(!is.na(zone))
 
-# Nearest sat -------------------------------------------------------------
+# Clean up and combine all in situ data into one dataframe
+## REPHY
+clean_REPHY <- right_join(REPHY, zone_sites, by = c("source", "site", "lon", "lat")) |> 
+  dplyr::rename(variable = `Code.parametre`, value = Valeur_mesure) |> 
+  dplyr::select(source, site, lon, lat, date, variable, value)
 
-# Get the SEXTANT grid
-# get_sat_grid("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc", "SEXTANT")
-coords_SEXTANT <- get_sat_grid("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc", "SEXTANT")
+## SOMLIT
+clean_SOMLIT <- right_join(SOMLIT, zone_sites, by = c("source", "site", "lon", "lat")) |> 
+  dplyr::select(source, site, lon, lat, date, temp:CHL_QC) |> 
+  # Act on the QC flags...
+  dplyr::select(-temp_QC, -sal_QC, -POC_QC, -SPM_QC, -CHLA_QC) |> 
+  pivot_longer(temp:CHLA, values_to = "value", names_to = "variable")
 
-# Get the MODIS grids per zone
-get_sat_grid("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily/L3m_20020704__FRANCE_03_MOD_SPM-G-NS_DAY_00.nc", 
-             "MODIS_GULF_OF_LION")
+## Combine
+zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |> 
+  # Create daily means
+  summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
 
 
-# Create indexes of which pixels match the 1 km range grid around the in situ sites
-target_ste = c(in_situ_site_list$lon[7], in_situ_site_list$lat[7]); dist_range = 1; sat_grid = coords_SEXTANT
-get_pixels <- function(target_pixel, sat_grid, dist_range){
-  
-  # Get the satellite resolution
-  lon_diff <- diff(sat_grid$lon)
-  lat_diff <- diff(sat_grid$lat)
-  lon_resolution <- mean(lon_diff[lon_diff > 0])
-  lat_resolution <- mean(lat_diff[lat_diff > 0])
-  
-  # Get the initial buffer to filter by
-  dist_buffer <- dist_range/100 # Convert to metres to better match decimal degrees
-  lon_buffer <- dist_buffer+lon_resolution/2
-  lat_buffer <- dist_buffer+lat_resolution/2
-  
-  # Get lon/la buffer range
-  lon_buff_range <- c(target_ste[1]-lon_buffer, target_ste[1]+lon_buffer)
-  lat_buff_range <- c(target_ste[2]-lat_buffer, target_ste[2]+lat_buffer)
-  
-  # Filter all pixels in the grid within buffer range
-  sat_grid_buffer <- sat_grid |> 
-    filter(lon >= lon_buff_range[1], lon <= lon_buff_range[2]) |> 
-    filter(lat >= lat_buff_range[1], lat <= lat_buff_range[2])
-  
-  # Calculate distance of pixels from the target in km
-  sat_grid_buffer$dist <- round(distHaversine(sat_grid_buffer, target_ste)/1000, 2)
-  
-  # Get the final pixel list
-  # Sat_grid_1km <- sat_grid_buffer |> filter(dist <= 1)
-  
-  # Get the pixel IDs
-  nc_base <- raster("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc", varname = "analysed_spim")
-  cell_numbers <- raster::cellFromXY(nc_base, xy = sat_grid_buffer)
-  # selected_values <- extract(nc_base, cell_numbers)
-}
+# Prep satellite pixels ---------------------------------------------------
 
+# Create the data.frames of pixel matchups
+## SEXTANT
+### TODO: Wrap this up with the other sensors and automate via a function call
+file_base_SEXTANT <- "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"
+grid_SEXTANT <- get_sat_grid(file_base_SEXTANT)
+rast_SEXTANT <- raster(file_base_SEXTANT, varname = "analysed_spim")
+zone_pixels_SEXTANT <- plyr::ddply(.data = zone_sites, .variables = c("zone", "source", "site"), .fun = get_pixels, .parallel = TRUE,
+                                   sat_grid = grid_SEXTANT, sat_rast = rast_SEXTANT)
+write_csv(zone_pixels_SEXTANT, "metadata/zone_pixels_SEXTANT.csv")
+
+## MODIS
+
+
+# Extract satellite data --------------------------------------------------
 
 # Function that loads each day of sat data to match against in situ and create a big file
+zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
 
-# With this data frame then perform the necessary stats
+# Extract all relevant SEXTANT data
+## SPM
+system.time(
+zone_data_SEXTANT_SPM <- plyr::ldply(.data = files_SEXTANT_SPM, .fun = extract_pixels, 
+                                     .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
+) # 5 seconds for 10 turns, xxx for all
+save(zone_data_SEXTANT_SPM, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+
+## CHL
+zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL[1:14], .fun = extract_pixels, 
+                                     .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
+save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+
+# Create median value time series
+zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_SPM, zone_data_SEXTANT_CHL) |> 
+  summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
+
+
+# Validation stats --------------------------------------------------------
+
+# Combine extracted sat data with in situ
+zone_in_situ_SEXTANT <- left_join(zone_data_in_situ, zone_median_SEXTANT, by = c("source", "site", "date", "variable"))
+zone_in_situ_SEXTANT_SPM <- zone_in_situ_SEXTANT |> filter(variable == "SPM")
+zone_in_situ_SEXTANT_CHL <- zone_in_situ_SEXTANT |> filter(variable == "CHL")
+
+# Calculate statistics
+zone_in_situ_SEXTANT_SPM_stats <- compute_stats(zone_in_situ_SEXTANT_SPM$value.x, zone_in_situ_SEXTANT_SPM$value.y)
+zone_in_situ_SEXTANT_CHL_stats <- compute_stats(zone_in_situ_SEXTANT_CHL$value.x, zone_in_situ_SEXTANT_CHL$value.y)
 
 
 # SOMLIT map --------------------------------------------------------------

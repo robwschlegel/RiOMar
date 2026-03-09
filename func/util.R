@@ -24,14 +24,76 @@ zones_bbox <- data.frame(zone = zones_list,
 # Utility -----------------------------------------------------------------
 
 # Simple wrapper to extract and save full satellite coord grids
-get_sat_grid <- function(file_name, sat_name){
+get_sat_grid <- function(file_name){
   nc_data <- nc_open(file_name)
   nc_lon <- as.vector(ncvar_get(nc_data, "lon"))
   nc_lat <- as.vector(ncvar_get(nc_data, "lat"))
   nc_close(nc_data)
-  coords_sat <- expand.grid(lon = nc_lon, lat = nc_lat, KEEP.OUT.ATTRS = FALSE) #|> distinct()
-  # write_csv(coords_sat, paste0("metadata/coords_",sat_name,".csv"))
+  coords_sat <- expand.grid(lon = nc_lon, lat = nc_lat, KEEP.OUT.ATTRS = FALSE)
   return(coords_sat)
+}
+
+# Create indexes of which pixels match the 1 km range grid around the in situ sites
+# target_site = zone_sites[1,]; dist_range = 1; sat_grid = coords_SEXTANT; sat_rast = rast_SEXTANT
+# rm(target_site, dist_range, sat_grid, sat_rast, lon_diff, lat_diff, lon_resolution, lat_resolution,
+#    dist_buffer, lon_buffer, lat_buffer, lon_buff_range, lat_buff_range, sat_grid_buffer)
+get_pixels <- function(target_site, sat_grid, sat_rast, dist_range = 1){
+  
+  # Get the satellite resolution
+  lon_diff <- diff(sat_grid$lon)
+  lat_diff <- diff(sat_grid$lat)
+  lon_resolution <- mean(lon_diff[lon_diff > 0])
+  lat_resolution <- mean(lat_diff[lat_diff > 0])
+  
+  # Get the initial buffer to filter by
+  dist_buffer <- dist_range/100 # Convert to metres to better match decimal degrees
+  lon_buffer <- dist_buffer+lon_resolution/2
+  lat_buffer <- dist_buffer+lat_resolution/2
+  
+  # Get lon/la buffer range
+  lon_buff_range <- c(target_site$lon-lon_buffer, target_site$lon+lon_buffer)
+  lat_buff_range <- c(target_site$lat-lat_buffer, target_site$lat+lat_buffer)
+  
+  # Filter all pixels in the grid within buffer range
+  sat_grid_buffer <- sat_grid |> 
+    filter(lon >= lon_buff_range[1], lon <= lon_buff_range[2]) |> 
+    filter(lat >= lat_buff_range[1], lat <= lat_buff_range[2])
+  
+  # Calculate distance of pixels from the target in km
+  sat_grid_buffer$dist <- round(distHaversine(sat_grid_buffer, target_site[,c("lon", "lat")])/1000, 2)
+  
+  # Get the pixel IDs and exit
+  sat_grid_buffer$cell_numbers <- raster::cellFromXY(sat_rast, xy = sat_grid_buffer)
+  return(sat_grid_buffer)
+}
+
+# Once the pixels have been determined, use this to extract the data
+# file_name <- "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"
+# df <- zone_pixels_SEXTANT
+extract_pixels <- function(file_name, df){
+  
+  # Determine variable names from file pathway
+  if(grepl("SEXTANT", file_name)){
+    if(grepl("SPM", file_name)){
+      var_col_name <- "SPM"
+      var_nc_name <- "analysed_spim"
+    } else if(grepl("CHL", file_name)){
+      var_col_name <- "CHL"
+      var_nc_name <- "analysed_chla"
+    } else {
+      stop("File structure not recognised")
+    }
+  } else {
+    stop("Need to add more satellites")
+  }
+  
+  # Extract data and exit
+  df_res <- df |> 
+    mutate(date = as.Date(str_split(basename(file_name), "-")[[1]][1], format = "%Y%m%d"),
+           variable = var_col_name,
+           value = extract(raster(file_name, varname = var_nc_name), cell_numbers)) |> 
+    dplyr::select(-cell_numbers)
+  return(df_res)
 }
 
 
