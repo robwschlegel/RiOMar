@@ -79,7 +79,7 @@ extract_pixels <- function(file_name, df){
       var_nc_name <- "analysed_spim"
     } else if(grepl("CHL", file_name)){
       var_col_name <- "CHL"
-      var_nc_name <- "analysed_chla"
+      var_nc_name <- "analysed_chl_a"
     } else {
       stop("File structure not recognised")
     }

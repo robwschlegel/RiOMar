@@ -32,15 +32,14 @@ files_SEXTANT_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", ful
 
 # Switch between project dedicated formats
 convert_list_to_df <- function(lst) {
-  # Convert list of lists into a dataframe
   
+  # Convert list of lists into a dataframe
   lst <- lst %>% purrr::discard(~ length(.) == 0)
   
   df <- do.call(rbind, lapply(lst, function(x) as.data.frame(t(x), stringsAsFactors = FALSE)))
   
-  # Add the names of the outer list as the first column
+  # Add the names of the outer list as the first column and exit
   df <- cbind(Region = names(lst), df)
-  
   return(df)
 }
 
@@ -164,7 +163,7 @@ unit_color_and_axis_limits_for_the_scatterplot <- function(variable) {
     color = "orange"
     axis_limits <- c(3, 30)
   } else {
-    stop(paste( "The function unit_color_and_axis_limits_for_the_scatterplot is not suited for", variable) )
+    stop(paste("The function unit_color_and_axis_limits_for_the_scatterplot is not suited for", variable))
   }
   
   # List and exit
@@ -217,10 +216,10 @@ colors_of_stations <- function() {
   #                  'Mer ligurienne - Corse' = rocket(n = 1,begin = 0.95,end = 0.95)
   # )
   
-  color_values = c('BAY OF SEINE' = mako(n = 1, begin = 0.8,end = 0.8),
-                   'SOUTHERN BRITTANY' = viridis(n = 1, begin = 0.9,end = 0.9),
-                   'GULF OF BISCAY' = plasma(n = 1, begin = 0.05,end = 0.05),
-                   'GULF OF LION' = rocket(n = 1, begin = 0.80,end = 0.80))
+  color_values = c('BAY OF SEINE' = viridis::mako(n = 1, begin = 0.8,end = 0.8),
+                   'SOUTHERN BRITTANY' = viridis::viridis(n = 1, begin = 0.9,end = 0.9),
+                   'GULF OF BISCAY' = viridis::plasma(n = 1, begin = 0.05,end = 0.05),
+                   'GULF OF LION' = viridis::rocket(n = 1, begin = 0.80,end = 0.80))
   
   return(color_values)
 }
@@ -282,14 +281,9 @@ make_the_figures <- function(insitu_value, satellite_median, Year, Month,
     scale_linetype_manual(values = c("Identity line" = "dashed",
                                      "Linear regression" = "solid"), name = "") +
     
-    guides(color=guide_legend(ncol=1, override.aes = list(size = 10),
-                              order = 1),
-           shape=guide_legend(ncol=1, override.aes = list(size = 10),
-                              order = 3),
-           linetype = guide_legend(override.aes = list(color = c("black"),
-                                                       shape = c(NA),
-                                                       linetype = c("dashed")),
-                                   ncol = 2), order = 2) +
+    guides(color = guide_legend(ncol = 1, override.aes = list(size = 10), order = 1),
+           shape = guide_legend(ncol = 1, override.aes = list(size = 10), order = 3),
+           linetype = guide_legend(override.aes = list(color = c("black"), shape = c(NA), linetype = c("dashed")), ncol = 2, order = 2)) +
     
     ggplot_theme() + 
     
@@ -511,7 +505,6 @@ Summarize_statistics_in_a_table <- function(where_to_save_MU_results) {
     )
   
   the_Table %>% gtsave(file.path(where_to_save_MU_results, "STATISTICS", "Per_sat_product", "Table.html"))
-  
 }
 
 
@@ -612,25 +605,30 @@ zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
 load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
 
 ## CHL
-zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL[1:14], .fun = extract_pixels, 
-                                     .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
-save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+# system.time(
+# zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL, .fun = extract_pixels, 
+#                                      .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
+# ) # 47 minutes
+# save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
 load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
 
 # Create median value time series
-zone_median_SEXTANT <- zone_data_SEXTANT_SPM |> #bind_rows(zone_data_SEXTANT_SPM, zone_data_SEXTANT_CHL) |> 
+zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_SPM, zone_data_SEXTANT_CHL) |> 
   filter(value >= 0) |> 
   summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
 
 
 # Validation stats --------------------------------------------------------
 
+# TODO: Calculate the number of missing data per site per day, month, year etc.
+# Will need to visualise this as a map as well
+
 # Combine extracted sat data with in situ
 zone_in_situ_SEXTANT <- zone_data_in_situ |> 
   left_join(zone_median_SEXTANT, by = c("source", "site", "date", "variable")) |> 
   filter(value.x >= 0, value.y >= 0)
 zone_in_situ_SEXTANT_SPM <- zone_in_situ_SEXTANT |> filter(variable == "SPM")
-# zone_in_situ_SEXTANT_CHL <- zone_in_situ_SEXTANT |> filter(variable == "CHL")
+zone_in_situ_SEXTANT_CHL <- zone_in_situ_SEXTANT |> filter(variable == "CHL")
 
 # Calculate statistics
 zone_in_situ_SEXTANT_SPM_stats <- compute_stats(zone_in_situ_SEXTANT_SPM$value.x, zone_in_situ_SEXTANT_SPM$value.y)
