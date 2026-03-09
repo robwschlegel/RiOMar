@@ -20,12 +20,12 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (add_array_to_dict, path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,  # noqa: E402
-                    create_arborescence, find_sat_data_files,merge_dicts, get_empty_paths,
-                    return_the_parameter_name_based_on_file_name, get_non_empty_paths,
-                    extract_the_time_from_the_satellite_file, access_item_in_a_dictionnary, 
-                    extract_dataframes_iterative, load_csv_files_in_the_package_folder,
-                    get_the_values_from_a_list_comprehension, define_parameters, get_all_cases_to_process)
+from util import (add_array_to_dict, path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,
+                  create_arborescence, find_sat_data_files, merge_dicts, get_empty_paths,
+                  return_the_parameter_name_based_on_file_name, get_non_empty_paths,
+                  extract_the_time_from_the_satellite_file, access_item_in_a_dictionnary, 
+                  extract_dataframes_iterative, load_csv_files_in_the_package_folder,
+                  get_the_values_from_a_list_comprehension, define_parameters, get_all_cases_to_process)
 
 
 # =============================================================================

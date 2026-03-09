@@ -522,7 +522,7 @@ Summarize_statistics_in_a_table <- function(where_to_save_MU_results) {
 # "data/INSITU_data/REPHY/REPHY_Dataset_20250408.R"
 REPHY <- read.csv2("data/INSITU_data/REPHY/Table1_REPHY_hydro_20250408.csv", fileEncoding = "ISO-8859-1") |> 
   mutate(lon = as.numeric(lon), lat = as.numeric(lat), source = "REPHY") |> 
-  dplyr::rename(site = Code_point_Libelle)
+  dplyr::rename(site = Code_point_Libelle, date = Date, variable = Code.parametre, value = Valeur_mesure)
 
 # SOMLIT
 # "data/INSITU_data/SOMLIT/SOMLIT_prep.R"
@@ -551,18 +551,31 @@ zone_sites <- in_situ_site_list |> filter(!is.na(zone))
 # Clean up and combine all in situ data into one dataframe
 ## REPHY
 clean_REPHY <- right_join(REPHY, zone_sites, by = c("source", "site", "lon", "lat")) |> 
-  dplyr::rename(variable = `Code.parametre`, value = Valeur_mesure) |> 
-  dplyr::select(source, site, lon, lat, date, variable, value)
+  filter(Qualite.resultat == "Bon") |> # Only keep 'good' measurements
+  filter(as.numeric(Profondeur.metre) <= 10) |>  # Only keep values within 10 meters of surface
+  dplyr::select(source, site, lon, lat, date, variable, value) |> 
+  mutate(variable = case_when(variable == "SALI" ~ "SAL",
+                              variable == "CHLOROA" ~ "CHLA", TRUE ~ variable),
+         date = as.Date(date)) |> 
+  filter(value >= 0)
 
 ## SOMLIT
 clean_SOMLIT <- right_join(SOMLIT, zone_sites, by = c("source", "site", "lon", "lat")) |> 
-  dplyr::select(source, site, lon, lat, date, temp:CHL_QC) |> 
-  # Act on the QC flags...
-  dplyr::select(-temp_QC, -sal_QC, -POC_QC, -SPM_QC, -CHLA_QC) |> 
-  pivot_longer(temp:CHLA, values_to = "value", names_to = "variable")
+  filter(prof_num <= 10) |> # Filter data deeper than 10 meters
+  # Filter bad flags
+  mutate(TEMP = case_when(temp_QC %in% c(2, 6, 7) ~ temp),
+         SAL = case_when(sal_QC %in% c(2, 6, 7) ~ sal),
+         POC = case_when(POC_QC %in% c(2, 6, 7) ~ POC),
+         SPM = case_when(SPM_QC %in% c(2, 6, 7) ~ SPM),
+         CHLA = case_when(CHLA_QC %in% c(2, 6, 7) ~ CHLA)) |> 
+  dplyr::select(source, site, lon, lat, date, TEMP, SAL, POC, SPM, CHLA) |> 
+  pivot_longer(TEMP:CHLA, values_to = "value", names_to = "variable") |>
+  filter(value >= 0)
 
 ## Combine
 zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |> 
+  # Get only variables of interest
+  filter(variable %in% c('TEMP', 'SAL', 'POC', 'SPM', 'CHLA', 'TURB')) |> 
   # Create daily means
   summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
 
@@ -572,14 +585,16 @@ zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |>
 # Create the data.frames of pixel matchups
 ## SEXTANT
 ### TODO: Wrap this up with the other sensors and automate via a function call
-file_base_SEXTANT <- "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"
-grid_SEXTANT <- get_sat_grid(file_base_SEXTANT)
-rast_SEXTANT <- raster(file_base_SEXTANT, varname = "analysed_spim")
-zone_pixels_SEXTANT <- plyr::ddply(.data = zone_sites, .variables = c("zone", "source", "site"), .fun = get_pixels, .parallel = TRUE,
-                                   sat_grid = grid_SEXTANT, sat_rast = rast_SEXTANT)
-write_csv(zone_pixels_SEXTANT, "metadata/zone_pixels_SEXTANT.csv")
+# file_base_SEXTANT <- "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"
+# grid_SEXTANT <- get_sat_grid(file_base_SEXTANT)
+# rast_SEXTANT <- raster(file_base_SEXTANT, varname = "analysed_spim")
+# zone_pixels_SEXTANT <- plyr::ddply(.data = zone_sites, .variables = c("zone", "source", "site"), .fun = get_pixels, .parallel = TRUE,
+#                                    sat_grid = grid_SEXTANT, sat_rast = rast_SEXTANT)
+# write_csv(zone_pixels_SEXTANT, "metadata/zone_pixels_SEXTANT.csv")
 
 ## MODIS
+### Need to ensure the L3 product is treated as daily
+### Otherwise need to match the overhead pass to hourly in situ sampling
 
 
 # Extract satellite data --------------------------------------------------
@@ -589,11 +604,11 @@ zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
 
 # Extract all relevant SEXTANT data
 ## SPM
-system.time(
-zone_data_SEXTANT_SPM <- plyr::ldply(.data = files_SEXTANT_SPM, .fun = extract_pixels, 
-                                     .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
-) # 5 seconds for 10 turns, xxx for all
-save(zone_data_SEXTANT_SPM, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+# system.time(
+# zone_data_SEXTANT_SPM <- plyr::ldply(.data = files_SEXTANT_SPM, .fun = extract_pixels, 
+#                                      .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
+# ) # 5 seconds for 10 turns, 52 minutes for all
+# save(zone_data_SEXTANT_SPM, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
 load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
 
 ## CHL
@@ -603,16 +618,19 @@ save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTAN
 load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
 
 # Create median value time series
-zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_SPM, zone_data_SEXTANT_CHL) |> 
+zone_median_SEXTANT <- zone_data_SEXTANT_SPM |> #bind_rows(zone_data_SEXTANT_SPM, zone_data_SEXTANT_CHL) |> 
+  filter(value >= 0) |> 
   summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
 
 
 # Validation stats --------------------------------------------------------
 
 # Combine extracted sat data with in situ
-zone_in_situ_SEXTANT <- left_join(zone_data_in_situ, zone_median_SEXTANT, by = c("source", "site", "date", "variable"))
+zone_in_situ_SEXTANT <- zone_data_in_situ |> 
+  left_join(zone_median_SEXTANT, by = c("source", "site", "date", "variable")) |> 
+  filter(value.x >= 0, value.y >= 0)
 zone_in_situ_SEXTANT_SPM <- zone_in_situ_SEXTANT |> filter(variable == "SPM")
-zone_in_situ_SEXTANT_CHL <- zone_in_situ_SEXTANT |> filter(variable == "CHL")
+# zone_in_situ_SEXTANT_CHL <- zone_in_situ_SEXTANT |> filter(variable == "CHL")
 
 # Calculate statistics
 zone_in_situ_SEXTANT_SPM_stats <- compute_stats(zone_in_situ_SEXTANT_SPM$value.x, zone_in_situ_SEXTANT_SPM$value.y)
