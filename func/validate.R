@@ -6,12 +6,15 @@
 # The packages needed for this script
 # library(plyr)
 library(tidyverse)
+library(raster)
+library(ncdf4)
 # library(viridis)
 library(scales)
 library(ggExtra)
 library(Metrics)
 library(gt)
 library(MASS)
+library(geosphere) # For pixel distances
 
 # The shared functions
 source("func/util.R")
@@ -511,18 +514,79 @@ Summarize_statistics_in_a_table <- function(where_to_save_MU_results) {
 # REPHY
 ## NB: The script used to process the data, and necessary files, were provided by Victor Pochic
 # "data/INSITU_data/REPHY/REPHY_Dataset_20250408.R"
-REPHY <- read.csv2("data/INSITU_data/REPHY/Table1_REPHY_hydro_20250408.csv", fileEncoding = "ISO-8859-1")
+REPHY <- read.csv2("data/INSITU_data/REPHY/Table1_REPHY_hydro_20250408.csv", fileEncoding = "ISO-8859-1") |> 
+  mutate(lon = as.numeric(lon), lat = as.numeric(lat), source = "REPHY") |> 
+  dplyr::rename(site = Code_point_Libelle)
 
 # SOMLIT
 # "data/INSITU_data/SOMLIT/SOMLIT_prep.R"
-SOMLIT <- read_csv("data/INSITU_data/SOMLIT/Somlit_clean.csv")
+SOMLIT <- read_csv("data/INSITU_data/SOMLIT/Somlit_clean.csv") |> 
+  mutate(source = "SOMLIT")
 
 # Filter out sites that are within the RiOMar regions
+# in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site), 
+#                                dplyr::select(SOMLIT, source, lon, lat, site)) |> 
+#   distinct() |> 
+#   summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |> 
+#   mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] & 
+#                             lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
+#                           lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] & 
+#                             lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
+#                           lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] & 
+#                             lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
+#                           lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] & 
+#                             lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY",))
+# write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
+in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
 
 
 # Nearest sat -------------------------------------------------------------
 
-# Create indexes of which pixels match the 3x3 grid around the in situ sites
+# Get the SEXTANT grid
+# get_sat_grid("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc", "SEXTANT")
+coords_SEXTANT <- get_sat_grid("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc", "SEXTANT")
+
+# Get the MODIS grids per zone
+get_sat_grid("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily/L3m_20020704__FRANCE_03_MOD_SPM-G-NS_DAY_00.nc", 
+             "MODIS_GULF_OF_LION")
+
+
+# Create indexes of which pixels match the 1 km range grid around the in situ sites
+target_ste = c(in_situ_site_list$lon[7], in_situ_site_list$lat[7]); dist_range = 1; sat_grid = coords_SEXTANT
+get_pixels <- function(target_pixel, sat_grid, dist_range){
+  
+  # Get the satellite resolution
+  lon_diff <- diff(sat_grid$lon)
+  lat_diff <- diff(sat_grid$lat)
+  lon_resolution <- mean(lon_diff[lon_diff > 0])
+  lat_resolution <- mean(lat_diff[lat_diff > 0])
+  
+  # Get the initial buffer to filter by
+  dist_buffer <- dist_range/100 # Convert to metres to better match decimal degrees
+  lon_buffer <- dist_buffer+lon_resolution/2
+  lat_buffer <- dist_buffer+lat_resolution/2
+  
+  # Get lon/la buffer range
+  lon_buff_range <- c(target_ste[1]-lon_buffer, target_ste[1]+lon_buffer)
+  lat_buff_range <- c(target_ste[2]-lat_buffer, target_ste[2]+lat_buffer)
+  
+  # Filter all pixels in the grid within buffer range
+  sat_grid_buffer <- sat_grid |> 
+    filter(lon >= lon_buff_range[1], lon <= lon_buff_range[2]) |> 
+    filter(lat >= lat_buff_range[1], lat <= lat_buff_range[2])
+  
+  # Calculate distance of pixels from the target in km
+  sat_grid_buffer$dist <- round(distHaversine(sat_grid_buffer, target_ste)/1000, 2)
+  
+  # Get the final pixel list
+  # Sat_grid_1km <- sat_grid_buffer |> filter(dist <= 1)
+  
+  # Get the pixel IDs
+  nc_base <- raster("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc", varname = "analysed_spim")
+  cell_numbers <- raster::cellFromXY(nc_base, xy = sat_grid_buffer)
+  # selected_values <- extract(nc_base, cell_numbers)
+}
+
 
 # Function that loads each day of sat data to match against in situ and create a big file
 

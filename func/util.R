@@ -21,6 +21,20 @@ zones_bbox <- data.frame(zone = zones_list,
                          lat_max = c(44.00, 50.25, 46.50, 48.00))
 
 
+# Utility -----------------------------------------------------------------
+
+# Simple wrapper to extract and save full satellite coord grids
+get_sat_grid <- function(file_name, sat_name){
+  nc_data <- nc_open(file_name)
+  nc_lon <- as.vector(ncvar_get(nc_data, "lon"))
+  nc_lat <- as.vector(ncvar_get(nc_data, "lat"))
+  nc_close(nc_data)
+  coords_sat <- expand.grid(lon = nc_lon, lat = nc_lat, KEEP.OUT.ATTRS = FALSE) #|> distinct()
+  # write_csv(coords_sat, paste0("metadata/coords_",sat_name,".csv"))
+  return(coords_sat)
+}
+
+
 # Loading -----------------------------------------------------------------
 
 # Load time series of plume values
