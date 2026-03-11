@@ -20,6 +20,9 @@ library(doParallel); registerDoParallel(cores = detectCores()-2)
 # The shared functions
 source("func/util.R")
 
+# Regions to process
+# zones_to_process <- c('Global', zones_bbox$zone) %>% unique()
+
 # Get all SEXTANT file names
 files_SEXTANT_SPM <- dir("~/pCloudDrive/data/SEXTANT/SPM", pattern = ".nc", full.names = TRUE, recursive = TRUE)
 files_SEXTANT_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", full.names = TRUE, recursive = TRUE)
@@ -31,33 +34,57 @@ files_SEXTANT_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", ful
 ## Utility ----------------------------------------------------------------
 
 # Switch between project dedicated formats
-convert_list_to_df <- function(lst) {
-  
-  # Convert list of lists into a dataframe
-  lst <- lst %>% purrr::discard(~ length(.) == 0)
-  
-  df <- do.call(rbind, lapply(lst, function(x) as.data.frame(t(x), stringsAsFactors = FALSE)))
-  
-  # Add the names of the outer list as the first column and exit
-  df <- cbind(Region = names(lst), df)
-  return(df)
-}
+# convert_list_to_df <- function(lst) {
+#   
+#   # Convert list of lists into a dataframe
+#   lst <- lst %>% purrr::discard(~ length(.) == 0)
+#   
+#   df <- do.call(rbind, lapply(lst, function(x) as.data.frame(t(x), stringsAsFactors = FALSE)))
+#   
+#   # Add the names of the outer list as the first column and exit
+#   df <- cbind(zone = names(lst), df)
+#   return(df)
+# }
 
 # Save data in a specific csv structure
-save_file_as_csv <- function(data, file_name) {
-  path <- file_name %>% str_split(pattern = "/") %>% .[[1]] %>% head(-1) %>% paste(collapse = "/")
-  if (dir.exists(path) == FALSE) {dir.create(path = path, recursive = TRUE)}
-  if (grepl(".csv", file_name) == FALSE) {file_name <- paste(file_name, ".csv", sep = "")}
-  data.table::fwrite(data %>% as.data.frame(), file = file_name, row.names = TRUE, col.names = TRUE)
-}
+# save_file_as_csv <- function(data, file_name) {
+#   path <- file_name %>% str_split(pattern = "/") %>% .[[1]] %>% head(-1) %>% paste(collapse = "/")
+#   if (dir.exists(path) == FALSE) {dir.create(path = path, recursive = TRUE)}
+#   if (grepl(".csv", file_name) == FALSE) {file_name <- paste(file_name, ".csv", sep = "")}
+#   data.table::fwrite(data %>% as.data.frame(), file = file_name, row.names = TRUE, col.names = TRUE)
+# }
 
 
 ## Stats ------------------------------------------------------------------
 
 # The full suite of stats to calculate
-compute_stats <- function(sat_values, insitu_values, axis_limits = c(NA, NA)) {
+compute_stats <- function(sat_values, insitu_values, zone, variable) {
   
-  if (length(sat_values) < 3) {return(list())}
+  if(length(sat_values) < 3){
+    return(data.frame(zone = zone,
+                      variable = variable,
+                      n = length(sat_values),
+                      MedAE_multiplicative = NA,
+                      MedAPE = NA,
+                      MedAE = NA,
+                      Bias_multiplicative = NA,
+                      Bias_multiplicative_in_perc = NA,
+                      RMSE = NA,
+                      RMSE_in_perc = NA,
+                      MAPE = NA,
+                      slope_log = NA,
+                      intercept_log = NA,
+                      r2_log = NA,
+                      # lm_line_log = lm_line_log,
+                      slope = NA,
+                      intercept = NA,
+                      r2 = NA,
+                      # lm_line = lm_line,
+                      bias_Pahlevan = NA,
+                      error_Pahlevan = NA,
+                      bias_Pahlevan_linear = NA,
+                      error_Pahlevan_linear = NA))
+  }
   
   MedAE_multiplicative <- 10 ^ mean( abs( log10(sat_values) - log10(insitu_values) ) )
   MedAPE <- (MedAE_multiplicative - 1) * 100
@@ -82,10 +109,10 @@ compute_stats <- function(sat_values, insitu_values, axis_limits = c(NA, NA)) {
   intercept_log <- lm_log$coefficients[1,1]
   r2_log <- lm_log$r.squared
   
-  lm_line_log <- data.frame(x = exp( log_insitu_values[index_to_keep_log] ) ,
-                            y_pred = exp (log_insitu_values[index_to_keep_log]*slope_log) * exp( intercept_log ),
-                            true_y = exp( log_sat_values[index_to_keep_log] ) ) %>% 
-    add_row(data.frame(x = axis_limits, y_pred = exp( (log(axis_limits)*slope_log) ) * exp(intercept_log)))
+  # lm_line_log <- data.frame(x = exp( log_insitu_values[index_to_keep_log] ) ,
+  #                           y_pred = exp (log_insitu_values[index_to_keep_log]*slope_log) * exp( intercept_log ),
+  #                           true_y = exp( log_sat_values[index_to_keep_log] ) ) %>% 
+  #   add_row(data.frame(x = axis_limits, y_pred = exp( (log(axis_limits)*slope_log) ) * exp(intercept_log)))
   
   
   weights <- rlm(sat_values ~ insitu_values)$weights
@@ -96,10 +123,10 @@ compute_stats <- function(sat_values, insitu_values, axis_limits = c(NA, NA)) {
   intercept <- lm$coefficients[1,1]
   r2 <- lm$r.squared
   
-  lm_line <- data.frame(x = insitu_values[index_to_keep] ,
-                        y_pred = insitu_values[index_to_keep]*slope + intercept,
-                        true_y = sat_values[index_to_keep] ) %>% 
-    add_row(data.frame(x = axis_limits, y_pred = axis_limits*slope + intercept))
+  # lm_line <- data.frame(x = insitu_values[index_to_keep] ,
+  #                       y_pred = insitu_values[index_to_keep]*slope + intercept,
+  #                       true_y = sat_values[index_to_keep] ) %>% 
+  #   add_row(data.frame(x = axis_limits, y_pred = axis_limits*slope + intercept))
   
   
   bias_Pahlevan = (sat_values / insitu_values) %>% log10() %>% median()
@@ -114,27 +141,51 @@ compute_stats <- function(sat_values, insitu_values, axis_limits = c(NA, NA)) {
   error_Pahlevan_linear = ((sat_values - insitu_values) / insitu_values) %>% abs() %>% median()
   error_Pahlevan_linear = 100 * (error_Pahlevan_linear)
   
-  return(list(MedAE_multiplicative = MedAE_multiplicative,
-              MedAPE = MedAPE,
-              MedAE = MedAE,
-              Bias_multiplicative = Bias_multiplicative,
-              Bias_multiplicative_in_perc = Bias_multiplicative_in_perc,
-              RMSE = RMSE,
-              RMSE_in_perc = RMSE_in_perc,
-              MAPE = MAPE,
-              slope_log = slope_log,
-              intercept_log = intercept_log,
-              r2_log = r2_log,
-              lm_line_log = lm_line_log,
-              slope = slope,
-              intercept = intercept,
-              r2 = r2,
-              lm_line = lm_line,
-              bias_Pahlevan = bias_Pahlevan,
-              error_Pahlevan = error_Pahlevan,
-              bias_Pahlevan_linear = bias_Pahlevan_linear,
-              error_Pahlevan_linear = error_Pahlevan_linear,
-              n = length(insitu_values)))
+  return(data.frame(zone = zone,
+                    variable = variable,
+                    n = length(sat_values),
+                    MedAE_multiplicative = MedAE_multiplicative,
+                    MedAPE = MedAPE,
+                    MedAE = MedAE,
+                    Bias_multiplicative = Bias_multiplicative,
+                    Bias_multiplicative_in_perc = Bias_multiplicative_in_perc,
+                    RMSE = RMSE,
+                    RMSE_in_perc = RMSE_in_perc,
+                    MAPE = MAPE,
+                    slope_log = slope_log,
+                    intercept_log = intercept_log,
+                    r2_log = r2_log,
+                    # lm_line_log = lm_line_log,
+                    slope = slope,
+                    intercept = intercept,
+                    r2 = r2,
+                    # lm_line = lm_line,
+                    bias_Pahlevan = bias_Pahlevan,
+                    error_Pahlevan = error_Pahlevan,
+                    bias_Pahlevan_linear = bias_Pahlevan_linear,
+                    error_Pahlevan_linear = error_Pahlevan_linear))
+  
+  # return(list(MedAE_multiplicative = MedAE_multiplicative,
+  #             MedAPE = MedAPE,
+  #             MedAE = MedAE,
+  #             Bias_multiplicative = Bias_multiplicative,
+  #             Bias_multiplicative_in_perc = Bias_multiplicative_in_perc,
+  #             RMSE = RMSE,
+  #             RMSE_in_perc = RMSE_in_perc,
+  #             MAPE = MAPE,
+  #             slope_log = slope_log,
+  #             intercept_log = intercept_log,
+  #             r2_log = r2_log,
+  #             lm_line_log = lm_line_log,
+  #             slope = slope,
+  #             intercept = intercept,
+  #             r2 = r2,
+  #             lm_line = lm_line,
+  #             bias_Pahlevan = bias_Pahlevan,
+  #             error_Pahlevan = error_Pahlevan,
+  #             bias_Pahlevan_linear = bias_Pahlevan_linear,
+  #             error_Pahlevan_linear = error_Pahlevan_linear,
+  #             n = length(insitu_values)))
 }
 
 
@@ -548,6 +599,7 @@ clean_REPHY <- right_join(REPHY, zone_sites, by = c("source", "site", "lon", "la
   filter(as.numeric(Profondeur.metre) <= 10) |>  # Only keep values within 10 meters of surface
   dplyr::select(source, site, lon, lat, date, variable, value) |> 
   mutate(variable = case_when(variable == "SALI" ~ "SAL",
+                              variable == "TURB" ~ "TUR",
                               variable == "CHLOROA" ~ "CHLA", TRUE ~ variable),
          date = as.Date(date)) |> 
   filter(value >= 0)
@@ -568,7 +620,7 @@ clean_SOMLIT <- right_join(SOMLIT, zone_sites, by = c("source", "site", "lon", "
 ## Combine
 zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |> 
   # Get only variables of interest
-  filter(variable %in% c('TEMP', 'SAL', 'POC', 'SPM', 'CHLA', 'TURB')) |> 
+  filter(variable %in% c('TEMP', 'SAL', 'POC', 'SPM', 'CHLA', 'TUR')) |> 
   # Create daily means
   summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
 
@@ -602,7 +654,11 @@ zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
 #                                      .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
 # ) # 5 seconds for 10 turns, 52 minutes for all
 # save(zone_data_SEXTANT_SPM, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
-load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+# load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+
+## TUR
+### Copy the SPM values as TUR for comparison against in situ values
+# zone_data_SEXTANT_TUR <- zone_data_SEXTANT_SPM |> mutate(variable = "TUR")
 
 ## CHL
 # system.time(
@@ -610,12 +666,14 @@ load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
 #                                      .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
 # ) # 47 minutes
 # save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
-load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+# load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
 
 # Create median value time series
-zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_SPM, zone_data_SEXTANT_CHL) |> 
-  filter(value >= 0) |> 
-  summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
+# zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_CHL,zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR) |>
+#   filter(value > 0) |>
+#   summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
+# save(zone_median_SEXTANT, file = "output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
+load("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
 
 
 # Validation stats --------------------------------------------------------
@@ -626,13 +684,47 @@ zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_SPM, zone_data_SEXTANT_CHL) |
 # Combine extracted sat data with in situ
 zone_in_situ_SEXTANT <- zone_data_in_situ |> 
   left_join(zone_median_SEXTANT, by = c("source", "site", "date", "variable")) |> 
-  filter(value.x >= 0, value.y >= 0)
-zone_in_situ_SEXTANT_SPM <- zone_in_situ_SEXTANT |> filter(variable == "SPM")
-zone_in_situ_SEXTANT_CHL <- zone_in_situ_SEXTANT |> filter(variable == "CHL")
+  filter(value.x > 0, value.y > 0)
 
 # Calculate statistics
-zone_in_situ_SEXTANT_SPM_stats <- compute_stats(zone_in_situ_SEXTANT_SPM$value.x, zone_in_situ_SEXTANT_SPM$value.y)
-zone_in_situ_SEXTANT_CHL_stats <- compute_stats(zone_in_situ_SEXTANT_CHL$value.x, zone_in_situ_SEXTANT_CHL$value.y)
+for(i in 1:length(unique(zone_in_situ_SEXTANT$variable))){
+  
+  # target variable
+  var_target <- unique(zone_in_situ_SEXTANT$variable)[i]
+  
+  # get one variable
+  zone_in_situ_SEXTANT_var <- filter(zone_in_situ_SEXTANT, variable == var_target)
+  
+  # Calculate all stats
+  stats_var <- compute_stats(sat_values = zone_in_situ_SEXTANT_var$value.y,
+                             insitu_values = zone_in_situ_SEXTANT_var$value.x,
+                             zone = "Global", variable = var_target)
+  
+  # Re-run per zone
+  for(j in 1:nrow(zones_bbox)){
+    
+    # Target zone
+    zone_target <- zones_bbox$zone[j]
+    
+    # Subset by zone
+    zone_in_situ_SEXTANT_var_zone <- filter(zone_in_situ_SEXTANT_var, zone == zone_target)
+    
+    # Calculate stats and add above
+    stats_var <- bind_rows(stats_var,
+                           compute_stats(sat_values = zone_in_situ_SEXTANT_var_zone$value.y,
+                                         insitu_values = zone_in_situ_SEXTANT_var_zone$value.x,
+                                         zone = zone_target, variable = var_target))
+    
+  }
+  
+  # Save results
+  write_csv(stats_var, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/Per_sat_product/",
+                              "SEXTANT","_",var_target,".csv"))
+}
+
+# TODO: Figure outputs
+# Base this largely on the code above, but remix to be more direct to this workflow
+# Also add in seasonal etc. paneling options
 
 
 # SOMLIT map --------------------------------------------------------------
