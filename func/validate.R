@@ -41,14 +41,13 @@ files_MODIS_SST <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pa
 ## Stats ------------------------------------------------------------------
 
 # The full suite of stats to calculate
-compute_stats <- function(x_vec, y_vec, zone, variable) {
+compute_stats <- function(x_vec, y_vec){
   
   if(!is.numeric(x_vec)) stop("x_vec is not numeric")
   if(!is.numeric(y_vec)) stop("y_vec is not numeric")
   
   if(length(x_vec) < 3){
-    return(data.frame(zone = zone,
-                      variable = variable,
+    return(data.frame(row.names = NULL,
                       n = length(x_vec),
                       Slope = NA,
                       Slope_log = NA,
@@ -86,8 +85,7 @@ compute_stats <- function(x_vec, y_vec, zone, variable) {
   error_perc <- 100 * (10^log_ratio_median_abs - 1)
   
   # Combine int data.frame and exit
-  return(data.frame(zone = zone,
-                    variable = variable,
+  return(data.frame(row.names = NULL,
                     n = length(x_vec),
                     Slope = round(slope, 2),
                     Slope_log = round(log_slope, 2),
@@ -480,42 +478,45 @@ zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |>
   # Create daily means
   summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
 
+
+# Map In situ -------------------------------------------------------------
+
 # Load high-res shape files
 # Tuto here : https://www.etiennebacher.com/posts/2021-12-27-mapping-french-rivers-network/
-# if(!exists("borders_FR")) borders_FR <- read_sf("data/FRANCE_shapefile/gadm41_FRA_0.shp")
-# if(!exists("rivers_FR")) rivers_FR <- st_intersection(read_sf("data/HydroRIVERS_v10_eu_shp/HydroRIVERS_v10_eu.shp"), borders_FR)
+if(!exists("borders_FR")) borders_FR <- read_sf("data/FRANCE_shapefile/gadm41_FRA_0.shp")
+if(!exists("rivers_FR")) rivers_FR <- st_intersection(read_sf("data/HydroRIVERS_v10_eu_shp/HydroRIVERS_v10_eu.shp"), borders_FR)
 
 # Map all in situ stations, highlighting the zones and the stations used
 # TODO: Add text labels showing the number of REPHY and SOMLIT stations per zone
-# in_situ_station_map <- ggplot() +
-#   geom_sf(data = borders_FR, color = "black", fill = "sienna4", inherit.aes = FALSE) +
-#   geom_sf(data = rivers_FR, color = "lightblue", inherit.aes = FALSE, linewidth = 0.2) +
-#   geom_rect(data = zones_bbox, fill = NA, linewidth = 2, show.legend = FALSE,
-#             aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max, colour = zone_pretty)) +
-#   # coord_map("moll") +
-#   coord_sf(xlim = c(-5, 10), ylim = c(41.5, 51)) +
-#   geom_point(data = in_situ_site_list,
-#              aes(x = lon, y = lat, shape = source), color = "black", size = 4) +
-#   geom_point(data = filter(in_situ_site_list, is.na(zone)),
-#              aes(x = lon, y = lat, shape = source), color = "red", size = 3) +
-#   geom_point(data = filter(in_situ_site_list, !is.na(zone)), 
-#              aes(x = lon, y = lat, shape = source, color = zone_pretty), size = 3) +
-#   # ggrepel::geom_text_repel(data =  filter(in_situ_site_list, source == "SOMLIT"), aes(x = lon, y = lat, label = site),
-#   #                 color = "red", size = 5, max.overlaps = 20) +
-#   # labs(title = paste(nrow(SOMLIT_stations), "SOMLIT stations"), x = NULL, y = NULL) +
-#   labs(x = NULL, y = NULL) +
-#   scale_x_continuous(labels = scales::unit_format(unit = "°E")) +
-#   scale_y_continuous(labels = scales::unit_format(unit = "°N")) +
-#   scale_color_manual(name = "zone", values = colours_of_stations(), drop = FALSE) +
-#   cowplot::theme_map() +
-#   ggplot_theme() +
-#   theme(legend.position = "inside", 
-#         legend.position.inside = c(0.73, 0.8),
-#         legend.box.background = element_rect(colour = "black", fill = "white"),
-#         legend.box.margin = margin(5, 5, 5, 5),
-#         axis.text = element_text(size = 20))
-# # in_situ_station_map
-# ggsave("figures/map_in_situ_stations.png", height = 14, width = 15.5, bg = "white")
+in_situ_station_map <- ggplot() +
+  geom_sf(data = borders_FR, color = "black", fill = "sienna4", inherit.aes = FALSE) +
+  geom_sf(data = rivers_FR, color = "lightblue", inherit.aes = FALSE, linewidth = 0.2) +
+  geom_rect(data = zones_bbox, fill = NA, linewidth = 2, show.legend = FALSE,
+            aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max, colour = zone_pretty)) +
+  # coord_map("moll") +
+  coord_sf(xlim = c(-5, 10), ylim = c(41.5, 51)) +
+  geom_point(data = in_situ_site_list,
+             aes(x = lon, y = lat, shape = source), color = "black", size = 4) +
+  geom_point(data = filter(in_situ_site_list, is.na(zone)),
+             aes(x = lon, y = lat, shape = source), color = "red", size = 3) +
+  geom_point(data = filter(in_situ_site_list, !is.na(zone)),
+             aes(x = lon, y = lat, shape = source, color = zone_pretty), size = 3) +
+  # ggrepel::geom_text_repel(data =  filter(in_situ_site_list, source == "SOMLIT"), aes(x = lon, y = lat, label = site),
+  #                 color = "red", size = 5, max.overlaps = 20) +
+  # labs(title = paste(nrow(SOMLIT_stations), "SOMLIT stations"), x = NULL, y = NULL) +
+  labs(x = NULL, y = NULL) +
+  scale_x_continuous(labels = scales::unit_format(unit = "°E")) +
+  scale_y_continuous(labels = scales::unit_format(unit = "°N")) +
+  scale_color_manual(name = "zone", values = colours_of_stations(), drop = FALSE) +
+  cowplot::theme_map() +
+  ggplot_theme() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.73, 0.8),
+        legend.box.background = element_rect(colour = "black", fill = "white"),
+        legend.box.margin = margin(5, 5, 5, 5),
+        axis.text = element_text(size = 20))
+# in_situ_station_map
+ggsave("figures/map_in_situ_stations.png", height = 14, width = 15.5, bg = "white")
 
 
 # Prep satellite pixels ---------------------------------------------------
@@ -534,83 +535,118 @@ write_pixels(zone_sites, "SEXTANT", "analysed_spim",
 # Extract satellite data --------------------------------------------------
 
 # Function that loads each day of sat data to match against in situ and create a big file
-# zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
+zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
 
 # Extract all relevant SEXTANT data
 ## SPM
-if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")){
+if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")){
   system.time(
     zone_data_SEXTANT_SPM <- plyr::ldply(.data = files_SEXTANT_SPM, .fun = extract_pixels,
                                          .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
   ) # 5 seconds for 10 turns, 52 minutes for all
-  system.time(
-  save(zone_data_SEXTANT_SPM, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
-  )
+  data.table::fwrite(zone_data_SEXTANT_SPM, "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
 } else {
-  
+  if(!exists("zone_data_SEXTANT_SPM")){
+    zone_data_SEXTANT_SPM <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
+  }
 }
-system.time(
-load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
-)
-system.time(
-data.table::fwrite(zone_data_SEXTANT_SPM, "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
-)
-system.time(
-zone_data_SEXTANT_SPM <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
-)
 
 ## TUR
 ### Copy the SPM values as TUR for comparison against in situ values
-# zone_data_SEXTANT_TUR <- zone_data_SEXTANT_SPM |> mutate(variable = "TUR")
+if(!exists("zone_data_SEXTANT_TUR")){
+  if(!exists("zone_data_SEXTANT_SPM")){
+    zone_data_SEXTANT_SPM <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
+  }
+  zone_data_SEXTANT_TUR <- zone_data_SEXTANT_SPM |> mutate(variable = "TUR")
+}
 
 ## CHL
-system.time(
-zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL, .fun = extract_pixels,
-                                     .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
-) # 47 minutes
-save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
-load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.csv")){
+  system.time(
+    zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL, .fun = extract_pixels,
+                                         .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
+  ) # 47 minutes
+  # load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+  data.table::fwrite(zone_data_SEXTANT_CHL, "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.csv")
+} else {
+  if(!exists("zone_data_SEXTANT_CHL")){
+    zone_data_SEXTANT_CHL <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.csv")
+  }
+}
 
 # Create median value time series
-zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_CHL,zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR) |>
-  filter(value > 0) |>
-  summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
-save(zone_median_SEXTANT, file = "output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
+if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")){
+  zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_CHL, zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR) |>
+    filter(value > 0) |>
+    summarise(median = median(value, na.rm = TRUE), 
+              mean = mean(value, na.rm = TRUE),
+              sd = sd(value, na.rm = TRUE),
+              n = n(), .by = c("zone", "source", "site", "date", "variable"))
+  data.table::fwrite(zone_median_SEXTANT, "output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")
+} else {
+  if(!exists("zone_median_SEXTANT")){
+    zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")
+  }
+}
+rm(zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR, zone_data_SEXTANT_CHL); gc()
 
 
 # Validation stats --------------------------------------------------------
 
 # Load prepped SEXTANT data
-load("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
-
-# TODO: Calculate the number of missing data per site per day, month, year etc.
-# Will need to visualise this as a map as well
+zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv") |> 
+  mutate(date = as.Date(date))
 
 # Combine extracted sat data with in situ
 zone_in_situ_SEXTANT <- zone_data_in_situ |> 
   left_join(zone_median_SEXTANT, by = c("source", "site", "date", "variable")) |> 
-  filter(value.x > 0, value.y > 0) |> 
-  dplyr::rename(value_in_situ = value.x, value_satellite = value.y)
+  filter(value > 0, median > 0) |> 
+  dplyr::rename(value_in_situ = value, value_satellite = median) |> 
+  mutate(season = case_when(
+    month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
+    month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
+  dplyr::select(zone, dplyr::everything())
+
+# Create big grid of sites to look for obvious outliers
+# ggplot(data = zone_in_situ_SEXTANT, aes(x = value_in_situ, y = value_satellite)) +
+#   geom_point(aes(colour = source, shape = variable)) +
+#   facet_wrap(~site, scales = "free")
 
 # Calculate statistics
-for(i in 1:length(unique(zone_in_situ_SEXTANT$variable))){
+for(var_int in 1:length(unique(zone_in_situ_SEXTANT$variable))){
   
   # target variable
-  var_target <- unique(zone_in_situ_SEXTANT$variable)[i]
+  var_target <- unique(zone_in_situ_SEXTANT$variable)[var_int]
   
   # get one variable
   zone_in_situ_SEXTANT_var <- filter(zone_in_situ_SEXTANT, variable == var_target)
   
   # Calculate all stats
-  stats_var <- compute_stats(sat_values = zone_in_situ_SEXTANT_var$value_satellite,
-                             insitu_values = zone_in_situ_SEXTANT_var$value_in_situ,
-                             zone = "Global", variable = var_target)
+  stats_var <- compute_stats(x_vec = zone_in_situ_SEXTANT_var$value_in_situ,
+                             y_vec = zone_in_situ_SEXTANT_var$value_satellite) |> 
+    mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = "ALL", variable = var_target)
+
+  # Run it per season per variable
+  for(seas in 1:length(unique(zone_in_situ_SEXTANT_var$season))){
+    
+    # target season
+    seas_target <- unique(zone_in_situ_SEXTANT_var$season)[seas]
+    
+    # Subset df accordingly
+    zone_in_situ_SEXTANT_var_seas <- zone_in_situ_SEXTANT_var |> filter(season == seas_target)
+    
+    # Run stats
+    stats_var <- bind_rows(stats_var,
+                           compute_stats(x_vec = zone_in_situ_SEXTANT_var_seas$value_in_situ,
+                                         y_vec = zone_in_situ_SEXTANT_var_seas$value_satellite) |> 
+                             mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = seas_target, variable = var_target))
+  }
   
   # Re-run per zone
-  for(j in 1:nrow(zones_bbox)){
+  for(zone_int in 1:nrow(zones_bbox)){
     
     # Target zone
-    zone_target <- zones_bbox$zone[j]
+    zone_target <- zones_bbox$zone[zone_int]
     
     # Subset by zone
     zone_in_situ_SEXTANT_var_zone <- filter(zone_in_situ_SEXTANT_var, zone == zone_target)
@@ -632,7 +668,7 @@ for(i in 1:length(unique(zone_in_situ_SEXTANT$variable))){
 #  Validation figures -----------------------------------------------------
 
 # Reload base data matchup
-load("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
+zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")
 
 # Reload stats
 stats_SEXTANT <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
