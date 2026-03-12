@@ -612,57 +612,80 @@ zone_in_situ_SEXTANT <- zone_data_in_situ |>
 #   geom_point(aes(colour = source, shape = variable)) +
 #   facet_wrap(~site, scales = "free")
 
-# Calculate statistics
-for(var_int in 1:length(unique(zone_in_situ_SEXTANT$variable))){
-  
-  # target variable
-  var_target <- unique(zone_in_situ_SEXTANT$variable)[var_int]
-  
-  # get one variable
-  zone_in_situ_SEXTANT_var <- filter(zone_in_situ_SEXTANT, variable == var_target)
-  
-  # Calculate all stats
-  stats_var <- compute_stats(x_vec = zone_in_situ_SEXTANT_var$value_in_situ,
-                             y_vec = zone_in_situ_SEXTANT_var$value_satellite) |> 
-    mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = "ALL", variable = var_target)
+# TODO: Think of a way to optimise this
+# Stats for all groups together by variable
+zone_in_situ_SEXTANT_stats_01 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
 
-  # Run it per season per variable
-  for(seas in 1:length(unique(zone_in_situ_SEXTANT_var$season))){
-    
-    # target season
-    seas_target <- unique(zone_in_situ_SEXTANT_var$season)[seas]
-    
-    # Subset df accordingly
-    zone_in_situ_SEXTANT_var_seas <- zone_in_situ_SEXTANT_var |> filter(season == seas_target)
-    
-    # Run stats
-    stats_var <- bind_rows(stats_var,
-                           compute_stats(x_vec = zone_in_situ_SEXTANT_var_seas$value_in_situ,
-                                         y_vec = zone_in_situ_SEXTANT_var_seas$value_satellite) |> 
-                             mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = seas_target, variable = var_target))
-  }
-  
-  # Re-run per zone
-  for(zone_int in 1:nrow(zones_bbox)){
-    
-    # Target zone
-    zone_target <- zones_bbox$zone[zone_int]
-    
-    # Subset by zone
-    zone_in_situ_SEXTANT_var_zone <- filter(zone_in_situ_SEXTANT_var, zone == zone_target)
-    
-    # Calculate stats and add above
-    stats_var <- bind_rows(stats_var,
-                           compute_stats(sat_values = zone_in_situ_SEXTANT_var_zone$value_satellite,
-                                         insitu_values = zone_in_situ_SEXTANT_var_zone$value_in_situ,
-                                         zone = zone_target, variable = var_target))
-    
-  }
-  
-  # Save results
-  write_csv(stats_var, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",
-                              "SEXTANT","_",var_target,".csv"))
-}
+# Stats for all groups together by variable and season
+zone_in_situ_SEXTANT_stats_02 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", source = "ALL", site = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all zones by variable
+zone_in_situ_SEXTANT_stats_03 <- zone_in_situ_SEXTANT |> mutate(source = "ALL", site = "ALL", season = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all zones by variable and season
+zone_in_situ_SEXTANT_stats_04 <- zone_in_situ_SEXTANT |> mutate(source = "ALL", site = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all sources by variable
+zone_in_situ_SEXTANT_stats_05 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", site = "ALL", season = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all sources by variable and season
+zone_in_situ_SEXTANT_stats_06 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", site = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all zones and sources by variable
+zone_in_situ_SEXTANT_stats_07 <- zone_in_situ_SEXTANT |> mutate(site = "ALL", season = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all zones and sources by variable and season
+zone_in_situ_SEXTANT_stats_08 <- zone_in_situ_SEXTANT |> mutate(site = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all sites by variable
+zone_in_situ_SEXTANT_stats_09 <- zone_in_situ_SEXTANT |> mutate(site = "ALL", season = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for all sites by variable and season
+zone_in_situ_SEXTANT_stats_10 <- zone_in_situ_SEXTANT |> mutate(site = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for each site by variable
+zone_in_situ_SEXTANT_stats_11 <- zone_in_situ_SEXTANT |> mutate(season = "ALL") |> 
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Stats for each site by variable and season
+zone_in_situ_SEXTANT_stats_12 <- zone_in_situ_SEXTANT |>
+  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
+
+# Bind all together
+zone_in_situ_SEXTANT_stats <- bind_rows(zone_in_situ_SEXTANT_stats_01, zone_in_situ_SEXTANT_stats_02, zone_in_situ_SEXTANT_stats_03,
+                                        zone_in_situ_SEXTANT_stats_04, zone_in_situ_SEXTANT_stats_05, zone_in_situ_SEXTANT_stats_06,
+                                        zone_in_situ_SEXTANT_stats_07, zone_in_situ_SEXTANT_stats_08, zone_in_situ_SEXTANT_stats_09,
+                                        zone_in_situ_SEXTANT_stats_10, zone_in_situ_SEXTANT_stats_11, zone_in_situ_SEXTANT_stats_12) |> 
+  mutate(sensor = "SEXTANT", .before = "zone")
+
+# Save results
+write_csv(zone_in_situ_SEXTANT_stats, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/","SEXTANT","_stats.csv"))
+
+# Plot to look for odd results
+# TODO: Consider running ANOVAs on the base values per the different groupings
+# Or rather run them on the resulting stats visualised here
+## Histogram
+# ggplot(data = zone_in_situ_SEXTANT_stats, aes(x = Bias)) +
+#   geom_histogram(aes(fill = variable))#, position = "dodge")
+# ggplot(data = zone_in_situ_SEXTANT_stats, aes(x = Bias, y = Error)) +
+#   geom_point(aes(colour = zone, shape = variable, size = source)) +
+#   scale_x_continuous(limits = c(-300, 300)) +
+#   scale_y_continuous(limits = c(0, 300))
+# ggplot(data = zone_in_situ_SEXTANT_stats, aes(y = Error)) +
+#   geom_boxplot(aes(fill = zone)) +
+#   facet_grid(variable~season, scales = "free_y") +
+#   coord_cartesian(ylim = c(0, 200))
+#   # coord_cartesian(ylim = c(-200, 200))
 
 
 #  Validation figures -----------------------------------------------------
