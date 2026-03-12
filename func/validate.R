@@ -486,6 +486,7 @@ zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |>
 # if(!exists("rivers_FR")) rivers_FR <- st_intersection(read_sf("data/HydroRIVERS_v10_eu_shp/HydroRIVERS_v10_eu.shp"), borders_FR)
 
 # Map all in situ stations, highlighting the zones and the stations used
+# TODO: Add text labels showing the number of REPHY and SOMLIT stations per zone
 # in_situ_station_map <- ggplot() +
 #   geom_sf(data = borders_FR, color = "black", fill = "sienna4", inherit.aes = FALSE) +
 #   geom_sf(data = rivers_FR, color = "lightblue", inherit.aes = FALSE, linewidth = 0.2) +
@@ -521,59 +522,69 @@ zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |>
 
 # Create the data.frames of pixel matchups
 ## SEXTANT
-### TODO: Wrap this up with the other sensors and automate via a function call
-# file_base_SEXTANT <- "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"
-# grid_SEXTANT <- get_sat_grid(file_base_SEXTANT)
-# rast_SEXTANT <- raster(file_base_SEXTANT, varname = "analysed_spim")
-# zone_pixels_SEXTANT <- plyr::ddply(.data = zone_sites, .variables = c("zone", "source", "site"), .fun = get_pixels, .parallel = TRUE,
-#                                    sat_grid = grid_SEXTANT, sat_rast = rast_SEXTANT)
-# write_csv(zone_pixels_SEXTANT, "metadata/zone_pixels_SEXTANT.csv")
+write_pixels(zone_sites, "SEXTANT", "analysed_spim",
+             "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc")
 
 ## MODIS
 ### Need to ensure the L3 product is treated as daily
 ### Otherwise need to match the overhead pass to hourly in situ sampling
 
 
+
 # Extract satellite data --------------------------------------------------
 
 # Function that loads each day of sat data to match against in situ and create a big file
-zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
+# zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
 
 # Extract all relevant SEXTANT data
 ## SPM
-# system.time(
-# zone_data_SEXTANT_SPM <- plyr::ldply(.data = files_SEXTANT_SPM, .fun = extract_pixels, 
-#                                      .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
-# ) # 5 seconds for 10 turns, 52 minutes for all
-# save(zone_data_SEXTANT_SPM, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
-# load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")){
+  system.time(
+    zone_data_SEXTANT_SPM <- plyr::ldply(.data = files_SEXTANT_SPM, .fun = extract_pixels,
+                                         .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
+  ) # 5 seconds for 10 turns, 52 minutes for all
+  system.time(
+  save(zone_data_SEXTANT_SPM, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+  )
+} else {
+  
+}
+system.time(
+load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.RData")
+)
+system.time(
+data.table::fwrite(zone_data_SEXTANT_SPM, "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
+)
+system.time(
+zone_data_SEXTANT_SPM <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
+)
 
 ## TUR
 ### Copy the SPM values as TUR for comparison against in situ values
 # zone_data_SEXTANT_TUR <- zone_data_SEXTANT_SPM |> mutate(variable = "TUR")
 
 ## CHL
-# system.time(
-# zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL, .fun = extract_pixels, 
-#                                      .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
-# ) # 47 minutes
-# save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
-# load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+system.time(
+zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL, .fun = extract_pixels,
+                                     .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
+) # 47 minutes
+save(zone_data_SEXTANT_CHL, file = "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
+load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
 
 # Create median value time series
-# zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_CHL,zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR) |>
-#   filter(value > 0) |>
-#   summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
-# save(zone_median_SEXTANT, file = "output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
+zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_CHL,zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR) |>
+  filter(value > 0) |>
+  summarise(value = median(value, na.rm = TRUE), .by = c("zone", "source", "site", "date", "variable"))
+save(zone_median_SEXTANT, file = "output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
 
 
 # Validation stats --------------------------------------------------------
 
-# TODO: Calculate the number of missing data per site per day, month, year etc.
-# Will need to visualise this as a map as well
-
 # Load prepped SEXTANT data
 load("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.RData")
+
+# TODO: Calculate the number of missing data per site per day, month, year etc.
+# Will need to visualise this as a map as well
 
 # Combine extracted sat data with in situ
 zone_in_situ_SEXTANT <- zone_data_in_situ |> 

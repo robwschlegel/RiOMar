@@ -49,7 +49,7 @@ get_pixels <- function(target_site, sat_grid, sat_rast, dist_range = 1){
   lat_resolution <- mean(lat_diff[lat_diff > 0])
   
   # Get the initial buffer to filter by
-  dist_buffer <- dist_range/100 # Convert to metres to better match decimal degrees
+  dist_buffer <- dist_range/100
   lon_buffer <- dist_buffer+lon_resolution/2
   lat_buffer <- dist_buffer+lat_resolution/2
   
@@ -68,6 +68,15 @@ get_pixels <- function(target_site, sat_grid, sat_rast, dist_range = 1){
   # Get the pixel IDs and exit
   sat_grid_buffer$cell_numbers <- raster::cellFromXY(sat_rast, xy = sat_grid_buffer)
   return(sat_grid_buffer)
+}
+
+# Wrapper for get_pixels() to write the pixels to .csv per sat product
+write_pixels <- function(zone_sites, sat_name, sat_var, nc_file_base){
+  grid_sat <- get_sat_grid(nc_file_base)
+  rast_sat <- raster(nc_file_base, varname = sat_var)
+  zone_pixels <- plyr::ddply(.data = zone_sites, .variables = c("zone", "source", "site"), .fun = get_pixels, .parallel = TRUE,
+                             sat_grid = grid_sat, sat_rast = rast_sat)
+  write_csv(zone_pixels, paste0("metadata/zone_pixels_",sat_name,".csv"))
 }
 
 # Once the pixels have been determined, use this to extract the data
@@ -90,13 +99,48 @@ extract_pixels <- function(file_name, df){
     stop("Need to add more satellites")
   }
   
+  # Get date values
+  # TODO: Adapt this to other sat files structures once added
+  nc_date <- as.Date(str_split(basename(file_name), "-")[[1]][1], format = "%Y%m%d")
+  
   # Extract data and exit
   df_res <- df |> 
-    mutate(date = as.Date(str_split(basename(file_name), "-")[[1]][1], format = "%Y%m%d"),
+    mutate(date = nc_date,
            variable = var_col_name,
            value = extract(raster(file_name, varname = var_nc_name), cell_numbers)) |> 
     dplyr::select(-cell_numbers)
   return(df_res)
+  
+  # Load the full nc file to test the raster extraction method
+  # df_nc <- tidync::tidync(file_name) |> tidync::hyper_tibble() |>
+  #   mutate(lon = plyr::round_any(as.numeric(lon), 0.005),
+  #          lat = round(as.numeric(lat), 2)) |>
+  #   dplyr::select(lon, lat, analysed_spim)
+  
+  # Merge and test similarity
+  # df_test <- df_res |>
+  #   mutate(lon = plyr::round_any(lon, 0.005),
+  #          lat = round(lat, 2)) |>
+  #   left_join(df_nc, by = c("lon", "lat")) |>
+  #   mutate(diff = mean(value-analysed_spim, na.rm = TRUE))
+  
+  # Test in situ stations with all missing data
+  # Eyrac, pk 30, pk 52, Anse du Piquet, Baie d'Yves (a), Cotard, Ile d'Aix, Truscat, Antoine, Luc-sur-Mer
+  # is_site <- "Luc-sur-Mer"
+  # df_is_test <- df_res |> filter(site == is_site)
+  # df_is_test_mean <- summarise(df_is_test, lon = mean(lon), lat = mean(lat), .by = c("zone", "source", "site"))
+  # df_nc_test <- df_nc |> filter(lon >= min(df_is_test$lon)-1, lon <= max(df_is_test$lon)+1,
+  #                               lat >= min(df_is_test$lat)-1, lat <= max(df_is_test$lat)+1)
+  # ggplot() +
+  #   annotation_borders() +
+  #   geom_raster(data = df_nc_test, aes( x = lon, y = lat, fill = analysed_spim)) +
+  #   geom_raster(data = df_is_test, aes( x = lon, y = lat), fill = "red") +
+  #   geom_point(data = df_is_test_mean, aes(x = lon, y = lat), colour = "darkred") +
+  #   coord_quickmap(xlim = range(df_nc_test$lon), ylim = range(df_nc_test$lat)) +
+  #   scale_fill_viridis_c()
+  
+  # Clean up
+  # rm(file_name, df, var_col_name, var_nc_name, df_res, nc_date, df_nc, df_test, df_is_test, df_is_test_mean, df_nc_test, is_site)
 }
 
 
