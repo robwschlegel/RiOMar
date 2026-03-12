@@ -8,13 +8,14 @@
 
 # The packages needed for this script
 library(tidyverse)
-library(raster)
+library(raster) # Used here to select specific pixels in a .nc file
 library(ncdf4)
-library(scales)
-library(ggExtra)
-library(gt)
-library(Metrics)
-library(MASS)
+library(sf) # Used for complex shape files
+library(scales) # For better plot labels
+library(ggExtra) # For histogram border plots
+library(gt) # For fancy tables
+# library(Metrics)
+# library(MASS)
 library(geosphere) # For pixel distances
 library(doParallel); registerDoParallel(cores = detectCores()-2)
 
@@ -26,104 +27,75 @@ files_SEXTANT_SPM <- dir("~/pCloudDrive/data/SEXTANT/SPM", pattern = ".nc", full
 files_SEXTANT_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", full.names = TRUE, recursive = TRUE)
 
 # Get all MODIS file names
+files_MODIS_path <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/"
+files_MODIS_SPM <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "SPM")
+files_MODIS_CHL <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "CHL")
+files_MODIS_TUR <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "TUR")
+files_MODIS_CDOM <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "CDOM")
+files_MODIS_RRS <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "RRS")
+files_MODIS_SST <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "SST")
+
 
 # Functions ---------------------------------------------------------------
 
 ## Stats ------------------------------------------------------------------
 
 # The full suite of stats to calculate
-compute_stats <- function(sat_values, insitu_values, zone, variable) {
+compute_stats <- function(x_vec, y_vec, zone, variable) {
   
-  if(length(sat_values) < 3){
+  if(!is.numeric(x_vec)) stop("x_vec is not numeric")
+  if(!is.numeric(y_vec)) stop("y_vec is not numeric")
+  
+  if(length(x_vec) < 3){
     return(data.frame(zone = zone,
                       variable = variable,
-                      n = length(sat_values),
-                      MedAE_multiplicative = NA,
-                      MedAPE = NA,
-                      MedAE = NA,
-                      Bias_multiplicative = NA,
-                      Bias_multiplicative_in_perc = NA,
+                      n = length(x_vec),
+                      Slope = NA,
+                      Slope_log = NA,
                       RMSE = NA,
-                      RMSE_in_perc = NA,
+                      MSA = NA,
                       MAPE = NA,
-                      slope_log = NA,
-                      intercept_log = NA,
-                      r2_log = NA,
-                      # lm_line_log = lm_line_log,
-                      slope = NA,
-                      intercept = NA,
-                      r2 = NA,
-                      # lm_line = lm_line,
-                      bias_Pahlevan = NA,
-                      error_Pahlevan = NA,
-                      bias_Pahlevan_linear = NA,
-                      error_Pahlevan_linear = NA))
+                      Bias = NA,
+                      Error = NA))
   }
   
-  MedAE_multiplicative <- 10 ^ mean( abs( log10(sat_values) - log10(insitu_values) ) )
-  MedAPE <- (MedAE_multiplicative - 1) * 100
-  MedAE <- (MedAPE/100) * mean(insitu_values)
+  # Calculate RMSE (Root Mean Square Error)
+  rmse <- sqrt(mean((y_vec - x_vec)^2, na.rm = TRUE))
   
-  Bias_multiplicative <- 10 ^ mean( log10(sat_values) - log10(insitu_values) )
-  Bias_multiplicative_in_perc <- (Bias_multiplicative - 1)  * 100
-  Bias_multiplicative <- (Bias_multiplicative_in_perc/100) * mean(insitu_values)  
+  # Calculate MAPE (Mean Absolute Percentage Error)
+  mape <- mean(abs((y_vec - x_vec) / x_vec), na.rm = TRUE) * 100
   
-  RMSE <- rmse(actual = insitu_values, predicted = sat_values)
-  RMSE_in_perc = 100 * RMSE / mean(insitu_values)
-  MAPE <- 100 * mape(actual = insitu_values, predicted = sat_values)
+  # Calculate MSA (Mean Squared Adjustment)
+  msa <- mean(abs(y_vec - x_vec), na.rm = TRUE)
   
-  log_sat_values <- log(sat_values)
-  log_insitu_values <- log(insitu_values)
+  # Calculate linear slope
+  lin_fit <- lm(y_vec ~ x_vec)
+  slope <- coef(lin_fit)[2]
   
-  weights_log <- rlm(log_sat_values ~ log_insitu_values)$weights
-  index_to_keep_log <- which(weights_log == 1)
+  # Calculate log-log linear slope
+  log_lin_fit <- lm(log10(y_vec) ~ log10(x_vec))
+  log_slope <- coef(log_lin_fit)[2]
   
-  lm_log <- lm(log_sat_values[index_to_keep_log] ~ log_insitu_values[index_to_keep_log]) %>% summary()
-  slope_log <- lm_log$coefficients[2,1]
-  intercept_log <- lm_log$coefficients[1,1]
-  r2_log <- lm_log$r.squared
+  # Calculate Bias
+  log_ratio <- log10(y_vec / x_vec)
+  log_ratio_median <- median(log_ratio, na.rm = TRUE)
+  bias_perc <- 100 * (sign(log_ratio_median) * (10^abs(log_ratio_median) - 1))
   
-  weights <- rlm(sat_values ~ insitu_values)$weights
-  index_to_keep <- which(weights == 1)
+  # Calculate error
+  log_ratio_median_abs <- median(abs(log_ratio), na.rm = TRUE)
+  error_perc <- 100 * (10^log_ratio_median_abs - 1)
   
-  lm <- lm(sat_values[index_to_keep] ~ insitu_values[index_to_keep]) %>% summary()
-  slope <- lm$coefficients[2,1]
-  intercept <- lm$coefficients[1,1]
-  r2 <- lm$r.squared
-
-  bias_Pahlevan = (sat_values / insitu_values) %>% log10() %>% median()
-  bias_Pahlevan = 100 * sign(bias_Pahlevan) * (10^abs(bias_Pahlevan) - 1)
-  
-  error_Pahlevan = (sat_values / insitu_values) %>% log10() %>% abs() %>% median()
-  error_Pahlevan = 100 * (10^error_Pahlevan - 1)
-  
-  bias_Pahlevan_linear = ((sat_values - insitu_values) / insitu_values) %>% median()
-  bias_Pahlevan_linear = 100 * (bias_Pahlevan_linear)
-  
-  error_Pahlevan_linear = ((sat_values - insitu_values) / insitu_values) %>% abs() %>% median()
-  error_Pahlevan_linear = 100 * (error_Pahlevan_linear)
-  
+  # Combine int data.frame and exit
   return(data.frame(zone = zone,
                     variable = variable,
-                    n = length(sat_values),
-                    MedAE_multiplicative = MedAE_multiplicative,
-                    MedAPE = MedAPE,
-                    MedAE = MedAE,
-                    Bias_multiplicative = Bias_multiplicative,
-                    Bias_multiplicative_in_perc = Bias_multiplicative_in_perc,
-                    RMSE = RMSE,
-                    RMSE_in_perc = RMSE_in_perc,
-                    MAPE = MAPE,
-                    slope_log = slope_log,
-                    intercept_log = intercept_log,
-                    r2_log = r2_log,
-                    slope = slope,
-                    intercept = intercept,
-                    r2 = r2,
-                    bias_Pahlevan = bias_Pahlevan,
-                    error_Pahlevan = error_Pahlevan,
-                    bias_Pahlevan_linear = bias_Pahlevan_linear,
-                    error_Pahlevan_linear = error_Pahlevan_linear))
+                    n = length(x_vec),
+                    Slope = round(slope, 2),
+                    Slope_log = round(log_slope, 2),
+                    RMSE = round(rmse, 6),
+                    MSA = round(msa, 6),
+                    MAPE = round(mape, 2),
+                    Bias = round(bias_perc, 2),
+                    Error = round(error_perc, 2)))
 }
 
 
@@ -241,13 +213,15 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats) {
   
   # Get stats to plot
   if(str_detect(var_name, 'SST')){
-    Error_value <- match_up_stats_var$error_Pahlevan_linear
-    Bias_value <- match_up_stats_var$bias_Pahlevan_linear
-    Slope_value <- match_up_stats_var$slope
+    # Error_value <- match_up_stats_var$error_Pahlevan_linear
+    # Bias_value <- match_up_stats_var$bias_Pahlevan_linear
+    Error_value <- match_up_stats_var$Error
+    Bias_value <- match_up_stats_var$Bias
+    Slope_value <- match_up_stats_var$Slope
   } else {
-    Error_value <- match_up_stats_var$error_Pahlevan
-    Bias_value <- match_up_stats_var$bias_Pahlevan
-    Slope_value <- match_up_stats_var$slope_log
+    Error_value <- match_up_stats_var$Error
+    Bias_value <- match_up_stats_var$Bias
+    Slope_value <- match_up_stats_var$Slope_log
   }
   
   # Correct var_name for satellite
@@ -321,8 +295,8 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats) {
   if(var_name %>% str_detect("SST")){ 
     scatterplot <- scatterplot +  
       geom_smooth(method = "lm", colour = "black", se = FALSE) +
-      scale_x_continuous(name = parse(text = paste0('In~situ~measurements~(', plot_meta_data$unit, ')'))) +
-      scale_y_continuous(name = parse(text = paste0('Satellite~estimates~(', plot_meta_data$unit, ')')))
+      scale_x_continuous(name = parse(text = paste0('In~situ~measurements~(', plot_meta_data$unit_x, ')'))) +
+      scale_y_continuous(name = parse(text = paste0('Satellite~estimates~(', plot_meta_data$unit_y, ')')))
   } else {
     scatterplot <- scatterplot + 
       geom_smooth(method = "lm", colour = "black", se = FALSE) +
@@ -374,11 +348,13 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats) {
 
 # Create pretty tables
 # file_path = "output/MATCH_UP_DATA/FRANCE/STATISTICS/"; sat_name = "SEXTANT"
+# TODO: This will need to be modified to work with other satellite products
 validation_tables <- function(file_path, sat_name) {
   
   # Load all output stats
+  # TODO: Clean up zone names and order by latitude
   stat_files <- map_dfr(dir(file_path, pattern = sat_name, full.names = TRUE), read_csv) |> 
-    dplyr::select(zone, Bias = bias_Pahlevan, Error = error_Pahlevan, n, variable) |> 
+    dplyr::select(zone, Bias, Error, n, variable) |> 
     mutate_at(vars(-zone, -variable), ~ round(., 1)) |> 
     mutate(var_label = paste("When compared with in situ", ifelse(variable == 'TUR', 'TURB', variable))) |>
     dplyr::select(-variable)
@@ -391,6 +367,7 @@ validation_tables <- function(file_path, sat_name) {
   names(desired_colnames) <- names(stat_files)
   
   # Create the SPM/TUR table
+  # TODO: Wrap this into a function to be called per variable
   table_SPM_TUR <- stat_files |>
     filter(!grepl("CHL", var_label)) |> 
     mutate(zone = paste0("**", zone, "**")) |> 
@@ -449,20 +426,24 @@ SOMLIT <- read_csv("data/INSITU_data/SOMLIT/Somlit_clean.csv") |>
   mutate(source = "SOMLIT")
 
 # Filter out sites that are within the RiOMar regions
-# in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site), 
-#                                dplyr::select(SOMLIT, source, lon, lat, site)) |> 
-#   distinct() |> 
-#   summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |> 
-#   mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] & 
-#                             lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
-#                           lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] & 
-#                             lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
-#                           lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] & 
-#                             lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
-#                           lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] & 
-#                             lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY",))
-# write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
-in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
+in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
+                               dplyr::select(SOMLIT, source, lon, lat, site)) |>
+  distinct() |>
+  summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |>
+  mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
+                            lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
+                          lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] &
+                            lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
+                          lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] &
+                            lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
+                          lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] &
+                            lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY")) |> 
+  mutate(zone_pretty = factor(zone, 
+                              levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
+                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |> 
+  mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
+write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
+# in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
 
 # Filter in situ stations to just those within a zone
 zone_sites <- in_situ_site_list |> filter(!is.na(zone))
@@ -498,6 +479,42 @@ zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |>
   filter(variable %in% c('TEMP', 'SAL', 'POC', 'SPM', 'CHLA', 'TUR')) |> 
   # Create daily means
   summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
+
+# Load high-res shape files
+# Tuto here : https://www.etiennebacher.com/posts/2021-12-27-mapping-french-rivers-network/
+# if(!exists("borders_FR")) borders_FR <- read_sf("data/FRANCE_shapefile/gadm41_FRA_0.shp")
+# if(!exists("rivers_FR")) rivers_FR <- st_intersection(read_sf("data/HydroRIVERS_v10_eu_shp/HydroRIVERS_v10_eu.shp"), borders_FR)
+
+# Map all in situ stations, highlighting the zones and the stations used
+# in_situ_station_map <- ggplot() +
+#   geom_sf(data = borders_FR, color = "black", fill = "sienna4", inherit.aes = FALSE) +
+#   geom_sf(data = rivers_FR, color = "lightblue", inherit.aes = FALSE, linewidth = 0.2) +
+#   geom_rect(data = zones_bbox, fill = NA, linewidth = 2, show.legend = FALSE,
+#             aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max, colour = zone_pretty)) +
+#   # coord_map("moll") +
+#   coord_sf(xlim = c(-5, 10), ylim = c(41.5, 51)) +
+#   geom_point(data = in_situ_site_list,
+#              aes(x = lon, y = lat, shape = source), color = "black", size = 4) +
+#   geom_point(data = filter(in_situ_site_list, is.na(zone)),
+#              aes(x = lon, y = lat, shape = source), color = "red", size = 3) +
+#   geom_point(data = filter(in_situ_site_list, !is.na(zone)), 
+#              aes(x = lon, y = lat, shape = source, color = zone_pretty), size = 3) +
+#   # ggrepel::geom_text_repel(data =  filter(in_situ_site_list, source == "SOMLIT"), aes(x = lon, y = lat, label = site),
+#   #                 color = "red", size = 5, max.overlaps = 20) +
+#   # labs(title = paste(nrow(SOMLIT_stations), "SOMLIT stations"), x = NULL, y = NULL) +
+#   labs(x = NULL, y = NULL) +
+#   scale_x_continuous(labels = scales::unit_format(unit = "°E")) +
+#   scale_y_continuous(labels = scales::unit_format(unit = "°N")) +
+#   scale_color_manual(name = "zone", values = colours_of_stations(), drop = FALSE) +
+#   cowplot::theme_map() +
+#   ggplot_theme() +
+#   theme(legend.position = "inside", 
+#         legend.position.inside = c(0.73, 0.8),
+#         legend.box.background = element_rect(colour = "black", fill = "white"),
+#         legend.box.margin = margin(5, 5, 5, 5),
+#         axis.text = element_text(size = 20))
+# # in_situ_station_map
+# ggsave("figures/map_in_situ_stations.png", height = 14, width = 15.5, bg = "white")
 
 
 # Prep satellite pixels ---------------------------------------------------
@@ -618,33 +635,4 @@ plyr::l_ply(unique(stats_SEXTANT$variable), validation_plots, .parallel = TRUE,
 # Validation tables -------------------------------------------------------
 
 validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
-
-
-# SOMLIT map --------------------------------------------------------------
-
-# world_map = map_data("world") %>% filter(! long > 180)
-# # France_boundaries <- ne_countries(country = "France", scale = 'medium', type = 'map_units', returnclass = 'sf')  
-# France_boundaries <- read_sf(file.path(work_dir, "DATA", "FRANCE_shapefile", "gadm41_FRA_0.shp"))  
-# riversData <- read_sf(file.path(path_to_river_data, "HydroRIVERS_v10_eu.shp")) 
-# riversData <- riversData %>% st_intersection(France_boundaries)
-# # Tuto here : https://www.etiennebacher.com/posts/2021-12-27-mapping-french-rivers-network/
-# # 
-# SOMLIT_station_map <- ggplot() +
-#   # geom_polygon(data = world_map, aes(x=long, y = lat, group = group), fill = "black") +
-#   geom_sf(data=France_boundaries, color="black", inherit.aes = FALSE) +
-#   geom_sf(data=riversData, color="white", inherit.aes = FALSE) +
-#   # geom_sf(data=riversData, color="white", inherit.aes = FALSE) +
-#   # expand_limits(x = c(-8,11), y = c(52, 40)) +
-#   # coord_map("moll") +
-#   coord_sf(xlim = c(-8,11), ylim = c(40,52)) +
-#   geom_point(data = SOMLIT_stations, aes(x = Longitude, y = Latitude), color = "red", size = 3) +
-#   geom_text_repel(data = SOMLIT_stations, aes(x = Longitude, y = Latitude, label = Site),
-#                   color = "red", size = 5, max.overlaps = 20) +
-#   labs(title = paste(nrow(SOMLIT_stations), "SOMLIT stations"), x = "", y = "") +
-#   scale_x_continuous(label = function(x) {paste(x, "°E", sep = "")}) +
-#   scale_y_continuous(label = function(x) {paste(x, "°N", sep = "")}) +
-#   theme_map() +
-#   ggplot_theme() +
-#   theme(plot.title = element_text(color = "red", size = 30),
-#         axis.text = element_text(size = 20))
 

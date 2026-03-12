@@ -10,6 +10,7 @@ data/INSITU_data
 data/RIVER_FLOW
 data/TIDES
 data/ROFI
+data/HydroRIVERS_v10_eu_shp
 
 # Large outputs
 output/MATCH_UP_DATA

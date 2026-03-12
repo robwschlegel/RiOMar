@@ -18,7 +18,10 @@ zones_bbox <- data.frame(zone = zones_list,
                          lon_min = c(3.50, -1.50, -4.00, -5.00),
                          lon_max = c(6.00, 0.50, -0.50, -1.50),
                          lat_min  = c(42.25, 49.25, 44.50, 46.5),
-                         lat_max = c(44.00, 50.25, 46.50, 48.00))
+                         lat_max = c(44.00, 50.25, 46.50, 48.00)) |> 
+  mutate(zone_pretty = factor(zone, 
+                              levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
+                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone")
 
 
 # Utility -----------------------------------------------------------------
