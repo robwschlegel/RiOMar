@@ -163,7 +163,9 @@ zone_data_in_situ <- bind_rows(REPHY_clean, SOMLIT_clean) |>
   # Filter from times 10:00 to 15:00
   filter(time >= hms("10:00:00"), time <= hms("15:00:00")) |> 
   # Create daily means
-  summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
+  summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable")) |> 
+  left_join(zone_sites, by = join_by(source, site, lon, lat)) |> 
+  dplyr::select(zone, zone_pretty, source, everything())
 write_csv(zone_data_in_situ, "data/INSITU_data/zone_data_in_situ.csv")
 
 
@@ -283,5 +285,68 @@ validate_sensor("OLCI-B")
 
 # Validation tables -------------------------------------------------------
 
+# Basic tables
+zone_all_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
+                              pattern = "_stats.csv", full.names = TRUE), read_csv) |> 
+  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
+  filter(!variable %in% c("POC"))
+
+# Get global stats
+zone_all_stats_global <- zone_all_stats |> 
+  filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
+  filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
+  dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
+  arrange(Error) |> 
+  mutate(Error = round(Error),
+         Bias = round(Bias))
+write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global.csv")
+
+# Get high level stats
+zone_all_stats_top <- zone_all_stats |> 
+  filter(site == "ALL", season == "ALL")
+
+# Fancy tables
 validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
+
+
+# Time series analyses ----------------------------------------------------
+
+# Load MODIS SST and in situ temperatures
+zone_median_SST <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE", pattern = "zone_median_MODIS_", 
+                               full.names = TRUE), data.table::fread) |> 
+  mutate(date = as.Date(date)) |> 
+  filter(variable == "SST")
+write_csv(zone_median_SST, "output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
+# zone_median_SST <- read_csv()
+
+# Load in situ data
+zone_data_in_situ <- read_csv("data/INSITU_data/zone_data_in_situ.csv")
+
+# Join
+zone_all_TEMP <- zone_data_in_situ |> 
+  filter(variable == "TEMP") |> 
+  group_by(site) |> 
+  mutate(count = n()) |> 
+  ungroup() |> 
+  filter(count > 90) |> 
+  mutate(variable_sat = "SST") |> 
+  left_join(zone_median_SST, by = c("zone", "source", "site", "date", "variable_sat" = "variable"))# |> 
+  filter(value > 0, median > 0) |> 
+  dplyr::rename(value_in_situ = value, value_satellite = median, variable_sat = variable.y) |> 
+  mutate(season = case_when(
+    month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
+    month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
+  dplyr::select(zone, dplyr::everything())
+
+# Basic plot
+zone_all_TEMP |> 
+  filter(date >= "2004-07-04") |> 
+  ggplot(aes(x = date, y = value)) +
+  geom_point(aes(group = site, shape = source)) +
+  geom_point(aes(y = median, group = site, shape = source), colour = "red", show.legend = FALSE) +
+  geom_smooth(method = "lm", colour = "black", se = FALSE) +
+  geom_smooth(aes(y = median), method = "lm", colour = "red", se = FALSE) +
+  facet_wrap(~zone_pretty) +
+  labs(title = "Comparison of in situ tmeperatures (depth <= 10) and MODIS SST",
+       y = "Temperature (°C)", x = NULL)
 
