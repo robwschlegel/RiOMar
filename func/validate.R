@@ -14,26 +14,25 @@ library(sf) # Used for complex shape files
 library(scales) # For better plot labels
 library(ggExtra) # For histogram border plots
 library(gt) # For fancy tables
-# library(Metrics)
-# library(MASS)
 library(geosphere) # For pixel distances
 library(doParallel); registerDoParallel(cores = detectCores()-2)
 
 # The shared functions
 source("func/util.R")
 
+## NB: File pathways no called within pipeline function
 # Get all SEXTANT file names
-files_SEXTANT_SPM <- dir("~/pCloudDrive/data/SEXTANT/SPM", pattern = ".nc", full.names = TRUE, recursive = TRUE)
-files_SEXTANT_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", full.names = TRUE, recursive = TRUE)
+# files_SEXTANT_SPM <- dir("~/pCloudDrive/data/SEXTANT/SPM", pattern = ".nc", full.names = TRUE, recursive = TRUE)
+# files_SEXTANT_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", full.names = TRUE, recursive = TRUE)
 
 # Get all MODIS file names
-files_MODIS_path <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/"
-files_MODIS_SPM <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "SPM")
-files_MODIS_CHL <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "CHL")
-files_MODIS_TUR <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "TUR")
-files_MODIS_CDOM <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "CDOM")
-files_MODIS_RRS <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "RRS")
-files_MODIS_SST <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "SST")
+# files_MODIS_path <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/"
+# files_MODIS_SPM <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "SPM")
+# files_MODIS_CHL <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "CHL")
+# files_MODIS_TUR <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "TUR")
+# files_MODIS_CDOM <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "CDOM")
+# files_MODIS_RRS <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "RRS")
+# files_MODIS_SST <- dir(files_MODIS_path, recursive = TRUE, full.names = TRUE, pattern = "SST")
 
 
 # Functions ---------------------------------------------------------------
@@ -411,6 +410,33 @@ validation_tables <- function(file_path, sat_name) {
 
 # Load in situ ------------------------------------------------------------
 
+# Look at times when MODIS, MERIS, OLCI-A, and OLCI-B are overhead in the ODATIS-MR L3 products
+get_start_end_time("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_BISCAY/daily/L3m_20020704__FRANCE_03_MOD_CDOM-NS_DAY_00.nc")
+get_start_end_time("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily/L3m_20020704__FRANCE_03_MOD_NRRS555-NS_DAY_00.nc")
+get_start_end_time("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/SOUTHERN_BRITTANY/daily/L3m_20030912__FRANCE_03_MER_CDOM-PO_DAY_00.nc")
+
+# Get all L3 satellite daily start and end times when overhead France
+## MODIS
+times_MODIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily", pattern = "SPM", full.names = TRUE),
+                           get_start_end_time, .parallel = TRUE)
+# Double check that times are the same for any region
+times_MODIS_check <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", pattern = "SPM", full.names = TRUE),
+                                 get_start_end_time, .parallel = TRUE)
+times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |> 
+  mutate(start_diff = start_time.x - start_time.y, end_diff = end_time.x - end_time.y)
+
+## MERIS
+times_MERIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily", pattern = "SPM", full.names = TRUE),
+                           get_start_end_time, .parallel = TRUE)
+
+## OLCI-A
+times_OLCI_A <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily", pattern = "SPM", full.names = TRUE),
+                           get_start_end_time, .parallel = TRUE)
+
+## OLCI-B
+times_OLCI_B <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily", pattern = "SPM", full.names = TRUE),
+                           get_start_end_time, .parallel = TRUE)
+
 # REPHY
 ## NB: The script used to process the data, and necessary files, were provided by Victor Pochic
 # "data/INSITU_data/REPHY/REPHY_Dataset_20250408.R"
@@ -424,24 +450,24 @@ SOMLIT <- read_csv("data/INSITU_data/SOMLIT/Somlit_clean.csv") |>
   mutate(source = "SOMLIT")
 
 # Filter out sites that are within the RiOMar regions
-in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
-                               dplyr::select(SOMLIT, source, lon, lat, site)) |>
-  distinct() |>
-  summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |>
-  mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
-                            lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
-                          lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] &
-                            lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
-                          lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] &
-                            lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
-                          lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] &
-                            lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY")) |> 
-  mutate(zone_pretty = factor(zone, 
-                              levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |> 
-  mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
-write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
-# in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
+# in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
+#                                dplyr::select(SOMLIT, source, lon, lat, site)) |>
+#   distinct() |>
+#   summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |>
+#   mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
+#                             lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
+#                           lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] &
+#                             lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
+#                           lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] &
+#                             lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
+#                           lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] &
+#                             lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY")) |> 
+#   mutate(zone_pretty = factor(zone, 
+#                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
+#                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |> 
+#   mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
+# write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
+in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
 
 # Filter in situ stations to just those within a zone
 zone_sites <- in_situ_site_list |> filter(!is.na(zone))
@@ -469,7 +495,8 @@ clean_SOMLIT <- right_join(SOMLIT, zone_sites, by = c("source", "site", "lon", "
          CHLA = case_when(CHLA_QC %in% c(2, 6, 7) ~ CHLA)) |> 
   dplyr::select(source, site, lon, lat, date, TEMP, SAL, POC, SPM, CHLA) |> 
   pivot_longer(TEMP:CHLA, values_to = "value", names_to = "variable") |>
-  filter(value >= 0)
+  filter(value >= 0) #|> 
+  # summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
 
 ## Combine
 zone_data_in_situ <- bind_rows(clean_REPHY, clean_SOMLIT) |> 
@@ -523,75 +550,70 @@ ggsave("figures/map_in_situ_stations.png", height = 14, width = 15.5, bg = "whit
 
 # Create the data.frames of pixel matchups
 ## SEXTANT
-write_pixels(zone_sites, "SEXTANT", "analysed_spim",
-             "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc")
+write_pixels(zone_sites, "SEXTANT")
 
 ## MODIS
-### Need to ensure the L3 product is treated as daily
-### Otherwise need to match the overhead pass to hourly in situ sampling
+write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "MODIS")
+write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "MODIS")
+write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "MODIS")
+write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "MODIS")
 
+## MERIS
+write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "MERIS")
+write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "MERIS")
+write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "MERIS")
+write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "MERIS")
+
+## OLCI-A
+write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "OLCI-A")
+write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "OLCI-A")
+write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "OLCI-A")
+write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "OLCI-A")
+
+## OLCI-B
+write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "OLCI-B")
+write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "OLCI-B")
+write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "OLCI-B")
+write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "OLCI-B")
 
 
 # Extract satellite data --------------------------------------------------
 
-# Function that loads each day of sat data to match against in situ and create a big file
-zone_pixels_SEXTANT <- read_csv("metadata/zone_pixels_SEXTANT.csv")
+# SEXTANT
+extract_pixels_all("SEXTANT")
 
-# Extract all relevant SEXTANT data
-## SPM
-if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")){
-  system.time(
-    zone_data_SEXTANT_SPM <- plyr::ldply(.data = files_SEXTANT_SPM, .fun = extract_pixels,
-                                         .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
-  ) # 5 seconds for 10 turns, 52 minutes for all
-  data.table::fwrite(zone_data_SEXTANT_SPM, "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
-} else {
-  if(!exists("zone_data_SEXTANT_SPM")){
-    zone_data_SEXTANT_SPM <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
-  }
-}
+# MODIS
+# TODO: This can be optimized with a map or walk function
+# But it isn't bad to have more control over the process...
+# Though, one could walk through this entire section, all sensors and zones, in one function call...
+# Could also use m_ply()
+extract_pixels_all("MODIS", "BAY_OF_SEINE"); gc()
+extract_pixels_all("MODIS", "SOUTHERN_BRITTANY"); gc()
+extract_pixels_all("MODIS", "BAY_OF_BISCAY"); gc()
+extract_pixels_all("MODIS", "GULF_OF_LION"); gc()
 
-## TUR
-### Copy the SPM values as TUR for comparison against in situ values
-if(!exists("zone_data_SEXTANT_TUR")){
-  if(!exists("zone_data_SEXTANT_SPM")){
-    zone_data_SEXTANT_SPM <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_SPM.csv")
-  }
-  zone_data_SEXTANT_TUR <- zone_data_SEXTANT_SPM |> mutate(variable = "TUR")
-}
+# MERIS
+extract_pixels_all("MERIS", "BAY_OF_SEINE"); gc()
+extract_pixels_all("MERIS", "SOUTHERN_BRITTANY"); gc()
+extract_pixels_all("MERIS", "BAY_OF_BISCAY"); gc()
+extract_pixels_all("MERIS", "GULF_OF_LION"); gc()
 
-## CHL
-if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.csv")){
-  system.time(
-    zone_data_SEXTANT_CHL <- plyr::ldply(.data = files_SEXTANT_CHL, .fun = extract_pixels,
-                                         .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels_SEXTANT)
-  ) # 47 minutes
-  # load("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.RData")
-  data.table::fwrite(zone_data_SEXTANT_CHL, "output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.csv")
-} else {
-  if(!exists("zone_data_SEXTANT_CHL")){
-    zone_data_SEXTANT_CHL <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_data_SEXTANT_CHL.csv")
-  }
-}
+# OLCI-A
+extract_pixels_all("OLCI-A", "BAY_OF_SEINE"); gc()
+extract_pixels_all("OLCI-A", "SOUTHERN_BRITTANY"); gc()
+extract_pixels_all("OLCI-A", "BAY_OF_BISCAY"); gc()
+extract_pixels_all("OLCI-A", "GULF_OF_LION"); gc()
 
-# Create median value time series
-if(!file.exists("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")){
-  zone_median_SEXTANT <- bind_rows(zone_data_SEXTANT_CHL, zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR) |>
-    filter(value > 0) |>
-    summarise(median = median(value, na.rm = TRUE), 
-              mean = mean(value, na.rm = TRUE),
-              sd = sd(value, na.rm = TRUE),
-              n = n(), .by = c("zone", "source", "site", "date", "variable"))
-  data.table::fwrite(zone_median_SEXTANT, "output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")
-} else {
-  if(!exists("zone_median_SEXTANT")){
-    zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")
-  }
-}
-rm(zone_data_SEXTANT_SPM, zone_data_SEXTANT_TUR, zone_data_SEXTANT_CHL); gc()
+# OLCI-B
+extract_pixels_all("OLCI-B", "BAY_OF_SEINE"); gc()
+extract_pixels_all("OLCI-B", "SOUTHERN_BRITTANY"); gc()
+extract_pixels_all("OLCI-B", "BAY_OF_BISCAY"); gc()
+extract_pixels_all("OLCI-B", "GULF_OF_LION"); gc()
 
 
 # Validation stats --------------------------------------------------------
+
+# TODO: To turn this section into a pipeline function
 
 # Load prepped SEXTANT data
 zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv") |> 
@@ -689,6 +711,8 @@ write_csv(zone_in_situ_SEXTANT_stats, paste0("output/MATCH_UP_DATA/FRANCE/STATIS
 
 
 #  Validation figures -----------------------------------------------------
+
+# TODO: To turn this section into a pipeline function
 
 # Reload base data matchup
 zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")

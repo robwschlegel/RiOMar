@@ -24,7 +24,18 @@ zones_bbox <- data.frame(zone = zones_list,
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone")
 
 
-# Utility -----------------------------------------------------------------
+# Pixels ------------------------------------------------------------------
+
+# Simple wrapper to extract start and end times of an ODATIS-MR file
+# file_name <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_BISCAY/daily/L3m_20020704__FRANCE_03_MOD_CDOM-NS_DAY_00.nc"
+# file_name <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_BISCAY/daily/L3m_20230424__FRANCE_03_MOD_T-FNU-NS_DAY_00.nc"
+get_start_end_time <- function(file_name){
+  df_info <- ncdump::NetCDF(file_name)$attribute[1]$global |> 
+    dplyr::select(start_time, end_time) |> 
+    mutate(start_time = as.POSIXct(gsub("T|Z", " ", start_time), format = "%Y%m%d %H%M%S"),
+           end_time = as.POSIXct(gsub("T|Z", " ", end_time), format = "%Y%m%d %H%M%S"))
+  return(df_info)
+}
 
 # Simple wrapper to extract and save full satellite coord grids
 get_sat_grid <- function(file_name){
@@ -37,51 +48,87 @@ get_sat_grid <- function(file_name){
 }
 
 # Create indexes of which pixels match the 1 km range grid around the in situ sites
-# target_site = zone_sites[1,]; dist_range = 1; sat_grid = coords_SEXTANT; sat_rast = rast_SEXTANT
-# rm(target_site, dist_range, sat_grid, sat_rast, lon_diff, lat_diff, lon_resolution, lat_resolution,
-#    dist_buffer, lon_buffer, lat_buffer, lon_buff_range, lat_buff_range, sat_grid_buffer)
-get_pixels <- function(target_site, sat_grid, sat_rast, dist_range = 1){
+# target_site = zone_site_df[10,]; dist_range = 1; sat_rast = rast_sat
+# rm(site_sp, site_buffer, cropped_rast, pixel_coords)
+get_pixels <- function(target_site, sat_rast, dist_range = 1){
   
-  # Get the satellite resolution
-  lon_diff <- diff(sat_grid$lon)
-  lat_diff <- diff(sat_grid$lat)
-  lon_resolution <- mean(lon_diff[lon_diff > 0])
-  lat_resolution <- mean(lat_diff[lat_diff > 0])
+  # Create spatial point
+  site_sp <- SpatialPoints(coords = target_site[,c("lon", "lat")], proj4string = CRS(proj4string(sat_rast)))
   
-  # Get the initial buffer to filter by
-  dist_buffer <- dist_range/100
-  lon_buffer <- dist_buffer+lon_resolution/2
-  lat_buffer <- dist_buffer+lat_resolution/2
+  # Create the chosen buffer 
+  site_buffer <- raster::buffer(site_sp, width = dist_range*1000)
+  # site_buffer <- st_buffer(site_sp, dist = dist_range*1000)
   
-  # Get lon/la buffer range
-  lon_buff_range <- c(target_site$lon-lon_buffer, target_site$lon+lon_buffer)
-  lat_buff_range <- c(target_site$lat-lat_buffer, target_site$lat+lat_buffer)
+  # Crop and mask the raster
+  cropped_rast <- raster::crop(sat_rast, site_buffer)
+  # masked_rast <- raster::mask(cropped_rast, site_buffer)
   
-  # Filter all pixels in the grid within buffer range
-  sat_grid_buffer <- sat_grid |> 
-    filter(lon >= lon_buff_range[1], lon <= lon_buff_range[2]) |> 
-    filter(lat >= lat_buff_range[1], lat <= lat_buff_range[2])
-  
+  # Get lon/lat coords
+  # pixel_values <- getValues(masked_rast)
+  pixel_coords <- as.data.frame(raster::xyFromCell(cropped_rast, 1:ncell(cropped_rast)))
+  colnames(pixel_coords) <- c("lon", "lat")
+                             
   # Calculate distance of pixels from the target in km
-  sat_grid_buffer$dist <- round(distHaversine(sat_grid_buffer, target_site[,c("lon", "lat")])/1000, 2)
+  pixel_coords$dist <- round(distHaversine(pixel_coords, target_site[,c("lon", "lat")])/1000, 2)
   
   # Get the pixel IDs and exit
-  sat_grid_buffer$cell_numbers <- raster::cellFromXY(sat_rast, xy = sat_grid_buffer)
-  return(sat_grid_buffer)
+  pixel_coords$cell_numbers <- raster::cellFromXY(sat_rast, xy = pixel_coords)
+  return(pixel_coords)
 }
 
 # Wrapper for get_pixels() to write the pixels to .csv per sat product
-write_pixels <- function(zone_sites, sat_name, sat_var, nc_file_base){
+# zone_site_df <- filter(zone_sites, zone == "BAY_OF_BISCAY")
+# sat_name <- "MODIS"
+# sat_var <- "SPM-G-NS_mean"
+# nc_file_base <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_BISCAY/daily/L3m_20020704__FRANCE_03_MOD_SPM-G-NS_DAY_00.nc"
+write_pixels <- function(zone_site_df, sat_name){
+  
+  # Check that only one zone is given if not SEXTANT
+  if(sat_name != "SEXTANT"){
+    if(length(unique(zone_site_df$zone)) > 1) stop("Only pass one zone to this function for non-SEXTANT data structure.")
+    zone_unique <- zone_site_df$zone[1]
+  }
+  
+  # Determine file and variable names
+  if(sat_name == "SEXTANT"){
+    sat_var <- "analysed_spim"
+    nc_file_base <- "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"
+  } else if(sat_name == "MODIS"){
+    sat_var <- "SPM-G-NS_mean"
+    nc_file_base <- paste0("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/",zone_unique,"/daily/L3m_20020704__FRANCE_03_MOD_SPM-G-NS_DAY_00.nc")
+  } else if(sat_name == "MERIS"){
+    sat_var <- "SPM-G-PO_mean"
+    nc_file_base <- paste0("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/",zone_unique,"/daily/L3m_20020619__FRANCE_03_MER_SPM-G-PO_DAY_00.nc")
+  } else if(sat_name == "OLCI-A"){
+    sat_var <- "SPM-G-PO_mean"
+    nc_file_base <- paste0("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/",zone_unique,"/daily/L3m_20160426__FRANCE_03_OLA_SPM-G-PO_DAY_00.nc")
+  } else if(sat_name == "OLCI-B"){
+    sat_var <- "SPM-G-PO_mean"
+    nc_file_base <- paste0("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/",zone_unique,"/daily/L3m_20180515__FRANCE_03_OLB_SPM-G-PO_DAY_00.nc")
+  }
+  
+  # Get the grid and raster bases
   grid_sat <- get_sat_grid(nc_file_base)
   rast_sat <- raster(nc_file_base, varname = sat_var)
-  zone_pixels <- plyr::ddply(.data = zone_sites, .variables = c("zone", "source", "site"), .fun = get_pixels, .parallel = TRUE,
-                             sat_grid = grid_sat, sat_rast = rast_sat)
-  write_csv(zone_pixels, paste0("metadata/zone_pixels_",sat_name,".csv"))
+  # Extract all pixels
+  zone_pixels <- plyr::ddply(.data = zone_site_df, .variables = c("zone", "source", "site"), 
+                             .fun = get_pixels, .parallel = TRUE, sat_rast = rast_sat)
+  
+  # Save and exit
+  if(length(unique(zone_pixels$zone)) == 1){
+    write_csv(zone_pixels, paste0("metadata/zone_pixels_",sat_name,"_",unique(zone_pixels$zone)[1],".csv"))
+  } else {
+    write_csv(zone_pixels, paste0("metadata/zone_pixels_",sat_name,".csv"))
+  }
 }
 
 # Once the pixels have been determined, use this to extract the data
 # file_name <- "~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"
-# df <- zone_pixels_SEXTANT
+# file_name <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily/L3m_20020704__FRANCE_03_MOD_CHL-OC5-NS_DAY_00.nc"
+# file_name <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily/L3m_20020619__FRANCE_03_MER_SPM-G-PO_DAY_00.nc"
+# file_name <- "/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/SOUTHERN_BRITTANY/daily/L3m_20120908__FRANCE_03_MOD_CDOM-NS_DAY_00.nc"
+# ncdump::NetCDF(file_name)
+# df <- zone_pixels
 extract_pixels <- function(file_name, df){
   
   # Determine variable names from file pathway
@@ -96,18 +143,23 @@ extract_pixels <- function(file_name, df){
       stop("File structure not recognised")
     }
   } else {
-    stop("Need to add more satellites")
+    var_base_name <- str_split(basename(file_name), "_")[[1]][7]
+    var_col_name <- str_split(var_base_name, "-")[[1]][1]
+    var_nc_name <- paste0(var_base_name,"_mean")
   }
   
   # Get date values
-  # TODO: Adapt this to other sat files structures once added
-  nc_date <- as.Date(str_split(basename(file_name), "-")[[1]][1], format = "%Y%m%d")
+  if(grepl("SEXTANT", file_name)){
+    nc_date <- as.Date(str_split(basename(file_name), "-")[[1]][1], format = "%Y%m%d")
+  } else {
+    nc_date <- as.Date(str_split(basename(file_name), "_")[[1]][2], format = "%Y%m%d")
+  }
   
   # Extract data and exit
   df_res <- df |> 
     mutate(date = nc_date,
            variable = var_col_name,
-           value = extract(raster(file_name, varname = var_nc_name), cell_numbers)) |> 
+           value = raster::extract(raster(file_name, varname = var_nc_name), cell_numbers)) |> 
     dplyr::select(-cell_numbers)
   return(df_res)
   
@@ -141,6 +193,177 @@ extract_pixels <- function(file_name, df){
   
   # Clean up
   # rm(file_name, df, var_col_name, var_nc_name, df_res, nc_date, df_nc, df_test, df_is_test, df_is_test_mean, df_nc_test, is_site)
+}
+
+# Function that extracts all of the data identified in the product/zone lon/lat metadata files
+# sat_name <- "SEXTANT"
+# sat_name <- "MODIS"; zone_name <- "SOUTHERN_BRITTANY"
+extract_pixels_all <- function(sat_name, zone_name = NULL){#, overwrite = FALSE){
+  
+  # Load zone pixels
+  if(is.null(zone_name)){
+    file_stub <- sat_name
+  } else {
+    file_stub <- paste0(sat_name,"_",zone_name)
+  }
+  zone_pixels <- read_csv(paste0("metadata/zone_pixels_",file_stub,".csv"))
+  message("Started run on ", file_stub, " : ", Sys.time())
+  
+  # Get file pathways
+  if(sat_name == "SEXTANT"){
+    files_SPM <- dir("~/pCloudDrive/data/SEXTANT/SPM", pattern = ".nc", full.names = TRUE, recursive = TRUE)
+    files_CHL <- dir("~/pCloudDrive/data/SEXTANT/CHLA", pattern = ".nc", full.names = TRUE, recursive = TRUE)
+  } else {
+    files_path <- file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR",sat_name,zone_name)
+    files_SPM <- dir(files_path, recursive = TRUE, full.names = TRUE, pattern = "SPM")
+    files_CHL <- dir(files_path, recursive = TRUE, full.names = TRUE, pattern = "CHL")
+    files_TUR <- dir(files_path, recursive = TRUE, full.names = TRUE, pattern = "T-FNU")
+    files_CDOM <- dir(files_path, recursive = TRUE, full.names = TRUE, pattern = "CDOM")
+    files_RRS <- dir(files_path, recursive = TRUE, full.names = TRUE, pattern = "RRS")
+  } 
+  
+  # Load SST explicitly for MODIS
+  if(sat_name == "MODIS") files_SST <- dir(files_path, recursive = TRUE, full.names = TRUE, pattern = "SST")
+  
+  # Extract all available data per variable
+  # TODO: Consider a different way of doing this. I think it could be more streamlined.
+  ## SPM
+  if(exists("files_SPM")){
+    message("Started SPM extraction at : ", Sys.time())
+    file_name_SPM <- paste0("output/MATCH_UP_DATA/FRANCE/zone_data_",file_stub,"_SPM.csv")
+    if(!file.exists(file_name_SPM)){
+      # system.time(
+      zone_data_SPM <- plyr::ldply(.data = files_SPM, .fun = extract_pixels,
+                                   .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels)
+      # ) # 57 minutes for all SEXTANT, 3 minutes for all MODIS Bay of Seine
+      data.table::fwrite(zone_data_SPM, file_name_SPM); gc()
+    } else {
+      if(!exists("zone_data_SPM")){
+        zone_data_SPM <- data.table::fread(file_name_SPM)
+      }
+    }
+  }
+  
+  ## TUR
+  ### Copy the SPM values as TUR for comparison against in situ values for SEXTANT
+  if(sat_name == "SEXTANT"){
+    message("Copying TUR from SPM at : ", Sys.time())
+    if(!exists("zone_data_TUR")){
+      if(!exists("zone_data_SPM")){
+        zone_data_SPM <- data.table::fread(file_name_SPM) # Intentionally SPM
+      }
+      zone_data_TUR <- zone_data_SPM |> mutate(variable = "TUR")
+    }
+  } else if(exists("files_TUR")){
+    message("Started TUR extraction at : ", Sys.time())
+    file_name_TUR <- paste0("output/MATCH_UP_DATA/FRANCE/zone_data_",file_stub,"_TUR.csv")
+    if(!file.exists(file_name_TUR)){
+      # system.time(
+      zone_data_TUR <- plyr::ldply(.data = files_TUR, .fun = extract_pixels,
+                                   .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels)
+      # ) # 5 seconds for 10 turns, 52 minutes for all SEXTANT, 3 minutes for MODIS Bay of Seine
+      data.table::fwrite(zone_data_TUR, file_name_TUR); gc()
+    } else {
+      if(!exists("zone_data_TUR")){
+        zone_data_TUR <- data.table::fread(file_name_TUR)
+      }
+    }
+  }
+  
+  ## CHL
+  if(exists("files_CHL")){
+    message("Started CHL extraction at : ", Sys.time())
+    file_name_CHL <- paste0("output/MATCH_UP_DATA/FRANCE/zone_data_",file_stub,"_CHL.csv")
+    if(!file.exists(file_name_CHL)){
+      zone_data_CHL <- plyr::ldply(.data = files_CHL, .fun = extract_pixels,
+                                   .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels)
+      data.table::fwrite(zone_data_CHL, file_name_CHL); gc()
+    } else {
+      if(!exists("zone_data_SEXTANT_CHL")){
+        zone_data_CHL <- data.table::fread(file_name_CHL)
+      }
+    }
+  }
+  
+  ## CDOM
+  if(exists("files_CDOM")){
+    message("Started CDOM extraction at : ", Sys.time())
+    file_name_CDOM <- paste0("output/MATCH_UP_DATA/FRANCE/zone_data_",file_stub,"_CDOM.csv")
+    if(!file.exists(file_name_CDOM)){
+      zone_data_CDOM <- plyr::ldply(.data = files_CDOM, .fun = extract_pixels,
+                                    .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels)
+      data.table::fwrite(zone_data_CDOM, file_name_CDOM); gc()
+    } else {
+      if(!exists("zone_data_SEXTANT_CDOM")){
+        zone_data_CDOM <- data.table::fread(file_name_CDOM)
+      }
+    }
+  }
+  
+  ## RRS
+  if(exists("files_RRS")){
+    message("Started RRS extraction at : ", Sys.time())
+    file_name_RRS <- paste0("output/MATCH_UP_DATA/FRANCE/zone_data_",file_stub,"_RRS.csv")
+    if(!file.exists(file_name_RRS)){
+      zone_data_RRS <- plyr::ldply(.data = files_RRS, .fun = extract_pixels,
+                                   .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels)
+      data.table::fwrite(zone_data_RRS, file_name_RRS); gc()
+    } else {
+      if(!exists("zone_data_SEXTANT_RRS")){
+        zone_data_RRS <- data.table::fread(file_name_RRS)
+      }
+    }
+  }
+  
+  ## SST
+  if(exists("files_SST")){
+    message("Started SST extraction at : ", Sys.time())
+    file_name_SST <- paste0("output/MATCH_UP_DATA/FRANCE/zone_data_",file_stub,"_SST.csv")
+    if(!file.exists(file_name_SST)){
+      zone_data_SST <- plyr::ldply(.data = files_SST, .fun = extract_pixels,
+                                   .parallel = TRUE, .paropts = list(.inorder = FALSE), df = zone_pixels)
+      data.table::fwrite(zone_data_SST, file_name_SST); gc()
+    } else {
+      if(!exists("zone_data_SEXTANT_SST")){
+        zone_data_SST <- data.table::fread(file_name_SST)
+      }
+    }
+  }
+  
+  # Create median value time series
+  ## Combine all data as required
+  file_name_median <- paste0("output/MATCH_UP_DATA/FRANCE/zone_median_",file_stub,".csv")
+  message("Started median calculations at : ", Sys.time())
+  if(!file.exists(file_name_median)){
+    if(sat_name == "SEXTANT"){
+      zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR)
+      rm(zone_data_SPM, zone_data_TUR, zone_data_CHL); gc()
+    } else if(sat_name == "MODIS"){
+      zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+                                    zone_data_CDOM, zone_data_RRS, zone_data_SST)
+      rm(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+         zone_data_CDOM, zone_data_RRS, zone_data_SST); gc()
+    } else {
+      zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+                                    zone_data_CDOM, zone_data_RRS)
+      rm(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+         zone_data_CDOM, zone_data_RRS); gc()
+    }
+    
+    # Create medians etc.
+    zone_median <- zone_median_base |> 
+      filter(value > 0) |>
+      summarise(median = median(value, na.rm = TRUE), 
+                mean = mean(value, na.rm = TRUE),
+                sd = sd(value, na.rm = TRUE),
+                n = n(), .by = c("zone", "source", "site", "date", "variable"))
+    data.table::fwrite(zone_median, file_name_median)
+    rm(zone_median_base, zone_median); gc()
+  } #else {
+  #   if(!exists("zone_median")){
+  #     zone_median <- data.table::fread(file_name_median)
+  #   }
+  # }
 }
 
 
