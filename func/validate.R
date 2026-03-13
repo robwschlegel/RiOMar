@@ -3,6 +3,7 @@
 # This script contains the code necessary to run validation on a number of
 # satellite products and variables against multiple sources of in situ data
 
+# Each section can run independently of the others
 
 # Setup -------------------------------------------------------------------
 
@@ -24,55 +25,54 @@ source("func/util.R")
 # Satellite times ---------------------------------------------------------
 
 # Get all L3 satellite daily start and end times when overhead France
-# This is used to correctly filter the in situ data by time when possible
-# NB: These each take a few minutes to run so best to just do it once, result is loaded below
+# This could be used to correctly filter the in situ data by time when possible
 ## SEXTANT
 ### NB: Handled differently because the values are always the same and downloading all files takes an hour...
-# times_SEXTANT <- data.frame(date_start = ymd(unlist(lapply(str_split(basename(dir("~/pCloudDrive/data/SEXTANT/SPM", 
-#                                                                                   recursive = TRUE, pattern = "SPIM")), "-"), "[[", 1)))) |> 
-#   mutate(date_end = date_start + 1,
-#          start_time = ymd_hms(paste(date_start, "12:00:00"), tz = "GMT"),
-#          end_time = ymd_hms(paste(date_end, "12:00:00"), tz = "GMT")) |> 
-#   dplyr::select(start_time, end_time)
-# save(times_SEXTANT, file = "metadata/times_SEXTANT.RData")
+times_SEXTANT <- data.frame(date_start = ymd(unlist(lapply(str_split(basename(dir("~/pCloudDrive/data/SEXTANT/SPM",
+                                                                                  recursive = TRUE, pattern = "SPIM")), "-"), "[[", 1)))) |>
+  mutate(date_end = date_start + 1,
+         start_time = ymd_hms(paste(date_start, "12:00:00"), tz = "GMT"),
+         end_time = ymd_hms(paste(date_end, "12:00:00"), tz = "GMT")) |>
+  dplyr::select(start_time, end_time)
+save(times_SEXTANT, file = "metadata/times_SEXTANT.RData")
 
 ## MODIS
-# times_MODIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
-#                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
-# save(times_MODIS, file = "metadata/times_MODIS.RData")
+times_MODIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
+                               pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+save(times_MODIS, file = "metadata/times_MODIS.RData")
 # Double check that times are the same for any region
-## Yes, start and end times are exactly the same
-# times_MODIS_check <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", pattern = "SPM", full.names = TRUE),
-#                                  get_start_end_time, .parallel = TRUE)
-# times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |> 
-#   mutate(start_diff = start_time...1 - start_time...3, end_diff = end_time...2 - end_time...4)
+# Yes, start and end times are exactly the same
+times_MODIS_check <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", pattern = "SPM", full.names = TRUE),
+                                 get_start_end_time, .parallel = TRUE)
+times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |>
+  mutate(start_diff = start_time...1 - start_time...3, end_diff = end_time...2 - end_time...4)
 
 # ## MERIS
-# times_MERIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
-#                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
-# save(times_MERIS, file = "metadata/times_MERIS.RData")
+times_MERIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
+                               pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+save(times_MERIS, file = "metadata/times_MERIS.RData")
 
 ## OLCI-A
-# times_OLCI_A <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
-#                                 pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
-# save(times_OLCI_A, file = "metadata/times_OLCI_A.RData")
+times_OLCI_A <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
+                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+save(times_OLCI_A, file = "metadata/times_OLCI_A.RData")
 
 ## OLCI-B
-# times_OLCI_B <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
-#                                 pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
-# save(times_OLCI_B, file = "metadata/times_OLCI_B.RData")
+times_OLCI_B <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
+                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+save(times_OLCI_B, file = "metadata/times_OLCI_B.RData")
 
 ## ALL
-# times_ALL <- bind_rows(mutate(times_SEXTANT, sat_name = "SEXTANT"),
-#                        mutate(times_MODIS, sat_name = "MODIS"),
-#                        mutate(times_MERIS, sat_name = "MERIS"),
-#                        mutate(times_OLCI_A, sat_name = "OLCI-A"),
-#                        mutate(times_OLCI_B, sat_name = "OLCI-B")) |>
-#   mutate(date = as.Date(start_time),
-#          start_hms = hms::as_hms(start_time),
-#          end_hms = hms::as_hms(end_time)) |>
-#   complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA), nesting(sat_name))
-# save(times_ALL, file = "metadata/times_ALL.RData") # Saving in R format to maintain time stamps
+times_ALL <- bind_rows(mutate(times_SEXTANT, sat_name = "SEXTANT"),
+                       mutate(times_MODIS, sat_name = "MODIS"),
+                       mutate(times_MERIS, sat_name = "MERIS"),
+                       mutate(times_OLCI_A, sat_name = "OLCI-A"),
+                       mutate(times_OLCI_B, sat_name = "OLCI-B")) |>
+  mutate(date = as.Date(start_time),
+         start_hms = hms::as_hms(start_time),
+         end_hms = hms::as_hms(end_time)) |>
+  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA), nesting(sat_name))
+save(times_ALL, file = "metadata/times_ALL.RData") # Saving in R format to maintain time stamps
 load("metadata/times_ALL.RData")
 
 # Plot the times of day during which the satellites are available
@@ -102,24 +102,24 @@ SOMLIT <- read_csv("data/INSITU_data/SOMLIT/Somlit_clean.csv") |>
   mutate(source = "SOMLIT")
 
 # Filter out sites that are within the RiOMar regions
-# in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
-#                                dplyr::select(SOMLIT, source, lon, lat, site)) |>
-#   distinct() |>
-#   summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |>
-#   mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
-#                             lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
-#                           lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] &
-#                             lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
-#                           lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] &
-#                             lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
-#                           lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] &
-#                             lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY")) |> 
-#   mutate(zone_pretty = factor(zone, 
-#                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-#                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |> 
-#   mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
-# write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
-in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
+in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
+                               dplyr::select(SOMLIT, source, lon, lat, site)) |>
+  distinct() |>
+  summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |>
+  mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
+                            lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
+                          lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] &
+                            lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
+                          lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] &
+                            lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
+                          lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] &
+                            lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY")) |>
+  mutate(zone_pretty = factor(zone,
+                              levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
+                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
+  mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
+write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
+# in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
 
 # Filter in situ stations to just those within a zone
 zone_sites <- in_situ_site_list |> filter(!is.na(zone))
@@ -164,6 +164,7 @@ zone_data_in_situ <- bind_rows(REPHY_clean, SOMLIT_clean) |>
   filter(time >= hms("10:00:00"), time <= hms("15:00:00")) |> 
   # Create daily means
   summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable"))
+write_csv(zone_data_in_situ, "data/INSITU_data/zone_data_in_situ.csv")
 
 
 # Map In situ -------------------------------------------------------------
@@ -271,119 +272,13 @@ extract_pixels_all("OLCI-B", "BAY_OF_BISCAY"); gc()
 extract_pixels_all("OLCI-B", "GULF_OF_LION"); gc()
 
 
-# Validation stats --------------------------------------------------------
+# Validation stats + figures  --------------------------------------------
 
-# TODO: To turn this section into a pipeline function
-
-# Load prepped SEXTANT data
-zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv") |> 
-  mutate(date = as.Date(date))
-
-# Combine extracted sat data with in situ
-zone_in_situ_SEXTANT <- zone_data_in_situ |> 
-  left_join(zone_median_SEXTANT, by = c("source", "site", "date", "variable")) |> 
-  filter(value > 0, median > 0) |> 
-  dplyr::rename(value_in_situ = value, value_satellite = median) |> 
-  mutate(season = case_when(
-    month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
-    month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
-  dplyr::select(zone, dplyr::everything())
-
-# Create big grid of sites to look for obvious outliers
-# ggplot(data = zone_in_situ_SEXTANT, aes(x = value_in_situ, y = value_satellite)) +
-#   geom_point(aes(colour = source, shape = variable)) +
-#   facet_wrap(~site, scales = "free")
-
-# TODO: Think of a way to optimise this
-# Stats for all groups together by variable
-zone_in_situ_SEXTANT_stats_01 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all groups together by variable and season
-zone_in_situ_SEXTANT_stats_02 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", source = "ALL", site = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all zones by variable
-zone_in_situ_SEXTANT_stats_03 <- zone_in_situ_SEXTANT |> mutate(source = "ALL", site = "ALL", season = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all zones by variable and season
-zone_in_situ_SEXTANT_stats_04 <- zone_in_situ_SEXTANT |> mutate(source = "ALL", site = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all sources by variable
-zone_in_situ_SEXTANT_stats_05 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", site = "ALL", season = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all sources by variable and season
-zone_in_situ_SEXTANT_stats_06 <- zone_in_situ_SEXTANT |> mutate(zone = "GLOBAL", site = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all zones and sources by variable
-zone_in_situ_SEXTANT_stats_07 <- zone_in_situ_SEXTANT |> mutate(site = "ALL", season = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all zones and sources by variable and season
-zone_in_situ_SEXTANT_stats_08 <- zone_in_situ_SEXTANT |> mutate(site = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all sites by variable
-zone_in_situ_SEXTANT_stats_09 <- zone_in_situ_SEXTANT |> mutate(site = "ALL", season = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for all sites by variable and season
-zone_in_situ_SEXTANT_stats_10 <- zone_in_situ_SEXTANT |> mutate(site = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for each site by variable
-zone_in_situ_SEXTANT_stats_11 <- zone_in_situ_SEXTANT |> mutate(season = "ALL") |> 
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Stats for each site by variable and season
-zone_in_situ_SEXTANT_stats_12 <- zone_in_situ_SEXTANT |>
-  summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable"))
-
-# Bind all together
-zone_in_situ_SEXTANT_stats <- bind_rows(zone_in_situ_SEXTANT_stats_01, zone_in_situ_SEXTANT_stats_02, zone_in_situ_SEXTANT_stats_03,
-                                        zone_in_situ_SEXTANT_stats_04, zone_in_situ_SEXTANT_stats_05, zone_in_situ_SEXTANT_stats_06,
-                                        zone_in_situ_SEXTANT_stats_07, zone_in_situ_SEXTANT_stats_08, zone_in_situ_SEXTANT_stats_09,
-                                        zone_in_situ_SEXTANT_stats_10, zone_in_situ_SEXTANT_stats_11, zone_in_situ_SEXTANT_stats_12) |> 
-  mutate(sensor = "SEXTANT", .before = "zone")
-
-# Save results
-write_csv(zone_in_situ_SEXTANT_stats, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/","SEXTANT","_stats.csv"))
-
-# Plot to look for odd results
-# TODO: Consider running ANOVAs on the base values per the different groupings
-# Or rather run them on the resulting stats visualised here
-## Histogram
-# ggplot(data = zone_in_situ_SEXTANT_stats, aes(x = Bias)) +
-#   geom_histogram(aes(fill = variable))#, position = "dodge")
-# ggplot(data = zone_in_situ_SEXTANT_stats, aes(x = Bias, y = Error)) +
-#   geom_point(aes(colour = zone, shape = variable, size = source)) +
-#   scale_x_continuous(limits = c(-300, 300)) +
-#   scale_y_continuous(limits = c(0, 300))
-# ggplot(data = zone_in_situ_SEXTANT_stats, aes(y = Error)) +
-#   geom_boxplot(aes(fill = zone)) +
-#   facet_grid(variable~season, scales = "free_y") +
-#   coord_cartesian(ylim = c(0, 200))
-#   # coord_cartesian(ylim = c(-200, 200))
-
-
-#  Validation figures -----------------------------------------------------
-
-# TODO: To turn this section into a pipeline function
-
-# Reload base data matchup
-zone_median_SEXTANT <- data.table::fread("output/MATCH_UP_DATA/FRANCE/zone_median_SEXTANT.csv")
-
-# Reload stats
-stats_SEXTANT <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
-                             pattern = "SEXTANT", full.names = TRUE), read_csv)
-
-# Create figures
-plyr::l_ply(unique(stats_SEXTANT$variable), validation_plots, .parallel = TRUE,
-            sat_name = "SEXTANT", match_up_df = zone_in_situ_SEXTANT, match_up_stats = stats_SEXTANT)
+validate_sensor("SEXTANT")
+validate_sensor("MODIS")
+validate_sensor("MERIS")
+validate_sensor("OLCI-A")
+validate_sensor("OLCI-B")
 
 
 # Validation tables -------------------------------------------------------
