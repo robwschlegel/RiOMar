@@ -35,36 +35,48 @@ times_SEXTANT <- data.frame(date_start = ymd(unlist(lapply(str_split(basename(di
          end_time = ymd_hms(paste(date_end, "12:00:00"), tz = "GMT")) |>
   dplyr::select(start_time, end_time)
 save(times_SEXTANT, file = "metadata/times_SEXTANT.RData")
+load("metadata/times_SEXTANT.RData")
 
 ## MODIS
 times_MODIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_MODIS, file = "metadata/times_MODIS.RData")
-# Double check that times are the same for any region
+load("metadata/times_MODIS.RData")
+
+### Double check that times are the same for any region
 # Yes, start and end times are exactly the same
 times_MODIS_check <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", pattern = "SPM", full.names = TRUE),
                                  get_start_end_time, .parallel = TRUE)
 times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |>
   mutate(start_diff = start_time...1 - start_time...3, end_diff = end_time...2 - end_time...4)
+### SST are night time
+times_MODIS_SST <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
+                               pattern = "SST", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+save(times_MODIS_SST, file = "metadata/times_MODIS_SST.RData")
+load("metadata/times_MODIS_SST.RData")
 
 # ## MERIS
 times_MERIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_MERIS, file = "metadata/times_MERIS.RData")
+load("metadata/times_MERIS.RData")
 
 ## OLCI-A
 times_OLCI_A <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
                                 pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_OLCI_A, file = "metadata/times_OLCI_A.RData")
+load("metadata/times_OLCI_A.RData")
 
 ## OLCI-B
 times_OLCI_B <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
                                 pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_OLCI_B, file = "metadata/times_OLCI_B.RData")
+load("metadata/times_OLCI_B.RData")
 
 ## ALL
 times_ALL <- bind_rows(mutate(times_SEXTANT, sat_name = "SEXTANT"),
                        mutate(times_MODIS, sat_name = "MODIS"),
+                       mutate(times_MODIS_SST, sat_name = "MODIS (SST)"),
                        mutate(times_MERIS, sat_name = "MERIS"),
                        mutate(times_OLCI_A, sat_name = "OLCI-A"),
                        mutate(times_OLCI_B, sat_name = "OLCI-B")) |>
@@ -80,7 +92,7 @@ time_plot <- ggplot(data = times_ALL, aes(x = date, y = start_hms)) +
   geom_point(data = filter(times_ALL, sat_name == "SEXTANT"), aes(colour = sat_name), size = 3) +
   geom_ribbon(aes(ymin = start_hms, ymax = end_hms, fill = sat_name)) +
   scale_fill_brewer("Sensor", palette = "Dark2", aesthetics = c("colour", "fill")) +
-  labs(y = "Passover time (UTC)", x = NULL,
+  labs(y = "Overhead time (UTC)", x = NULL,
        title = "SEXTANT and ODATIS-MR sensor availability and overhead times") +
   theme_bw()
 # time_plot
@@ -118,7 +130,7 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
   mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
-write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
+# write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
 # in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
 
 # Filter in situ stations to just those within a zone
@@ -160,8 +172,12 @@ SOMLIT_clean <- right_join(SOMLIT, zone_sites, by = c("source", "site", "lon", "
 zone_data_in_situ <- bind_rows(REPHY_clean, SOMLIT_clean) |> 
   # Get only variables of interest
   filter(variable %in% c('TEMP', 'SAL', 'POC', 'SPM', 'CHLA', 'TUR')) |> 
-  # Filter from times 10:00 to 15:00
-  filter(time >= hms("10:00:00"), time <= hms("15:00:00")) |> 
+  # Create HMS filter differently for TEMP from all other variables
+  # Filter from times 10:00 to 15:00 for non-SST; 00:00 to 04:00 for TEMP
+  mutate(hms_idx = case_when(variable != "TEMP" & time >= hms("10:00:00") & time <= hms("15:00:00") ~ 1,
+                             variable == "TEMP" & time >= hms("21:00:00") | time <= hms("09:00:00") ~ 1,
+                             TRUE ~ 0)) |> 
+  filter(hms_idx == 1) |>
   # Create daily means
   summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable")) |> 
   left_join(zone_sites, by = join_by(source, site, lon, lat)) |> 
@@ -295,7 +311,7 @@ zone_all_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/",
 zone_all_stats_global <- zone_all_stats |> 
   filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
   filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
-  dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
+  # dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
   arrange(Error) |> 
   mutate(Error = round(Error),
          Bias = round(Bias))
@@ -316,7 +332,7 @@ zone_median_SST <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE", pattern = "zone_me
                                full.names = TRUE), data.table::fread) |> 
   mutate(date = as.Date(date)) |> 
   filter(variable == "SST")
-write_csv(zone_median_SST, "output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
+# write_csv(zone_median_SST, "output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
 # zone_median_SST <- read_csv()
 
 # Load in situ data
@@ -330,23 +346,32 @@ zone_all_TEMP <- zone_data_in_situ |>
   ungroup() |> 
   filter(count > 90) |> 
   mutate(variable_sat = "SST") |> 
-  left_join(zone_median_SST, by = c("zone", "source", "site", "date", "variable_sat" = "variable"))# |> 
+  left_join(zone_median_SST, by = c("zone", "source", "site", "date", "variable_sat" = "variable")) |> 
   filter(value > 0, median > 0) |> 
-  dplyr::rename(value_in_situ = value, value_satellite = median, variable_sat = variable.y) |> 
+  dplyr::rename(value_in_situ = value, value_satellite = median) |> 
   mutate(season = case_when(
     month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
     month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
   dplyr::select(zone, dplyr::everything())
 
 # Basic plot
-zone_all_TEMP |> 
+# TODO: Add lm stats
+# TODO: Why the missing data?
+plot_TEMP_compare <- zone_all_TEMP |> 
   filter(date >= "2004-07-04") |> 
-  ggplot(aes(x = date, y = value)) +
-  geom_point(aes(group = site, shape = source)) +
-  geom_point(aes(y = median, group = site, shape = source), colour = "red", show.legend = FALSE) +
+  ggplot(aes(x = date, y = value_in_situ)) +
+  geom_point(aes(group = site, shape = source), show.legend = FALSE) +
+  geom_point(aes(y = value_satellite, group = site, shape = source), colour = "red", show.legend = FALSE) +
   geom_smooth(method = "lm", colour = "black", se = FALSE) +
-  geom_smooth(aes(y = median), method = "lm", colour = "red", se = FALSE) +
+  geom_smooth(aes(y = value_satellite), method = "lm", colour = "red", se = FALSE) +
   facet_wrap(~zone_pretty) +
-  labs(title = "Comparison of in situ tmeperatures (depth <= 10) and MODIS SST",
-       y = "Temperature (°C)", x = NULL)
-
+  labs(title = "MODIS SST vs in situ TEMP",
+       y = "Temperature (°C)", x = NULL) +
+  theme(panel.border = element_rect(colour = "black", fill = NA),
+        plot.title = element_text(size = 25, face = "bold"),
+        legend.title = element_text(size = 23),
+        legend.text = element_text(size = 20),
+        axis.title = element_text(size = 23),
+        axis.text = element_text(size = 20))
+plot_TEMP_compare
+ggsave("figures/comparison_TEMP_TS.png", plot_TEMP_compare, width = 14, height = 6)

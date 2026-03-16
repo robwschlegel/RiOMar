@@ -904,7 +904,7 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats){
   }
   
   # Create title and subtitle
-  plot_title = paste("In situ", var_name_is, "vs.", sat_name, var_name_sat)
+  plot_title = paste(sat_name, var_name_sat, "vs.", "in situ", var_name_is)
   
   # Create the plot
   scatterplot <- ggplot(data = match_up_df_var, aes(x = value_in_situ, y = value_satellite)) + 
@@ -927,11 +927,13 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats){
     
     annotate(geom = 'text', x = plot_meta_is$axis_limits[1], y = plot_meta_sat$axis_limits[2], 
              hjust = 0, vjust = 1, color = "black", size = 12.5,
-             label = paste('Error = ', round(ifelse(Error_value %>% is.numeric(), Error_value, NA), 1), "%\n",
-                           'Bias = ', round(ifelse(Bias_value %>% is.numeric(), Bias_value, NA), 1), " %\n",
-                           # 'r² (linearity) = ', round(statistics_values$r2_log, 2),"\n",
-                           'Slope = ', round(ifelse(Slope_value %>% is.numeric(), Slope_value, NA), 2),"\n",
-                           'n = ', nrow(match_up_df_var), sep = "")) + 
+             # label = paste('Error = ', round(ifelse(Error_value %>% is.numeric(), Error_value, NA), 1), "%\n",
+             #               'Bias = ', round(ifelse(Bias_value %>% is.numeric(), Bias_value, NA), 1), " %\n",
+             #               # 'r² (linearity) = ', round(statistics_values$r2_log, 2),"\n",
+             #               'Slope = ', round(ifelse(Slope_value %>% is.numeric(), Slope_value, NA), 2),"\n",
+             #               'n = ', nrow(match_up_df_var), sep = "")) + 
+             label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
+                           "n = ", nrow(match_up_df_var), sep = "")) + 
     
     labs(title = plot_title) +
     
@@ -1012,7 +1014,10 @@ validate_sensor <- function(sat_name){
   
   #  # Load prepped data
   zone_median <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE", pattern = paste0("zone_median_",sat_name), full.names = TRUE),
-                         data.table::fread) |> mutate(date = as.Date(date))
+                         data.table::fread) |> mutate(date = as.Date(date)) |> 
+    # Complete all dates
+    complete(date = seq(min(date), max(date), by = "day"), fill = list(median = NA), 
+             nesting(zone, source, site, variable))
   
   # Make variable name conversions as necessary
   if(sat_name == "SEXTANT"){
@@ -1023,6 +1028,7 @@ validate_sensor <- function(sat_name){
       mutate(variable = case_when(variable == "CHLA" ~ "CHL",
                                   variable == "TUR" ~ "SPM", # To see what happens
                                   TRUE ~ variable))
+
   } else {
     zone_median <- zone_median |> 
       mutate(variable_is = case_when(variable == "CHL" ~ "CHLA",
@@ -1034,16 +1040,106 @@ validate_sensor <- function(sat_name){
                                      TRUE ~ variable))
   }
   
+  # Load in situ data and complete the date column
+  zone_data_in_situ <- read_csv("data/INSITU_data/zone_data_in_situ.csv") |> 
+    dplyr::select(-lon, -lat) |> 
+    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA), 
+             nesting(zone, zone_pretty, source, site, variable))
+  
   # Combine extracted sat data with in situ
-  zone_data_in_situ <- read_csv("data/INSITU_data/zone_data_in_situ.csv")
-  zone_all_in_situ <- zone_data_in_situ |> 
-    left_join(zone_median, by = c("source", "site", "date", "variable" = "variable_is")) |> 
-    filter(value > 0, median > 0) |> 
+  zone_all_in_situ_base <- zone_data_in_situ |> 
+    left_join(zone_median, by = c("zone", "source", "site", "date", "variable" = "variable_is")) |>
     dplyr::rename(value_in_situ = value, value_satellite = median, variable_sat = variable.y) |> 
+    filter(!is.na(variable_sat)) |> 
     mutate(season = case_when(
       month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
       month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
     dplyr::select(zone, dplyr::everything())
+  
+  # Trim the time series for appropriate lm calculations
+  zone_all_in_situ_trim <- zone_all_in_situ_base |> 
+    group_by(zone, zone_pretty, source, site, variable) |> 
+    zoo::na.trim() |> 
+    ungroup()
+  
+  # Create monthly average TS for lm analysis
+  zone_all_in_situ_monthly <- zone_all_in_situ_trim |> 
+    mutate(date = floor_date(date, unit = "month")) |> 
+    summarise(value_in_situ = mean(value_in_situ, na.rm = TRUE),
+              value_satellite = mean(value_satellite, na.rm = TRUE),
+              .by = c("zone", "zone_pretty", "source", "season", "date", "variable", "variable_sat"))
+  
+  # Calculate linear model stats to look at change over time
+  zone_in_situ_monthly_lm <- zone_all_in_situ_monthly |> 
+    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+    do(broom::tidy(lm(value_in_situ ~ date, data = .))) |> 
+    filter(term == "date") |> 
+    dplyr::rename(slope_is = estimate, p_is = p.value) |> 
+    dplyr::select(zone:variable_sat, slope_is, p_is)
+  zone_sat_monthly_lm <- zone_all_in_situ_monthly |> 
+    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+    do(broom::tidy(lm(value_satellite ~ date, data = .))) |> 
+    filter(term == "date") |> 
+    dplyr::rename(slope_sat = estimate, p_sat = p.value) |> 
+    dplyr::select(zone:variable_sat, slope_sat, p_sat)
+  
+  # Combine results
+  zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm) |> 
+    # Convert to values / year
+    mutate(slope_is = slope_is*365.25, slope_sat = slope_sat*365.25)
+  
+  # Save statistics
+  write_csv(zone_all_monthly_lm, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_lm_stats.csv"))
+  
+  # Plot the linear TS matchups
+  # var_sub = "TEMP"; df = zone_all_in_situ_monthly
+  validation_lm_plots <- function(var_sub, sat_name, df){
+    
+    # Filter and pivot data
+    df_var_sub <- df |> 
+      filter(variable == var_sub) |> 
+      pivot_longer(cols = value_in_situ:value_satellite) |> 
+      mutate(name = gsub("value|_", "", name),
+             name = gsub("insitu", "in situ", name))
+    
+    # Get y-axis label and units
+    if(var_sub == "TEMP"){
+      y_lab <- "Temperature (°C)"
+    } else if(var_sub == "CHLA"){
+      y_lab <- "Chlorophyll a (mg m-3)"
+    } else if(var_sub == "TUR"){
+      y_lab <- "Turbidity (NTU)"
+    } else if(var_sub == "SPM"){
+      y_lab <- "SPM (g m-3)"
+    } else {
+      # Not worried about other variables for the moment
+      y_lab <- NA
+    }
+    
+    # Create plot
+    plot_zone_var_TS <- ggplot(data = df_var_sub, aes(x = date, y = value)) +
+      geom_point(aes(y = value, colour = name, shape = source)) +
+      geom_smooth(aes(colour = name, linetype = source), method = "lm", se = FALSE) +
+      facet_wrap(~zone_pretty) +
+      scale_colour_manual(values = c("black", "red")) +
+      labs(title = paste(sat_name, zone_data_var_sub$variable_sat[1],"vs in situ",zone_data_var_sub$variable[1]),
+           y = y_lab, x = NULL, colour = "Type", shape = "Source", linetype = "Source") +
+      theme(panel.border = element_rect(colour = "black", fill = NA),
+            plot.title = element_text(size = 25, face = "bold"), 
+            strip.text = element_text(size = 20),
+            legend.title = element_text(size = 23),
+            legend.text = element_text(size = 20),
+            axis.title = element_text(size = 23),
+            axis.text = element_text(size = 20),
+            legend.position = "bottom")
+    # plot_zone_var_TS
+    ggsave(paste0("figures/validation/comparison_",sat_name,"_",var_sub,"_TS.png"), plot_zone_var_TS, width = 14, height = 8)
+  }
+
+  
+  # Remove any missing values for stats matchups
+  zone_all_in_situ <- zone_all_in_situ_trim |> 
+    filter(value_in_situ > 0, value_satellite > 0)
   
   # Create big grid of sites to look for obvious outliers
   # ggplot(data = zone_in_situ, aes(x = value_in_situ, y = value_satellite)) +
