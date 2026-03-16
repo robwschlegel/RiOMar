@@ -563,6 +563,24 @@ load_ROFI <- function(file_name){
   return(df_ROFI)
 }
 
+# Load X11 results
+load_X11 <- function(zone_name, plume = TRUE){
+  if(plume){
+    file_name <- paste0("output/FIXED_THRESHOLD/GULF_OF_LION/X11_ANALYSIS/area_of_the_plume_mask_in_km2/SEXTANT_merged_Standard_WEEKLY.csv")
+  } else {
+    file_name <- paste0("output/FIXED_THRESHOLD/GULF_OF_LION/X11_ANALYSIS/river_flow/River_flow___WEEKLY.csv")
+  }
+  suppressMessages(
+    df_X11 <- read_csv(file_name) |> 
+      dplyr::rename(date = dates) |> 
+      complete(date = seq(min(date), max(date), by = "day")) |> 
+      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area)) |> 
+      zoo::na.trim() |> 
+      mutate(zone = zone, .before = "date")
+  )
+  return(df_X11)
+}
+
 
 # Statistics --------------------------------------------------------------
 
@@ -861,6 +879,68 @@ colours_of_stations <- function(){
   return(colour_values)
 }
 
+# Plot linear trends and stats for matched data
+# var_sub = "TEMP"; df = zone_all_in_situ_monthly; df_stats = zone_all_monthly_lm
+validation_lm_plots <- function(var_sub, sat_name, df, df_stats){
+  
+  # Filter and pivot data
+  df_var_sub <- df |> 
+    filter(variable == var_sub) |> 
+    pivot_longer(cols = value_in_situ:value_satellite) |> 
+    mutate(name = gsub("value|_", "", name),
+           name = gsub("insitu", "in situ", name))
+  
+  # Filter stats labels
+  df_stats_var_sub <- df_stats |> 
+    filter(variable == var_sub) |> 
+    mutate(y = max(df_var_sub$value, na.rm = TRUE))
+  
+  # Get y-axis label and units
+  if(var_sub == "TEMP"){
+    y_lab <- "Temperature (°C)"
+  } else if(var_sub == "CHLA"){
+    y_lab <- "Chlorophyll a (mg m-3)"
+  } else if(var_sub == "TUR"){
+    y_lab <- "Turbidity (NTU)"
+  } else if(var_sub == "SPM"){
+    y_lab <- "SPM (g m-3)"
+  } else {
+    # Not worried about other variables for the moment
+    y_lab <- NA
+  }
+  
+  # Create plot
+  plot_zone_var_TS <- ggplot(data = df_var_sub, aes(x = date, y = value)) +
+    geom_point(aes(y = value, colour = name, shape = source)) +
+    geom_smooth(aes(colour = name, linetype = source), method = "lm", se = FALSE) +
+    # In situ values
+    geom_label(data = filter(df_stats_var_sub, source == "REPHY"), 
+               aes(x = as.Date("2005-01-01"), y = y, label = paste0(source," : ", round(slope_is, 2)," / year"), vjust = 1.0)) +
+    geom_label(data = filter(df_stats_var_sub, source == "SOMLIT"), 
+               aes(x = as.Date("2005-01-01"), y = y, label = paste0(source," : ", round(slope_is, 2)," / year"), vjust = -0.5)) +
+    # Satellite values
+    geom_label(data = filter(df_stats_var_sub, source == "REPHY"), colour = "red",
+               aes(x = as.Date("2020-01-01"), y = y, label = paste0(source," : ", round(slope_sat, 2)," / year"), vjust = 1.0)) +
+    geom_label(data = filter(df_stats_var_sub, source == "SOMLIT"),  colour = "red",
+               aes(x = as.Date("2020-01-01"), y = y, label = paste0(source," : ", round(slope_sat, 2)," / year"), vjust = -0.5)) +
+    facet_wrap(~zone_pretty) +
+    scale_colour_manual(values = c("black", "red")) +
+    scale_y_continuous(limits = c(min(df_var_sub$value, na.rm = TRUE), max(df_var_sub$value, na.rm = TRUE)*1.1)) +
+    labs(title = paste(sat_name, df_var_sub$variable_sat[1],"vs in situ",df_var_sub$variable[1]),
+         y = y_lab, x = NULL, colour = "Type", shape = "Source", linetype = "Source") +
+    theme(panel.border = element_rect(colour = "black", fill = NA),
+          plot.title = element_text(size = 25, face = "bold"), 
+          strip.text = element_text(size = 20),
+          legend.title = element_text(size = 23),
+          legend.text = element_text(size = 20),
+          axis.title = element_text(size = 23),
+          axis.text = element_text(size = 20),
+          legend.position = "bottom")
+  # plot_zone_var_TS
+  ggsave(paste0("figures/validation/comparison_",sat_name,"_",var_sub,"_TS.png"), plot_zone_var_TS, width = 14, height = 8)
+  return()
+}
+
 # The figure code wrapper
 # var_name = "SPM"; match_up_df = zone_in_situ_SEXTANT; match_up_stats = stats_SEXTANT; sat_name = "SEXTANT"
 # sat_name = sat_name; match_up_df = zone_all_in_situ; match_up_stats = zone_all_in_situ_stats; var_name = unique(zone_all_in_situ_stats$variabl_combi)[1]
@@ -1069,73 +1149,35 @@ validate_sensor <- function(sat_name){
               value_satellite = mean(value_satellite, na.rm = TRUE),
               .by = c("zone", "zone_pretty", "source", "season", "date", "variable", "variable_sat"))
   
-  # Calculate linear model stats to look at change over time
-  zone_in_situ_monthly_lm <- zone_all_in_situ_monthly |> 
-    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
-    do(broom::tidy(lm(value_in_situ ~ date, data = .))) |> 
-    filter(term == "date") |> 
-    dplyr::rename(slope_is = estimate, p_is = p.value) |> 
-    dplyr::select(zone:variable_sat, slope_is, p_is)
-  zone_sat_monthly_lm <- zone_all_in_situ_monthly |> 
-    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
-    do(broom::tidy(lm(value_satellite ~ date, data = .))) |> 
-    filter(term == "date") |> 
-    dplyr::rename(slope_sat = estimate, p_sat = p.value) |> 
-    dplyr::select(zone:variable_sat, slope_sat, p_sat)
-  
-  # Combine results
-  zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm) |> 
-    # Convert to values / year
-    mutate(slope_is = slope_is*365.25, slope_sat = slope_sat*365.25)
-  
-  # Save statistics
-  write_csv(zone_all_monthly_lm, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_lm_stats.csv"))
-  
-  # Plot the linear TS matchups
-  # var_sub = "TEMP"; df = zone_all_in_situ_monthly
-  validation_lm_plots <- function(var_sub, sat_name, df){
+  # There is a bug in the OLCI products that prevent linear trend estimates
+  # TODO: Find and fix
+  if(sat_name %in% c("SEXTNAT", "MODIS", "MERIS")){
+    # Calculate linear model stats to look at change over time
+    zone_in_situ_monthly_lm <- zone_all_in_situ_monthly |> 
+      group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+      do(broom::tidy(lm(value_in_situ ~ date, data = .))) |> 
+      filter(term == "date") |> 
+      dplyr::rename(slope_is = estimate, p_is = p.value) |> 
+      dplyr::select(zone:variable_sat, slope_is, p_is)
+    zone_sat_monthly_lm <- zone_all_in_situ_monthly |> 
+      group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+      do(broom::tidy(lm(value_satellite ~ date, data = .))) |> 
+      filter(term == "date") |> 
+      dplyr::rename(slope_sat = estimate, p_sat = p.value) |> 
+      dplyr::select(zone:variable_sat, slope_sat, p_sat)
     
-    # Filter and pivot data
-    df_var_sub <- df |> 
-      filter(variable == var_sub) |> 
-      pivot_longer(cols = value_in_situ:value_satellite) |> 
-      mutate(name = gsub("value|_", "", name),
-             name = gsub("insitu", "in situ", name))
+    # Combine results
+    zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm) |> 
+      # Convert to values / year
+      mutate(slope_is = slope_is*365.25, slope_sat = slope_sat*365.25)
     
-    # Get y-axis label and units
-    if(var_sub == "TEMP"){
-      y_lab <- "Temperature (°C)"
-    } else if(var_sub == "CHLA"){
-      y_lab <- "Chlorophyll a (mg m-3)"
-    } else if(var_sub == "TUR"){
-      y_lab <- "Turbidity (NTU)"
-    } else if(var_sub == "SPM"){
-      y_lab <- "SPM (g m-3)"
-    } else {
-      # Not worried about other variables for the moment
-      y_lab <- NA
-    }
+    # Save statistics
+    write_csv(zone_all_monthly_lm, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_lm_stats.csv"))
     
-    # Create plot
-    plot_zone_var_TS <- ggplot(data = df_var_sub, aes(x = date, y = value)) +
-      geom_point(aes(y = value, colour = name, shape = source)) +
-      geom_smooth(aes(colour = name, linetype = source), method = "lm", se = FALSE) +
-      facet_wrap(~zone_pretty) +
-      scale_colour_manual(values = c("black", "red")) +
-      labs(title = paste(sat_name, zone_data_var_sub$variable_sat[1],"vs in situ",zone_data_var_sub$variable[1]),
-           y = y_lab, x = NULL, colour = "Type", shape = "Source", linetype = "Source") +
-      theme(panel.border = element_rect(colour = "black", fill = NA),
-            plot.title = element_text(size = 25, face = "bold"), 
-            strip.text = element_text(size = 20),
-            legend.title = element_text(size = 23),
-            legend.text = element_text(size = 20),
-            axis.title = element_text(size = 23),
-            axis.text = element_text(size = 20),
-            legend.position = "bottom")
-    # plot_zone_var_TS
-    ggsave(paste0("figures/validation/comparison_",sat_name,"_",var_sub,"_TS.png"), plot_zone_var_TS, width = 14, height = 8)
+    # Plot the linear TS matchups
+    plyr::l_ply(unique(zone_all_in_situ_monthly$variable), validation_lm_plots, 
+                sat_name = sat_name, df = zone_all_in_situ_monthly, df_stats = zone_all_monthly_lm)
   }
-
   
   # Remove any missing values for stats matchups
   zone_all_in_situ <- zone_all_in_situ_trim |> 
