@@ -1231,6 +1231,7 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
 # Run all validation stats and produce the plots
 # sat_name = "SEXTANT"; median_base = "small"
 # sat_name = "MODIS"; median_base = "all"
+# sat_name = "OLCI-A"; median_base = "all"
 validate_sensor <- function(sat_name, median_base){
   
   # Load prepped data
@@ -1288,12 +1289,14 @@ validate_sensor <- function(sat_name, median_base){
   
   # Calculate linear model stats to look at change over time
   zone_in_situ_monthly_lm <- zone_all_in_situ_monthly |> 
+    filter(value_in_situ > 0) |> 
     group_by(zone, zone_pretty, source, variable, variable_sat) |> 
     do(broom::tidy(lm(value_in_situ ~ date, data = .))) |> 
     filter(term == "date") |> 
     dplyr::rename(slope_is = estimate, p_is = p.value) |> 
     dplyr::select(zone:variable_sat, slope_is, p_is)
   zone_sat_monthly_lm <- zone_all_in_situ_monthly |> 
+    filter(value_satellite > 0) |> 
     group_by(zone, zone_pretty, source, variable, variable_sat) |> 
     do(broom::tidy(lm(value_satellite ~ date, data = .))) |> 
     filter(term == "date") |> 
@@ -1301,7 +1304,8 @@ validate_sensor <- function(sat_name, median_base){
     dplyr::select(zone:variable_sat, slope_sat, p_sat)
   
   # Combine results
-  zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm) |> 
+  zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm,
+                                   by = join_by(zone, zone_pretty, source, variable, variable_sat)) |> 
     # Convert to values / year
     mutate(slope_is = slope_is*365.25, slope_sat = slope_sat*365.25)
   

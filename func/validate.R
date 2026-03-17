@@ -315,16 +315,20 @@ validate_sensor("OLCI-B", "small")
 
 # Validation tables -------------------------------------------------------
 
-# Basic tables
-zone_all_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
-                              pattern = "_stats_all.csv", full.names = TRUE), read_csv) |> 
-  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
-  filter(!variable %in% c("POC"))
-zone_small_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
-                              pattern = "_stats_small.csv", full.names = TRUE), read_csv) |> 
-  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
-  filter(!variable %in% c("POC"))
+# Get stats files
+files_stats <- dir("output/MATCH_UP_DATA/FRANCE/STATISTICS", pattern = "_stats_", full.names = TRUE)
+files_stats_lm <- files_stats[grepl("_lm_", files_stats)]
+files_stats_area <- files_stats[!files_stats %in% files_stats_lm]
+files_stats_all <- files_stats_area[grepl("_all", files_stats_area)]
+files_stats_small <-  files_stats_area[grepl("_small", files_stats_area)]
 
+# Basic tables
+zone_all_stats <- map_dfr(files_stats_all, read_csv) |> 
+  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
+  filter(!variable %in% c("POC"))
+zone_small_stats <- map_dfr(files_stats_small, read_csv) |> 
+  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
+  filter(!variable %in% c("POC"))
 
 # Get global stats
 zone_all_stats_global <- zone_all_stats |> 
@@ -335,14 +339,14 @@ zone_all_stats_global <- zone_all_stats |>
   mutate(Error = round(Error),
          Bias = round(Bias))
 write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_all.csv")
-zone_small_stats_global <- zone_amall_stats |> 
+zone_small_stats_global <- zone_small_stats |> 
   filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
   filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
   # dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
   arrange(Error) |> 
   mutate(Error = round(Error),
          Bias = round(Bias))
-write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_small.csv")
+write_csv(zone_small_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_small.csv")
 
 # Get high level stats
 zone_all_stats_top <- zone_all_stats |> 
@@ -351,54 +355,3 @@ zone_all_stats_top <- zone_all_stats |>
 # Fancy tables
 validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
 
-
-# Time series analyses ----------------------------------------------------
-
-# Load MODIS SST and in situ temperatures
-zone_median_SST <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE", pattern = "zone_median_MODIS_", 
-                               full.names = TRUE), data.table::fread) |> 
-  mutate(date = as.Date(date)) |> 
-  filter(variable == "SST")
-# write_csv(zone_median_SST, "output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
-# zone_median_SST <- read_csv()
-
-# Load in situ data
-zone_data_in_situ <- read_csv("data/INSITU_data/zone_data_in_situ.csv")
-
-# Join
-zone_all_TEMP <- zone_data_in_situ |> 
-  filter(variable == "TEMP") |> 
-  group_by(site) |> 
-  mutate(count = n()) |> 
-  ungroup() |> 
-  filter(count > 90) |> 
-  mutate(variable_sat = "SST") |> 
-  left_join(zone_median_SST, by = c("zone", "source", "site", "date", "variable_sat" = "variable")) |> 
-  filter(value > 0, median > 0) |> 
-  dplyr::rename(value_in_situ = value, value_satellite = median) |> 
-  mutate(season = case_when(
-    month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
-    month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
-  dplyr::select(zone, dplyr::everything())
-
-# Basic plot
-# TODO: Add lm stats
-# TODO: Why the missing data?
-plot_TEMP_compare <- zone_all_TEMP |> 
-  filter(date >= "2004-07-04") |> 
-  ggplot(aes(x = date, y = value_in_situ)) +
-  geom_point(aes(group = site, shape = source), show.legend = FALSE) +
-  geom_point(aes(y = value_satellite, group = site, shape = source), colour = "red", show.legend = FALSE) +
-  geom_smooth(method = "lm", colour = "black", se = FALSE) +
-  geom_smooth(aes(y = value_satellite), method = "lm", colour = "red", se = FALSE) +
-  facet_wrap(~zone_pretty) +
-  labs(title = "MODIS SST vs in situ TEMP",
-       y = "Temperature (°C)", x = NULL) +
-  theme(panel.border = element_rect(colour = "black", fill = NA),
-        plot.title = element_text(size = 25, face = "bold"),
-        legend.title = element_text(size = 23),
-        legend.text = element_text(size = 20),
-        axis.title = element_text(size = 23),
-        axis.text = element_text(size = 20))
-plot_TEMP_compare
-ggsave("figures/comparison_TEMP_TS.png", plot_TEMP_compare, width = 14, height = 6)
