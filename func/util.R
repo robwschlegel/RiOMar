@@ -369,40 +369,64 @@ extract_pixels_all <- function(sat_name, zone_name = NULL){#, overwrite = FALSE)
     }
   }
   
+  # Combine all data for median calculations
+  if(sat_name == "SEXTANT"){
+    zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR)
+    rm(zone_data_SPM, zone_data_TUR, zone_data_CHL); gc()
+  } else if(sat_name == "MODIS"){
+    zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+                                  zone_data_CDOM, zone_data_RRS, zone_data_SST)
+    rm(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+       zone_data_CDOM, zone_data_RRS, zone_data_SST); gc()
+  } else {
+    zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+                                  zone_data_CDOM, zone_data_RRS)
+    rm(zone_data_CHL, zone_data_SPM, zone_data_TUR,
+       zone_data_CDOM, zone_data_RRS); gc()
+  }
+  
   # Create median value time series
-  ## Combine all data as required
-  file_name_median <- paste0("output/MATCH_UP_DATA/FRANCE/zone_median_",file_stub,".csv")
-  message("Started median calculations at : ", Sys.time())
-  if(!file.exists(file_name_median)){
-    if(sat_name == "SEXTANT"){
-      zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR)
-      rm(zone_data_SPM, zone_data_TUR, zone_data_CHL); gc()
-    } else if(sat_name == "MODIS"){
-      zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR,
-                                    zone_data_CDOM, zone_data_RRS, zone_data_SST)
-      rm(zone_data_CHL, zone_data_SPM, zone_data_TUR,
-         zone_data_CDOM, zone_data_RRS, zone_data_SST); gc()
-    } else {
-      zone_median_base <- bind_rows(zone_data_CHL, zone_data_SPM, zone_data_TUR,
-                                    zone_data_CDOM, zone_data_RRS)
-      rm(zone_data_CHL, zone_data_SPM, zone_data_TUR,
-         zone_data_CDOM, zone_data_RRS); gc()
-    }
+  file_name_median_all <- paste0("output/MATCH_UP_DATA/FRANCE/zone_median_",file_stub,"_all.csv")
+  file_name_median_small <- paste0("output/MATCH_UP_DATA/FRANCE/zone_median_",file_stub,"_small.csv")
+  if(!file.exists(file_name_median_all)){
+    message("Started median all calculations at : ", Sys.time())
     
-    # Create medians etc.
-    zone_median <- zone_median_base |> 
+    # Create medians etc. from all pixels
+    zone_median_all <- zone_median_base |> 
       filter(value > 0) |>
       summarise(median = median(value, na.rm = TRUE), 
                 mean = mean(value, na.rm = TRUE),
                 sd = sd(value, na.rm = TRUE),
                 n = n(), .by = c("zone", "source", "site", "date", "variable"))
-    data.table::fwrite(zone_median, file_name_median)
-    rm(zone_median_base, zone_median); gc()
-  } #else {
-  #   if(!exists("zone_median")){
-  #     zone_median <- data.table::fread(file_name_median)
-  #   }
-  # }
+    data.table::fwrite(zone_median_all, file_name_median_all)
+    rm(zone_median_all); gc()
+  }
+    # Create medians etc. from 'small' pixels
+  if(!file.exists(file_name_median_small)){
+    message("Started median small calculations at : ", Sys.time())
+    
+    if(sat_name == "SEXTANT"){
+      slice_n <- 1
+    } else{
+      slice_n <- 9
+    }
+    zone_median_small <- zone_median_base |> 
+      filter(value > 0) |> # NB: This removes NA pixels before selecting the nearest pixel, which may be incorrect
+      group_by(zone, source, site, date, variable) |> 
+      arrange(dist) |> 
+      slice_head(n = slice_n) |> 
+      ungroup() |> 
+      summarise(median = median(value, na.rm = TRUE), 
+                mean = mean(value, na.rm = TRUE),
+                sd = sd(value, na.rm = TRUE),
+                n = n(), .by = c("zone", "source", "site", "date", "variable"))
+    data.table::fwrite(zone_median_small, file_name_median_small)
+    rm(zone_median_small); gc()
+  }
+  
+  # Clean and exit
+  rm(zone_median_base, file_name_median_all, file_name_median_small); gc()
+  message("Finished ", file_stub," at : ", Sys.time())
 }
 
 
@@ -854,11 +878,11 @@ comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label
       # Var 1 data
       geom_point(aes(x = date, y = var_1), color = colour_1) +
       geom_path(aes(x = date, y = var_1), color = colour_1) +
-      geom_smooth(aes(x = date, y = var_1), method = "lm", se = FALSE, color = colour_1) +
+      # geom_smooth(aes(x = date, y = var_1), method = "lm", se = FALSE, color = colour_1) +
       # Var 2 data
       geom_point(aes(x = date, y = var_2_scaled), color = colour_2) +
       geom_path(aes(x = date, y = var_2_scaled), color = colour_2) +
-      geom_smooth(aes(x = date, y = var_2_scaled), method = "lm", se = FALSE, color = colour_2) +
+      # geom_smooth(aes(x = date, y = var_2_scaled), method = "lm", se = FALSE, color = colour_2) +
       # Facet
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
       # X-axis labels
@@ -995,7 +1019,7 @@ colours_of_stations <- function(){
 
 # Plot linear trends and stats for matched data
 # var_sub = "TEMP"; df = zone_all_in_situ_monthly; df_stats = zone_all_monthly_lm
-validation_lm_plots <- function(var_sub, sat_name, df, df_stats){
+validation_lm_plots <- function(var_sub, sat_name, median_base, df, df_stats){
   
   # Filter and pivot data
   df_var_sub <- df |> 
@@ -1052,14 +1076,14 @@ validation_lm_plots <- function(var_sub, sat_name, df, df_stats){
           axis.text = element_text(size = 20),
           legend.position = "bottom")
   # plot_zone_var_TS
-  ggsave(paste0("figures/validation/comparison_",sat_name,"_",var_sub,"_TS.png"), plot_zone_var_TS, width = 14, height = 8)
+  ggsave(paste0("figures/validation/ts/ts_",sat_name,"_",var_sub,"_",median_base,".png"), plot_zone_var_TS, width = 14, height = 8)
   return()
 }
 
 # The figure code wrapper
 # var_name = "SPM"; match_up_df = zone_in_situ_SEXTANT; match_up_stats = stats_SEXTANT; sat_name = "SEXTANT"
 # sat_name = sat_name; match_up_df = zone_all_in_situ; match_up_stats = zone_all_in_situ_stats; var_name = unique(zone_all_in_situ_stats$variabl_combi)[1]
-validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats){
+validation_plots <- function(var_name, sat_name, median_base, match_up_df, match_up_stats){
   
   # Split the variable names
   var_name_is <- str_split(var_name, "_")[[1]][1]
@@ -1122,13 +1146,13 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats){
     
     annotate(geom = 'text', x = plot_meta_is$axis_limits[1], y = plot_meta_sat$axis_limits[2], 
              hjust = 0, vjust = 1, color = "black", size = 12.5,
-             # label = paste('Error = ', round(ifelse(Error_value %>% is.numeric(), Error_value, NA), 1), "%\n",
-             #               'Bias = ', round(ifelse(Bias_value %>% is.numeric(), Bias_value, NA), 1), " %\n",
-             #               # 'r² (linearity) = ', round(statistics_values$r2_log, 2),"\n",
-             #               'Slope = ', round(ifelse(Slope_value %>% is.numeric(), Slope_value, NA), 2),"\n",
-             #               'n = ', nrow(match_up_df_var), sep = "")) + 
-             label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
-                           "n = ", nrow(match_up_df_var), sep = "")) + 
+             label = paste('Error = ', round(ifelse(Error_value |> is.numeric(), Error_value, NA), 1), "%\n",
+                           'Bias = ', round(ifelse(Bias_value |> is.numeric(), Bias_value, NA), 1), " %\n",
+                           # 'r² (linearity) = ', round(statistics_values$r2_log, 2),"\n",
+                           'Slope = ', round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
+                           'n = ', nrow(match_up_df_var), sep = "")) +
+             # label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
+             #               "n = ", nrow(match_up_df_var), sep = "")) + 
     
     labs(title = plot_title) +
     
@@ -1168,7 +1192,7 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats){
   # Add histograms to x and y axes
   scatterplot_with_side_hist <- ggMarginal(scatterplot, type = "histogram", groupFill = TRUE, alpha = 1)
   # scatterplot_with_side_hist
-  ggsave(paste0("figures/validation/scatterplot_",sat_name,"_",var_name_is,"_vs_",var_name_sat,".png"), 
+  ggsave(paste0("figures/validation/scatterplot/",sat_name,"_",var_name_sat,"_vs_in_situ_",var_name_is,"_",median_base,".png"), 
          plot = scatterplot_with_side_hist, height = 16, width = 16, bg = "white")
   
   # Barplot of frequency per year
@@ -1183,7 +1207,7 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats){
     ggplot_theme() +
     theme(plot.title = element_text(color = plot_meta_is$var_colour, face = "bold", size = 35))
   # bar_plot_freq_per_year
-  ggsave(paste0("figures/validation/barplot_annual_",sat_name,"_",var_name,".png"), 
+  ggsave(paste0("figures/validation/barplot/annual_",sat_name,"_",var_name_sat,"_",median_base,".png"), 
          plot = bar_plot_freq_per_year, height = 10, width = 14, bg = "white")
   
   # Barplot of monthly counts
@@ -1199,24 +1223,28 @@ validation_plots <- function(var_name, sat_name, match_up_df, match_up_stats){
     ggplot_theme() +
     theme(plot.title = element_text(color = plot_meta_is$var_colour, face = "bold", size = 35))
   # bar_plot_freq_per_month
-  ggsave(paste0("figures/validation/barplot_monthly_",sat_name,"_",var_name,".png"), 
+  ggsave(paste0("figures/validation/barplot/monthly_",sat_name,"_",var_name_sat,"_",median_base,".png"), 
          plot = bar_plot_freq_per_month, height = 10, width = 14, bg = "white")
   return()
 }
 
 # Run all validation stats and produce the plots
-validate_sensor <- function(sat_name){
+# sat_name = "SEXTANT"; median_base = "small"
+# sat_name = "MODIS"; median_base = "all"
+validate_sensor <- function(sat_name, median_base){
   
-  #  # Load prepped data
-  zone_median <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE", pattern = paste0("zone_median_",sat_name), full.names = TRUE),
-                         data.table::fread) |> mutate(date = as.Date(date)) |> 
+  # Load prepped data
+  sat_files <- dir("output/MATCH_UP_DATA/FRANCE", full.names = TRUE, 
+                   pattern = paste0("zone_median_",sat_name))
+  sat_files <- sat_files[grepl(paste0("_",median_base), sat_files)]
+  zone_median <- map_dfr(sat_files, data.table::fread) |> mutate(date = as.Date(date)) |> 
     # Complete all dates
     complete(date = seq(min(date), max(date), by = "day"), fill = list(median = NA), 
              nesting(zone, source, site, variable))
   
   # Make variable name conversions as necessary
   if(sat_name == "SEXTANT"){
-    # NB: SEXTANT data had already been tweaked to macth the in situ
+    # NB: SEXTANT data had already been tweaked to match the in situ
     # This is rolling that back somewhat and should rather be addressed earlier on in the process
     zone_median <- zone_median |> 
       mutate(variable_is = variable) |> 
@@ -1250,52 +1278,43 @@ validate_sensor <- function(sat_name){
       month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
       month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
     dplyr::select(zone, dplyr::everything())
-  
-  # Trim the time series for appropriate lm calculations
-  zone_all_in_situ_trim <- zone_all_in_situ_base |> 
-    group_by(zone, zone_pretty, source, site, variable) |> 
-    zoo::na.trim() |> 
-    ungroup()
-  
+
   # Create monthly average TS for lm analysis
-  zone_all_in_situ_monthly <- zone_all_in_situ_trim |> 
+  zone_all_in_situ_monthly <- zone_all_in_situ_base |> 
     mutate(date = floor_date(date, unit = "month")) |> 
     summarise(value_in_situ = mean(value_in_situ, na.rm = TRUE),
               value_satellite = mean(value_satellite, na.rm = TRUE),
               .by = c("zone", "zone_pretty", "source", "season", "date", "variable", "variable_sat"))
   
-  # There is a bug in the OLCI products that prevent linear trend estimates
-  # TODO: Find and fix
-  if(sat_name %in% c("SEXTNAT", "MODIS", "MERIS")){
-    # Calculate linear model stats to look at change over time
-    zone_in_situ_monthly_lm <- zone_all_in_situ_monthly |> 
-      group_by(zone, zone_pretty, source, variable, variable_sat) |> 
-      do(broom::tidy(lm(value_in_situ ~ date, data = .))) |> 
-      filter(term == "date") |> 
-      dplyr::rename(slope_is = estimate, p_is = p.value) |> 
-      dplyr::select(zone:variable_sat, slope_is, p_is)
-    zone_sat_monthly_lm <- zone_all_in_situ_monthly |> 
-      group_by(zone, zone_pretty, source, variable, variable_sat) |> 
-      do(broom::tidy(lm(value_satellite ~ date, data = .))) |> 
-      filter(term == "date") |> 
-      dplyr::rename(slope_sat = estimate, p_sat = p.value) |> 
-      dplyr::select(zone:variable_sat, slope_sat, p_sat)
-    
-    # Combine results
-    zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm) |> 
-      # Convert to values / year
-      mutate(slope_is = slope_is*365.25, slope_sat = slope_sat*365.25)
-    
-    # Save statistics
-    write_csv(zone_all_monthly_lm, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_lm_stats.csv"))
-    
-    # Plot the linear TS matchups
-    plyr::l_ply(unique(zone_all_in_situ_monthly$variable), validation_lm_plots, 
-                sat_name = sat_name, df = zone_all_in_situ_monthly, df_stats = zone_all_monthly_lm)
-  }
+  # Calculate linear model stats to look at change over time
+  zone_in_situ_monthly_lm <- zone_all_in_situ_monthly |> 
+    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+    do(broom::tidy(lm(value_in_situ ~ date, data = .))) |> 
+    filter(term == "date") |> 
+    dplyr::rename(slope_is = estimate, p_is = p.value) |> 
+    dplyr::select(zone:variable_sat, slope_is, p_is)
+  zone_sat_monthly_lm <- zone_all_in_situ_monthly |> 
+    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+    do(broom::tidy(lm(value_satellite ~ date, data = .))) |> 
+    filter(term == "date") |> 
+    dplyr::rename(slope_sat = estimate, p_sat = p.value) |> 
+    dplyr::select(zone:variable_sat, slope_sat, p_sat)
+  
+  # Combine results
+  zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm) |> 
+    # Convert to values / year
+    mutate(slope_is = slope_is*365.25, slope_sat = slope_sat*365.25)
+  
+  # Save statistics
+  write_csv(zone_all_monthly_lm, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_lm_stats_",median_base,".csv"))
+  
+  # Plot the linear TS matchups
+  plyr::l_ply(unique(zone_all_in_situ_monthly$variable), validation_lm_plots, 
+              sat_name = sat_name, median_base = median_base,
+              df = zone_all_in_situ_monthly, df_stats = zone_all_monthly_lm)
   
   # Remove any missing values for stats matchups
-  zone_all_in_situ <- zone_all_in_situ_trim |> 
+  zone_all_in_situ <- zone_all_in_situ_base |> 
     filter(value_in_situ > 0, value_satellite > 0)
   
   # Create big grid of sites to look for obvious outliers
@@ -1360,7 +1379,7 @@ validate_sensor <- function(sat_name){
     mutate(sensor = sat_name, .before = "zone")
   
   # Save results
-  write_csv(zone_all_in_situ_stats, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_stats.csv"))
+  write_csv(zone_all_in_situ_stats, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_stats_",median_base,".csv"))
   rm(zone_in_situ_stats_01, zone_in_situ_stats_02, zone_in_situ_stats_03,
      zone_in_situ_stats_04, zone_in_situ_stats_05, zone_in_situ_stats_06,
      zone_in_situ_stats_07, zone_in_situ_stats_08, zone_in_situ_stats_09,
@@ -1369,7 +1388,8 @@ validate_sensor <- function(sat_name){
   # Run all of the plots per variable pairing
   zone_all_in_situ_stats$variabl_combi <- paste0(zone_all_in_situ_stats$variable,"_",zone_all_in_situ_stats$variable_sat)
   plyr::l_ply(unique(zone_all_in_situ_stats$variabl_combi), validation_plots, .parallel = TRUE,
-              sat_name = sat_name, match_up_df = zone_all_in_situ, match_up_stats = zone_all_in_situ_stats)
+              sat_name = sat_name, median_base = median_base,
+              match_up_df = zone_all_in_situ, match_up_stats = zone_all_in_situ_stats)
 }
 
 

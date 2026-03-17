@@ -292,20 +292,39 @@ extract_pixels_all("OLCI-B", "GULF_OF_LION"); gc()
 
 # Validation stats + figures  --------------------------------------------
 
-validate_sensor("SEXTANT")
-validate_sensor("MODIS")
-validate_sensor("MERIS")
-validate_sensor("OLCI-A")
-validate_sensor("OLCI-B")
+# SEXTANT
+validate_sensor("SEXTANT", "all")
+validate_sensor("SEXTANT", "small")
+
+# MODIS
+validate_sensor("MODIS", "all")
+validate_sensor("MODIS", "small")
+
+# MERIS
+validate_sensor("MERIS", "all")
+validate_sensor("MERIS", "small")
+
+# OLCI-A
+validate_sensor("OLCI-A", "all")
+validate_sensor("OLCI-A", "small")
+
+# OLCI-B
+validate_sensor("OLCI-B", "all")
+validate_sensor("OLCI-B", "small")
 
 
 # Validation tables -------------------------------------------------------
 
 # Basic tables
 zone_all_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
-                              pattern = "_stats.csv", full.names = TRUE), read_csv) |> 
+                              pattern = "_stats_all.csv", full.names = TRUE), read_csv) |> 
   filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
   filter(!variable %in% c("POC"))
+zone_small_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
+                              pattern = "_stats_small.csv", full.names = TRUE), read_csv) |> 
+  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
+  filter(!variable %in% c("POC"))
+
 
 # Get global stats
 zone_all_stats_global <- zone_all_stats |> 
@@ -315,7 +334,15 @@ zone_all_stats_global <- zone_all_stats |>
   arrange(Error) |> 
   mutate(Error = round(Error),
          Bias = round(Bias))
-write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global.csv")
+write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_all.csv")
+zone_small_stats_global <- zone_amall_stats |> 
+  filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
+  filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
+  # dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
+  arrange(Error) |> 
+  mutate(Error = round(Error),
+         Bias = round(Bias))
+write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_small.csv")
 
 # Get high level stats
 zone_all_stats_top <- zone_all_stats |> 
