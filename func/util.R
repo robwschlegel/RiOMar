@@ -1129,6 +1129,7 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
   scatterplot <- ggplot(data = match_up_df_var, aes(x = value_in_situ, y = value_satellite)) + 
     
     geom_point(aes(colour = zone_pretty, shape = source), size = 6, show.legend = TRUE) + 
+    # TODO: Add 2:1 and 1:2 dashed lines
     geom_line(data = identity_line, aes(x = x, y = y), linetype = "dashed", show.legend = FALSE) +
     
     scale_x_continuous(
@@ -1146,13 +1147,15 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
     
     annotate(geom = 'text', x = plot_meta_is$axis_limits[1], y = plot_meta_sat$axis_limits[2], 
              hjust = 0, vjust = 1, color = "black", size = 12.5,
-             label = paste('Error = ', round(ifelse(Error_value |> is.numeric(), Error_value, NA), 1), "%\n",
-                           'Bias = ', round(ifelse(Bias_value |> is.numeric(), Bias_value, NA), 1), " %\n",
-                           # 'r² (linearity) = ', round(statistics_values$r2_log, 2),"\n",
-                           'Slope = ', round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
-                           'n = ', nrow(match_up_df_var), sep = "")) +
-             # label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
-             #               "n = ", nrow(match_up_df_var), sep = "")) + 
+             # label = paste('Error = ', round(ifelse(Error_value |> is.numeric(), Error_value, NA), 1), "%\n",
+             #               'Bias = ', round(ifelse(Bias_value |> is.numeric(), Bias_value, NA), 1), " %\n",
+             #               # TODO: Change this to show Slope_log or Slope depending on the variable tested (e.g. SST or not)
+             #               # 'R²_log = ', round(statistics_values$r2_log, 2),"\n",
+             #               'Slope = ', round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
+             #               'n = ', nrow(match_up_df_var), sep = "")) +
+             label = paste("Slope = ", round(Slope_value, 2),"\n",
+                           'R² = ', round(statistics_values$r2_log, 2),"\n",
+                           "n = ", nrow(match_up_df_var), sep = "")) +
     
     labs(title = plot_title) +
     
