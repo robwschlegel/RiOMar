@@ -1153,8 +1153,8 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
              #               # 'R²_log = ', round(statistics_values$r2_log, 2),"\n",
              #               'Slope = ', round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
              #               'n = ', nrow(match_up_df_var), sep = "")) +
-             label = paste("Slope = ", round(Slope_value, 2),"\n",
-                           'R² = ', round(statistics_values$r2_log, 2),"\n",
+             label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
+                           # 'R² = ', round(statistics_values$r2_log, 2),"\n",
                            "n = ", nrow(match_up_df_var), sep = "")) +
     
     labs(title = plot_title) +
