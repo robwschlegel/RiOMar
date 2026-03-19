@@ -1019,33 +1019,49 @@ colours_of_stations <- function(){
 
 # Plot linear trends and stats for matched data
 # var_sub = "TEMP"; df = zone_all_in_situ_monthly; df_stats = zone_all_monthly_lm
+# var_sub = "CHLA"
 validation_lm_plots <- function(var_sub, sat_name, median_base, df, df_stats){
-  
-  # Filter and pivot data
-  df_var_sub <- df |> 
-    filter(variable == var_sub) |> 
-    pivot_longer(cols = value_in_situ:value_satellite) |> 
-    mutate(name = gsub("value|_", "", name),
-           name = gsub("insitu", "in situ", name))
-  
-  # Filter stats labels
-  df_stats_var_sub <- df_stats |> 
-    filter(variable == var_sub) |> 
-    mutate(y = max(df_var_sub$value, na.rm = TRUE))
   
   # Get y-axis label and units
   if(var_sub == "TEMP"){
     y_lab <- "Temperature (°C)"
+    y_lim <- c(4, 32)
+    var_sat <- "SST"
   } else if(var_sub == "CHLA"){
-    y_lab <- "Chlorophyll a (mg m-3)"
+    y_lab <- "Chlorophyll-a (mg m-3)"
+    y_lim <- c(0, 20)
+    var_sat <- "CHL"
   } else if(var_sub == "TUR"){
     y_lab <- "Turbidity (NTU)"
+    y_lim <- c(0, 20)
   } else if(var_sub == "SPM"){
     y_lab <- "SPM (g m-3)"
+    y_lim <- c(0, 20)
   } else {
     # Not worried about other variables for the moment
     y_lab <- NA
+    y_lim <- c(0, 20)
   }
+  
+  # Filter and pivot data
+  df_var_sub <- df |> 
+    filter(variable == var_sub) |> 
+    filter(variable_sat != "NRRS555") |> 
+    pivot_longer(cols = value_in_situ:value_satellite) |> 
+    mutate(name = gsub("value|_", "", name),
+           name = gsub("insitu", "in situ", name)) |> 
+    mutate(zone_pretty = factor(zone,
+                                levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
+                                labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")))
+  
+  # Filter stats labels
+  df_stats_var_sub <- df_stats |> 
+    filter(variable == var_sub) |> 
+    filter(variable_sat != "NRRS555") |> 
+    mutate(y = max(y_lim)-2) |> 
+    mutate(zone_pretty = factor(zone,
+                                levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
+                                labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")))
   
   # Create plot
   plot_zone_var_TS <- ggplot(data = df_var_sub, aes(x = date, y = value)) +
@@ -1062,9 +1078,10 @@ validation_lm_plots <- function(var_sub, sat_name, median_base, df, df_stats){
                aes(x = as.Date("2020-01-01"), y = y, label = paste0(source," : ", round(slope_sat, 2)," / year"), vjust = 1.0)) +
     geom_label(data = filter(df_stats_var_sub, source == "SOMLIT"),  colour = "red",
                aes(x = as.Date("2020-01-01"), y = y, label = paste0(source," : ", round(slope_sat, 2)," / year"), vjust = -0.5)) +
-    facet_wrap(~zone_pretty) +
+    facet_wrap(~zone_pretty,nrow = 2) +
     scale_colour_manual(values = c("black", "red")) +
-    scale_y_continuous(limits = c(min(df_var_sub$value, na.rm = TRUE), max(df_var_sub$value, na.rm = TRUE)*1.1)) +
+    # scale_y_continuous(limits = c(min(df_var_sub$value, na.rm = TRUE), max(df_var_sub$value, na.rm = TRUE)*1.1)) +
+    coord_cartesian(ylim = y_lim) +
     labs(title = paste(sat_name, df_var_sub$variable_sat[1],"vs in situ",df_var_sub$variable[1]),
          y = y_lab, x = NULL, colour = "Type", shape = "Source", linetype = "Source") +
     theme(panel.border = element_rect(colour = "black", fill = NA),
@@ -1237,11 +1254,30 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
 # sat_name = "OLCI-A"; median_base = "all"
 validate_sensor <- function(sat_name, median_base){
   
+  # Get the pixel cutoff based on product
+  if(median_base == "small"){
+    if(sat_name == "SEXTANT"){
+      pixel_n_cut <- 1
+    } else {
+      pixel_n_cut <- 3
+    }
+  } else {
+    if(sat_name == "SEXTANT"){
+      pixel_n_cut <- 3
+    } else {
+      pixel_n_cut <- 9
+    }
+  }
+  
   # Load prepped data
   sat_files <- dir("output/MATCH_UP_DATA/FRANCE", full.names = TRUE, 
                    pattern = paste0("zone_median_",sat_name))
   sat_files <- sat_files[grepl(paste0("_",median_base), sat_files)]
   zone_median <- map_dfr(sat_files, data.table::fread) |> mutate(date = as.Date(date)) |> 
+    # Remove all rows that are below the pixel cutoff and CV cutoff of 20%
+    mutate(sd = case_when(n == 1 ~ 0, TRUE ~ sd), # Necessary for CV for 1 pixel count matchups for SEXTANT 'small'
+           cv = sd / median) |> 
+    filter(n >= pixel_n_cut, cv <= 0.20) |> 
     # Complete all dates
     complete(date = seq(min(date), max(date), by = "day"), fill = list(median = NA), 
              nesting(zone, source, site, variable))
