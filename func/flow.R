@@ -265,7 +265,6 @@ flow_trend <- function(mouth_info){
 }
 
 
-
 # Calculate flow analyses -------------------------------------------------
 
 # Compare panache size and river flow data
