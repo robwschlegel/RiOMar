@@ -20,8 +20,16 @@ source("func/util.R")
 # https://github.com/RiOMar-projet/sat_access
 source("~/sat_access/sat_access_script.R")
 
-# AVISO+ credentials
+# Create FRANCE bounding box with same structure as zones_bbox
+france_bbox <- data.frame(zone = "FRANCE",
+                         lon_min = c(-7.8),
+                         lon_max = c(10.3),
+                         lat_min  = c(41.2),
+                         lat_max = c(51.5)) 
+
+# Credentials
 aviso_plus_cred <- read.csv("~/pCloudDrive/Documents/info/aviso_plus_pswd.csv")
+odatis_mr_expert_cred <- read.csv("~/pCloudDrive/Documents/info/odatis_mr_expert_pswrd.csv")
 
 # Time steps to walk through
 vec_time_steps <- c("daily")#, "weekly")#, "monthly")
@@ -37,16 +45,18 @@ vars_polymer <- c("SPM", "CHL", "TUR", "CDOM", "RRS")
 
 # Convenience wrapper to help plyr::m_ply
 download_nc_ply <- function(username, password,
-                            dl_product, dl_sensor, dl_correction, 
+                            dl_product, dl_sensor, dl_correction, dl_processing,
                             time_step, zone, lon_min, lon_max, lat_min, lat_max,
                             dl_var, date_start, date_end){
   download_nc(
     dl_var = dl_var,
     dl_dates = c(date_start, date_end), dl_time_step = time_step,
-    dl_product = dl_product, dl_sensor = dl_sensor, dl_correction = dl_correction, 
+    dl_product = dl_product, dl_sensor = dl_sensor, 
+    dl_correction = dl_correction, dl_processing = dl_processing,
     dl_bbox = c(lon_min, lon_max, lat_min, lat_max),
     username = username, password = password,
     output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/", dl_sensor, zone, time_step),
+    # output_dir = file.path("~/data/ODATIS-MR/", dl_sensor, zone, time_step),
     overwrite = FALSE)
 }
 
@@ -57,7 +67,7 @@ download_nc_ply <- function(username, password,
 # date_start = "2002-07-04"; date_end = "2024-12-31"; time_step = "daily"
 # zone_info = zones_bbox[4,]; dl_var = vars_nirswir
 download_study_area <- function(username, password, 
-                                dl_product, dl_sensor, dl_correction, 
+                                dl_product, dl_sensor, dl_correction, dl_processing = NULL,
                                 date_start, date_end, time_step, 
                                 zone_info, dl_var){
   
@@ -72,7 +82,8 @@ download_study_area <- function(username, password,
   
   # Create the full ply dataframe
   ply_df <- data.frame(username = username, password = password,
-                       dl_product = dl_product, dl_sensor = dl_sensor, dl_correction = dl_correction,
+                       dl_product = dl_product, dl_sensor = dl_sensor, 
+                       dl_correction = dl_correction, dl_processing = dl_processing,
                        # date_start = date_start, date_end = date_end, 
                        time_step = time_step,
                        zone = rep(zone_info$zone, each = length(dl_var)),
@@ -89,6 +100,10 @@ download_study_area <- function(username, password,
   plyr::m_ply(.data = ply_date_df, .fun = download_nc_ply, .parallel = TRUE); gc()
 }
 
+# A wrapper to download all of the EXPERT data for a given sensor
+download_expert <- function(){
+
+}
 
 # Download all SEXTANT ----------------------------------------------------
 
@@ -99,6 +114,7 @@ download_study_area <- function(username, password,
 # Download ODATIS-MR ------------------------------------------------------
 
 ## MODIS ------------------------------------------------------------------
+# 8217 days of data
 
 # Run a loop across all sites
 # NB: The multi-core is targeted at running one core for each year of data in the subset by variable
@@ -109,8 +125,15 @@ for(i in 1:nrow(zones_bbox)){
                       zone_info = zones_bbox[i,], dl_var = vars_nirswir)
 }
 
+# EXPERT products
+ download_nc(username = odatis_mr_expert_cred$usrname, password = odatis_mr_expert_cred$psswrd,
+                    dl_product = "ODATIS-MR EXPERT", dl_sensor = "MODIS", dl_correction = "nirswir",
+                    dl_dates = "2002-07-04", dl_time_step = "day",
+                    dl_var = "TUR", dl_processing = "OC5", output_dir = "~/data/ODATIS-MR/MODIS/FRANCE/daily")
+
 
 ## MERIS -------------------------------------------------------------------
+# 3582 days of data
 
 # Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
@@ -122,6 +145,7 @@ for(i in 1:nrow(zones_bbox)){
 
 
 ## OLCI-A ------------------------------------------------------------------
+# 3172 days of data
 
 # Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
@@ -133,6 +157,7 @@ for(i in 1:nrow(zones_bbox)){
 
 
 ## OLCI-B ------------------------------------------------------------------
+# 2423 days of data
 
 # Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
