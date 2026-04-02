@@ -55,8 +55,8 @@ download_nc_ply <- function(username, password,
     dl_correction = dl_correction, dl_processing = dl_processing,
     dl_bbox = c(lon_min, lon_max, lat_min, lat_max),
     username = username, password = password,
-    output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/", dl_sensor, zone, time_step),
-    # output_dir = file.path("~/data/ODATIS-MR/", dl_sensor, zone, time_step),
+    # output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/", dl_sensor, zone, time_step),
+    output_dir = file.path("~/data/ODATIS-MR/", dl_sensor, zone, time_step),
     overwrite = FALSE)
 }
 
@@ -101,8 +101,59 @@ download_study_area <- function(username, password,
 }
 
 # A wrapper to download all of the EXPERT data for a given sensor
-download_expert <- function(){
+# NB: This is only designed to directly download specific daily EXPERT files
+# username = odatis_mr_expert_cred$usrname; password = odatis_mr_expert_cred$psswrd
+# dl_sensor = "MODIS"; date_start = "2002-07-04"; date_end = "2024-12-31"
+download_expert <- function(username, password, 
+                            dl_sensor, date_start, date_end){
+  
+  # Get a dataframe of download dates by year
+  year_range <- year(date_start):year(date_end)
+  date_df <- data.frame(date_start = paste0(year_range,"-01-01"),
+                        date_end = paste0(year_range,"-12-31"))
+  
+  # Correct start and end dates accordingly
+  date_df$date_start[1] <- ifelse(date_df$date_start[1] < date_start, date_start, date_df$date_start[1])
+  date_df$date_end[nrow(date_df)] <- ifelse(date_df$date_end[nrow(date_df)] > date_end, date_end, date_df$date_end[nrow(date_df)])
+  
+  # Set the full range of possible values
+  dl_product <- "ODATIS-MR EXPERT"
+  dl_var <- c("CHL", "CHL1", "SPM", "SST", "SST-NIGHT", "T")
+  dl_correction <- c("acolite", "nirswir", "polymer")
+  dl_processing <- c("OC5", "GONS", "G", "R")
 
+  # Create big grid and clean as necessary
+  ply_df <- expand_grid(dl_product, dl_sensor, dl_correction, dl_processing, dl_var) |> 
+    mutate(dl_var = case_when(dl_var == "CHL" & dl_processing %in% c("R", "G") ~ NA,
+                              dl_var == "SPM" & dl_processing %in% c("OC5", "GONS") ~ NA,
+                              # Remove unused corrections by sensor
+                              dl_sensor == "MODIS" & dl_correction == "acolite" ~ NA,
+                              dl_sensor != "MODIS" & dl_correction == "nirswir" ~ NA,
+                              # Only MODIS has SST
+                              dl_var %in% c("SST", "SST-NIGHT") & dl_sensor != "MODIS" ~ NA,
+                              # No SST-NIGHT for MODIS : polymer
+                              dl_var == "SST-NIGHT" & dl_correction == "polymer" ~ NA,
+                              # No GONS for MODIS
+                              dl_sensor == "MODIS" & dl_processing == "GONS" ~ NA,
+                              TRUE ~ dl_var)) |> 
+    mutate(dl_processing = case_when(dl_var %in% c("SST", "SST-NIGHT", "CHL1", "T") ~ NA,
+                                    TRUE ~ dl_processing)) |> 
+    filter(!is.na(dl_var)) |> 
+    distinct()
+  
+  # Bigger grid
+  ply_date_df <- expand_grid(ply_df, date_df) |> 
+    # Add France bbox, even though it's not used, to keep same structure as other functions
+    bind_cols(france_bbox) |> 
+    mutate(time_step = "daily",
+      username = odatis_mr_expert_cred$usrname,
+      password = odatis_mr_expert_cred$psswrd) |> 
+    dplyr::select(username, password, dl_product, dl_sensor, dl_correction, dl_processing,
+                  time_step, zone, lon_min, lon_max, lat_min, lat_max, dl_var, date_start, date_end)
+
+  # Ply it
+  # NB: It appears that the FTP server doesn't accept parallel requests
+  plyr::m_ply(.data = ply_date_df, .fun = download_nc_ply, .parallel = FALSE); gc()
 }
 
 # Download all SEXTANT ----------------------------------------------------
@@ -126,10 +177,7 @@ for(i in 1:nrow(zones_bbox)){
 }
 
 # EXPERT products
- download_nc(username = odatis_mr_expert_cred$usrname, password = odatis_mr_expert_cred$psswrd,
-                    dl_product = "ODATIS-MR EXPERT", dl_sensor = "MODIS", dl_correction = "nirswir",
-                    dl_dates = "2002-07-04", dl_time_step = "day",
-                    dl_var = "TUR", dl_processing = "OC5", output_dir = "~/data/ODATIS-MR/MODIS/FRANCE/daily")
+download_expert("MODIS")
 
 
 ## MERIS -------------------------------------------------------------------
@@ -143,6 +191,9 @@ for(i in 1:nrow(zones_bbox)){
                       zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
 
+# EXPERT products
+download_expert("MERIS")
+
 
 ## OLCI-A ------------------------------------------------------------------
 # 3172 days of data
@@ -155,6 +206,9 @@ for(i in 1:nrow(zones_bbox)){
                       zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
 
+# EXPERT products
+download_expert("OLCI-A")
+
 
 ## OLCI-B ------------------------------------------------------------------
 # 2423 days of data
@@ -166,4 +220,7 @@ for(i in 1:nrow(zones_bbox)){
                       date_start = "2018-05-15", date_end = "2024-12-31", time_step = "daily",
                       zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
+
+# EXPERT products
+download_expert("OLCI-B")
 
