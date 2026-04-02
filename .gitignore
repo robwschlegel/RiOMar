@@ -54,6 +54,8 @@ MANIFEST
 
 # MacOS
 .DS_Store
+data/.DS_Store
+output/.DS_Store
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

@@ -10,6 +10,9 @@
 # Load tidyverse
 library(tidyverse)
 
+# FOr SSH downloading
+library(ssh)
+
 # Set multi-core
 library(doParallel); registerDoParallel(cores = detectCores()-2)
 
@@ -20,8 +23,17 @@ source("func/util.R")
 # https://github.com/RiOMar-projet/sat_access
 source("~/sat_access/sat_access_script.R")
 
-# AVISO+ credentials
+# Create FRANCE bounding box with same structure as zones_bbox
+france_bbox <- data.frame(zone = "FRANCE",
+                         lon_min = c(-7.8),
+                         lon_max = c(10.3),
+                         lat_min  = c(41.2),
+                         lat_max = c(51.5)) 
+
+# Credentials
 aviso_plus_cred <- read.csv("~/pCloudDrive/Documents/info/aviso_plus_pswd.csv")
+odatis_mr_expert_cred <- read.csv("~/pCloudDrive/Documents/info/odatis_mr_expert_pswrd.csv")
+rspro2_cred <- read.csv("~/pCloudDrive/Documents/info/RSpro2_pswd.csv")
 
 # Time steps to walk through
 vec_time_steps <- c("daily")#, "weekly")#, "monthly")
@@ -37,16 +49,18 @@ vars_polymer <- c("SPM", "CHL", "TUR", "CDOM", "RRS")
 
 # Convenience wrapper to help plyr::m_ply
 download_nc_ply <- function(username, password,
-                            dl_product, dl_sensor, dl_correction, 
+                            dl_product, dl_sensor, dl_correction, dl_processing,
                             time_step, zone, lon_min, lon_max, lat_min, lat_max,
                             dl_var, date_start, date_end){
   download_nc(
     dl_var = dl_var,
     dl_dates = c(date_start, date_end), dl_time_step = time_step,
-    dl_product = dl_product, dl_sensor = dl_sensor, dl_correction = dl_correction, 
+    dl_product = dl_product, dl_sensor = dl_sensor, 
+    dl_correction = dl_correction, dl_processing = dl_processing,
     dl_bbox = c(lon_min, lon_max, lat_min, lat_max),
     username = username, password = password,
     output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/", dl_sensor, zone, time_step),
+    # output_dir = file.path("~/data/ODATIS-MR/", dl_sensor, zone, time_step),
     overwrite = FALSE)
 }
 
@@ -57,7 +71,7 @@ download_nc_ply <- function(username, password,
 # date_start = "2002-07-04"; date_end = "2024-12-31"; time_step = "daily"
 # zone_info = zones_bbox[4,]; dl_var = vars_nirswir
 download_study_area <- function(username, password, 
-                                dl_product, dl_sensor, dl_correction, 
+                                dl_product, dl_sensor, dl_correction, dl_processing = NULL,
                                 date_start, date_end, time_step, 
                                 zone_info, dl_var){
   
@@ -72,7 +86,8 @@ download_study_area <- function(username, password,
   
   # Create the full ply dataframe
   ply_df <- data.frame(username = username, password = password,
-                       dl_product = dl_product, dl_sensor = dl_sensor, dl_correction = dl_correction,
+                       dl_product = dl_product, dl_sensor = dl_sensor, 
+                       dl_correction = dl_correction, dl_processing = dl_processing,
                        # date_start = date_start, date_end = date_end, 
                        time_step = time_step,
                        zone = rep(zone_info$zone, each = length(dl_var)),
@@ -89,6 +104,112 @@ download_study_area <- function(username, password,
   plyr::m_ply(.data = ply_date_df, .fun = download_nc_ply, .parallel = TRUE); gc()
 }
 
+# Same same, but can handle SSH requests
+# df = 
+download_nc_ply_ssh <- function(df){
+  
+  # Get FTP URL
+  ftp_url <- download_nc(
+    dl_var = df$dl_var,
+    dl_dates = df$dl_date, dl_time_step = df$time_step,
+    dl_product = df$dl_product, dl_sensor = df$dl_sensor, 
+    dl_correction = df$dl_correction, dl_processing = df$dl_processing,
+    username = df$username, password = df$password,
+    # output_dir = file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/", dl_sensor, zone, time_step),
+    output_dir = file.path("../data/ODATIS-MR/", df$dl_sensor, df$zone, df$time_step),
+    overwrite = FALSE, 
+    return_url = TRUE)
+  
+  # Establish SSH connection
+  session <- ssh_connect(host = paste0(rspro2_cred$usrname,"@192.168.77.57"), passwd = rspro2_cred$psswrd)
+  on.exit(ssh_disconnect(session))
+  
+  # Set pathway on SSH server
+  # remote_dir <- file.path("/home/data/rschlegel/ODATIS-MR", df$dl_sensor, df$zone, df$time_step)
+  remote_dir <- file.path("../data/ODATIS-MR", df$dl_sensor, df$zone, df$time_step)
+  
+  # Build the remote destination path
+  filename <- basename(ftp_url)
+  remote_dest <- file.path(remote_dir, filename)
+  
+  # The curl call
+  # NB: Assumes usernam and password are already integrated into URL
+  curl_cmd <- sprintf(
+     "curl '%s' -o '%s'",
+     ftp_url, remote_dest
+  )
+  # curl_cmd <- sprintf(
+  #   "curl --user '%s:%s' '%s' -o '%s'",
+  #   ftp_user, ftp_password, ftp_url, remote_dest
+  # )
+  
+  exit_code <- ssh_exec_wait(session, command = curl_cmd, std_out = stdout(), std_err = stderr())
+  
+  if (exit_code == 0) {
+    message("Downloaded to ", ssh_host, ":", remote_dest)
+  } else {
+    warning("Failed on ", ssh_host, " with exit code: ", exit_code)
+  }
+  
+}
+
+# A wrapper to download all of the EXPERT data for a given sensor
+# NB: This is only designed to directly download specific daily EXPERT files
+# username = odatis_mr_expert_cred$usrname; password = odatis_mr_expert_cred$psswrd
+# dl_sensor = "MODIS"; date_start = "2002-07-04"; date_end = "2024-12-31"
+download_expert <- function(username, password, 
+                            dl_sensor, date_start, date_end){
+  
+  # Get a dataframe of download dates by year
+  # year_range <- year(date_start):year(date_end)
+  # date_df <- data.frame(date_start = paste0(year_range,"-01-01"),
+  #                       date_end = paste0(year_range,"-12-31"))
+  
+  # Correct start and end dates accordingly
+  # date_df$date_start[1] <- ifelse(date_df$date_start[1] < date_start, date_start, date_df$date_start[1])
+  # date_df$date_end[nrow(date_df)] <- ifelse(date_df$date_end[nrow(date_df)] > date_end, date_end, date_df$date_end[nrow(date_df)])
+  date_df <- data.frame(dl_date = seq(as.Date(date_start), as.Date(date_end), by = "day"))
+  
+  # Set the full range of possible values
+  dl_product <- "ODATIS-MR EXPERT"
+  dl_var <- c("CHL", "CHL1", "SPM", "SST", "SST-NIGHT", "T")
+  dl_correction <- c("acolite", "nirswir", "polymer")
+  dl_processing <- c("OC5", "GONS", "G", "R")
+
+  # Create big grid and clean as necessary
+  ply_df <- expand_grid(dl_product, dl_sensor, dl_correction, dl_processing, dl_var) |> 
+    mutate(dl_var = case_when(dl_var == "CHL" & dl_processing %in% c("R", "G") ~ NA,
+                              dl_var == "SPM" & dl_processing %in% c("OC5", "GONS") ~ NA,
+                              # Remove unused corrections by sensor
+                              dl_sensor == "MODIS" & dl_correction == "acolite" ~ NA,
+                              dl_sensor != "MODIS" & dl_correction == "nirswir" ~ NA,
+                              # Only MODIS has SST
+                              dl_var %in% c("SST", "SST-NIGHT") & dl_sensor != "MODIS" ~ NA,
+                              # No SST-NIGHT for MODIS : polymer
+                              dl_var == "SST-NIGHT" & dl_correction == "polymer" ~ NA,
+                              # No GONS for MODIS
+                              dl_sensor == "MODIS" & dl_processing == "GONS" ~ NA,
+                              TRUE ~ dl_var)) |> 
+    mutate(dl_processing = case_when(dl_var %in% c("SST", "SST-NIGHT", "CHL1", "T") ~ NA,
+                                    TRUE ~ dl_processing)) |> 
+    filter(!is.na(dl_var)) |> 
+    distinct()
+  
+  # Bigger grid
+  ply_date_df <- expand_grid(ply_df, date_df) |> 
+    # Add France bbox, even though it's not used, to keep same structure as other functions
+    # bind_cols(france_bbox) |> 
+    mutate(time_step = "daily", zone = "FRANCE",
+      username = odatis_mr_expert_cred$usrname,
+      password = odatis_mr_expert_cred$psswrd,
+      ply_idx = 1:n())
+
+  # Ply it
+  # NB: It appears that the FTP server doesn't accept parallel requests
+  plyr::d_ply(.data = ply_date_df[1,], .variables = c("ply_idx"),
+              .fun = download_nc_ply_ssh, .parallel = FALSE); gc()
+}
+
 
 # Download all SEXTANT ----------------------------------------------------
 
@@ -99,6 +220,7 @@ download_study_area <- function(username, password,
 # Download ODATIS-MR ------------------------------------------------------
 
 ## MODIS ------------------------------------------------------------------
+# 8217 days of data
 
 # Run a loop across all sites
 # NB: The multi-core is targeted at running one core for each year of data in the subset by variable
@@ -109,8 +231,12 @@ for(i in 1:nrow(zones_bbox)){
                       zone_info = zones_bbox[i,], dl_var = vars_nirswir)
 }
 
+# EXPERT products
+download_expert("MODIS")
+
 
 ## MERIS -------------------------------------------------------------------
+# 3582 days of data
 
 # Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
@@ -120,8 +246,12 @@ for(i in 1:nrow(zones_bbox)){
                       zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
 
+# EXPERT products
+download_expert("MERIS")
+
 
 ## OLCI-A ------------------------------------------------------------------
+# 3172 days of data
 
 # Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
@@ -131,8 +261,12 @@ for(i in 1:nrow(zones_bbox)){
                       zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
 
+# EXPERT products
+download_expert("OLCI-A")
+
 
 ## OLCI-B ------------------------------------------------------------------
+# 2423 days of data
 
 # Run a loop across all sites
 for(i in 1:nrow(zones_bbox)){
@@ -141,4 +275,7 @@ for(i in 1:nrow(zones_bbox)){
                       date_start = "2018-05-15", date_end = "2024-12-31", time_step = "daily",
                       zone_info = zones_bbox[i,], dl_var = vars_polymer)
 }
+
+# EXPERT products
+download_expert("OLCI-B")
 

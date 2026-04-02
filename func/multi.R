@@ -272,118 +272,6 @@ multi_plot <- function(df_stl){
   plot_inter(df_pretty, "flow_inter", "blue", "River flow (m^3 s-1)", "flow")
   plot_inter(df_pretty, "tide_inter", "darkgreen", "Tidal range (m)", "tide")
   plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s-1)", "wind")
-
-  # Comparison plots
-  # df <- df_pretty; var_1 <- "plume_inter"; var_2 <- "flow_inter"
-  # df <- df_seas; var_1 <- "plume_seas"; var_2 <- "flow_seas"
-  # colour_1 <- "brown"; colour_2 <- "blue"; label_1 <- "Plume area (km^2)"; label_2 <- "River flow (m^3 s-1)"; file_stub <- "comparison_plume_flow_inter"
-  comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2){
-    
-    if(grepl("seas", var_1)){
-      df_sub <- df[,c("plot_title", "month", var_1, var_2)]
-      colnames(df_sub) <- c("plot_title", "month", "var_1", "var_2")
-    } else {
-      df_sub <- df[,c("plot_title", "date", var_1, var_2)]
-      colnames(df_sub) <- c("plot_title", "date", "var_1", "var_2")
-    }
-    
-    # Plot base
-    if(grepl("seas", var_1)){
-      
-      # Scaling factor
-      scaling_factor <- sec_axis_adjustement_factors(df_sub$var_2, df_sub$var_1)
-      df_scaling <- summarise(df_sub, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
-      df_scale <- left_join(df_sub, df_scaling, by = "plot_title") |>
-        mutate(var_2_scaled = var_2 * diff + adjust, .after = "var_2")
-      
-      # Get range for ribbon plot
-      df_scale_sub <- df_scale |> 
-        summarise(var_1_min = min(var_1, na.rm = TRUE),
-                  var_1_mean = mean(var_1, na.rm = TRUE),
-                  var_1_max = max(var_1, na.rm = TRUE),
-                  var_2_min = min(var_2_scaled, na.rm = TRUE),
-                  var_2_mean = mean(var_2_scaled, na.rm = TRUE),
-                  var_2_max = max(var_2_scaled, na.rm = TRUE), .by = c("plot_title", "month")) |> 
-        mutate(month_int = as.integer(month))
-      
-      # Plot them
-      pl_base <- ggplot(data = df_scale_sub, aes(x = month_int)) + 
-        # Var 1
-        geom_ribbon(aes(ymin = var_1_min, ymax = var_1_max), fill = colour_1, alpha = 0.3) +
-        geom_path(aes(y = var_1_mean), color = colour_1, linewidth = 2) +
-        # Var 2
-        geom_ribbon(aes(ymin = var_2_min, ymax = var_2_max), fill = colour_2, alpha = 0.3) +
-        geom_path(aes(y = var_2_mean), color = colour_2, linewidth = 2) +
-        facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-        scale_x_continuous(expand = c(0, 0), breaks = 1:12, labels = month.abb)
-    } else {
-      
-      # Perform rolling mean
-      df_roll_mean <- df_sub |>
-        mutate(date = date - lubridate::days(lubridate::wday(date)-1)) |>
-        # mutate(date = round_date(date, unit = "months")) |>
-        filter(date >= min(df$date)) |>
-        group_by(plot_title, date) |>
-        summarise(var_1 = mean(var_1, na.rm = TRUE),
-                  var_2 = mean(var_2, na.rm = TRUE), .groups = "keep") |>
-        group_by(plot_title) |>
-        mutate(var_1 = roll_mean(var_1, n = 48, fill = NA, align = "center"),
-               var_2 = roll_mean(var_2, n = 48, fill = NA, align = "center")) |>
-        ungroup()
-      
-      # Then get the scaling factor
-      scaling_factor <- sec_axis_adjustement_factors(df_roll_mean$var_2, df_roll_mean$var_1)
-      df_scaling <- summarise(df_roll_mean, sec_axis_adjustement_factors(var_2, var_1), .by = plot_title)
-      df_scale <- left_join(df_roll_mean, df_scaling, by = "plot_title") |>
-        mutate(var_2_scaled = var_2 * diff + adjust, .after = "var_2")
-      unique_years <- df_scale$date |> year() |> unique()
-      
-      pl_base <- ggplot(data = df_scale) +
-        # Var 1 data
-        geom_point(aes(x = date, y = var_1), color = colour_1) +
-        geom_path(aes(x = date, y = var_1), color = colour_1) +
-        # Var 2 data
-        geom_point(aes(x = date, y = var_2_scaled), color = colour_2) +
-        geom_path(aes(x = date, y = var_2_scaled), color = colour_2) +
-        # Facet
-        facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-        # X-axis labels
-        scale_x_date(name = "", expand = c(0, 0),
-                     breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(),
-                     labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) 
-    }
-    
-    # Finish up the comparison plot
-    pl_comp <- pl_base +
-      # Y-axis labels
-      scale_y_continuous(name = label_1,
-                         sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
-                                             name = label_2)) +
-      labs( x = NULL) +
-      # Extra bits
-      ggplot_theme() +
-      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-            plot.subtitle = element_text(hjust = 0.5),
-            axis.text.y.left = element_text(color = colour_1),
-            axis.ticks.y.left = element_line(color = colour_1),
-            axis.line.y.left = element_line(color = colour_1),
-            axis.title.y.left = element_text(color = colour_1, margin = unit(c(0, 7.5, 0, 0), "mm")),
-            axis.text.y.right = element_text(color = colour_2),
-            axis.ticks.y.right = element_line(color = colour_2),
-            axis.line.y.right = element_line(color = colour_2),
-            axis.title.y.right = element_text(color = colour_2, margin = unit(c(0, 0, 0, 7.5), "mm")),
-            panel.border = element_rect(linetype = "solid", fill = NA))
-    return(pl_comp)
-  }
-  
-  # Convenience wrapper to run and save comparison plots
-  # NB: this is hqrd coded to work with four plots
-  comparison_plot_save <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2, file_stub){
-    comp_list <- plyr::dlply(df, c("zone"), comparison_plot, var_1 = var_1, var_2 = var_2, 
-                             colour_1 = colour_1, colour_2 = colour_2, label_1 = label_1, label_2 = label_2)
-    comp_fig <- comp_list[[2]] + comp_list[[4]] + comp_list[[1]] + comp_list[[3]] + plot_layout(ncol = 1, axes = "collect")
-    ggsave(filename = paste0("figures/",file_stub,".png"), plot = comp_fig, width = 24, height = 24, dpi = 300)
-  }
   
   # Seasonal comparison plots
   comparison_plot_save(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_seas")
@@ -497,6 +385,17 @@ load_X11 <- function(zone, type = "plume"){
 }
 X11_plume <- map_dfr(zones, load_X11)
 X11_flow <- map_dfr(zones, load_X11, type = "flow")
+X_11_plume_flow <- left_join(X11_plume, X11_flow, by = join_by(zone, date)) |> 
+  dplyr::rename(plume_inter = Interannual_signal_X11_plume, flow_inter = Interannual_signal_X11_flow) |> 
+  left_join(zones_bbox, by = "zone") |> 
+  mutate(plot_title = zone_pretty)
+
+# Get correlation stats
+X_11_plume_flow_stats_all <- X_11_plume_flow |> 
+  summarise(r = round(cor(plume_inter, flow_inter, use = "pairwise.complete.obs"), 2), .by = "zone")
+
+# Interannual comparison plots
+comparison_plot_save(X_11_plume_flow, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter_X11")
 
 # STL
 load("output/STATS/stl_all.RData")

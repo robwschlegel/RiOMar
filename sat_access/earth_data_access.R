@@ -40,7 +40,7 @@ library(doParallel); registerDoParallel(cores = detectCores() - 2)
 # It contains one row of data, which is the username and password for an account on earth data
 # An account can be created here: https://urs.earthdata.nasa.gov/
 # Once you have your account details, create the .csv file shown here and store in a secure location
-earth_up <- read_csv("path/to/file/earthdata_pswd.csv")
+earth_up <- read_csv("~/pCloudDrive/Documents/info/earthdata_pswd.csv")
 
 
 # Functions ---------------------------------------------------------------
@@ -159,8 +159,7 @@ S3_catalogue <- earth_data_catalogue[grepl("OLCI|Sentinel|SENTINEL", earth_data_
 ## 1) Setup ---------------------------------------------------------------
 
 # Chose where you would like to save the files
-# dl_dir <- "~/data/MODIS"
-dl_dir <- "~/data/S3"
+dl_dir <- "~/data/MODIS"
 
 # Chosen start and end dates for downloading
 start_date <- "2020-10-01"; end_date <- "2020-10-05"
@@ -184,8 +183,7 @@ plot(study_coords)
 maps::map(add = TRUE)
 
 # Chose the product ID you want to download
-product_ID <- "MYD09GA" # MODIS-AQUA L2G 500 m
-# product_ID <- "OLCIS3A_L3b_CYAN" # Sentinel-3A L3
+product_ID <- "MYD09GQ"
 
 # Look at the server and version info for the product of choice
 earth_data_catalogue[earth_data_catalogue$short_name == product_ID,]
@@ -203,17 +201,17 @@ product_version <- "061" # NB: Change this if not shown in the output shown abov
 # NB: If this throws an error, it may be necessary to manually change the download server
 # Remove the server and version arguments and run again
 # It should show all of the possible servers and versions from which the desired product can be downloaded
-luna::getNASA(product_ID, start_date, end_date, aoi = study_bbox, download = FALSE, 
-              server = product_server, version = product_version)
+luna::getNASA("MYD09GQ", start_date, end_date, aoi = study_bbox, download = FALSE)
 
 # If that looks reasonable, download them
 # NB: If this doesn't work, then the product ID, even if it is listed, may not be findable by the luna package
-luna::getNASA(product_ID, start_date, end_date, aoi = study_bbox, download = TRUE, overwrite = FALSE, 
-              server = product_server, version = product_version,
+luna::getNASA(product = product_ID, start_date = start_date, end_date = end_date, aoi = study_bbox, 
+              download = TRUE, overwrite = FALSE, server = product_server, version = product_version,
               path = dl_dir, username = earth_up$usrname, password = earth_up$psswrd)
 
 # To follow the rest of the examples below we also want to download the MODIS mask files
-luna::getNASA("MOD44W", start_date, end_date, aoi = study_bbox, download = TRUE, overwrite = FALSE,
+luna::getNASA(product = "MOD44W", start_date = start_date, end_date = end_date, 
+              aoi = study_bbox, download = TRUE, overwrite = FALSE,
               path = dl_dir, username = earth_up$usrname, password = earth_up$psswrd)
 
 

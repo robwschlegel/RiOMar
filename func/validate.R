@@ -35,36 +35,48 @@ times_SEXTANT <- data.frame(date_start = ymd(unlist(lapply(str_split(basename(di
          end_time = ymd_hms(paste(date_end, "12:00:00"), tz = "GMT")) |>
   dplyr::select(start_time, end_time)
 save(times_SEXTANT, file = "metadata/times_SEXTANT.RData")
+load("metadata/times_SEXTANT.RData")
 
 ## MODIS
 times_MODIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_MODIS, file = "metadata/times_MODIS.RData")
-# Double check that times are the same for any region
+load("metadata/times_MODIS.RData")
+
+### Double check that times are the same for any region
 # Yes, start and end times are exactly the same
 times_MODIS_check <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", pattern = "SPM", full.names = TRUE),
                                  get_start_end_time, .parallel = TRUE)
 times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |>
   mutate(start_diff = start_time...1 - start_time...3, end_diff = end_time...2 - end_time...4)
+### SST are night time
+times_MODIS_SST <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
+                               pattern = "SST", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+save(times_MODIS_SST, file = "metadata/times_MODIS_SST.RData")
+load("metadata/times_MODIS_SST.RData")
 
 # ## MERIS
 times_MERIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_MERIS, file = "metadata/times_MERIS.RData")
+load("metadata/times_MERIS.RData")
 
 ## OLCI-A
 times_OLCI_A <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
                                 pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_OLCI_A, file = "metadata/times_OLCI_A.RData")
+load("metadata/times_OLCI_A.RData")
 
 ## OLCI-B
 times_OLCI_B <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
                                 pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_OLCI_B, file = "metadata/times_OLCI_B.RData")
+load("metadata/times_OLCI_B.RData")
 
 ## ALL
 times_ALL <- bind_rows(mutate(times_SEXTANT, sat_name = "SEXTANT"),
                        mutate(times_MODIS, sat_name = "MODIS"),
+                       mutate(times_MODIS_SST, sat_name = "MODIS (SST)"),
                        mutate(times_MERIS, sat_name = "MERIS"),
                        mutate(times_OLCI_A, sat_name = "OLCI-A"),
                        mutate(times_OLCI_B, sat_name = "OLCI-B")) |>
@@ -80,7 +92,7 @@ time_plot <- ggplot(data = times_ALL, aes(x = date, y = start_hms)) +
   geom_point(data = filter(times_ALL, sat_name == "SEXTANT"), aes(colour = sat_name), size = 3) +
   geom_ribbon(aes(ymin = start_hms, ymax = end_hms, fill = sat_name)) +
   scale_fill_brewer("Sensor", palette = "Dark2", aesthetics = c("colour", "fill")) +
-  labs(y = "Passover time (UTC)", x = NULL,
+  labs(y = "Overhead time (UTC)", x = NULL,
        title = "SEXTANT and ODATIS-MR sensor availability and overhead times") +
   theme_bw()
 # time_plot
@@ -118,7 +130,7 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
   mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
-write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
+# write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
 # in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
 
 # Filter in situ stations to just those within a zone
@@ -160,8 +172,12 @@ SOMLIT_clean <- right_join(SOMLIT, zone_sites, by = c("source", "site", "lon", "
 zone_data_in_situ <- bind_rows(REPHY_clean, SOMLIT_clean) |> 
   # Get only variables of interest
   filter(variable %in% c('TEMP', 'SAL', 'POC', 'SPM', 'CHLA', 'TUR')) |> 
-  # Filter from times 10:00 to 15:00
-  filter(time >= hms("10:00:00"), time <= hms("15:00:00")) |> 
+  # Create HMS filter differently for TEMP from all other variables
+  # Filter from times 10:00 to 15:00 for non-SST; 00:00 to 04:00 for TEMP
+  mutate(hms_idx = case_when(variable != "TEMP" & time >= hms("10:00:00") & time <= hms("15:00:00") ~ 1,
+                             variable == "TEMP" & time >= hms("21:00:00") | time <= hms("09:00:00") ~ 1,
+                             TRUE ~ 0)) |> 
+  filter(hms_idx == 1) |>
   # Create daily means
   summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable")) |> 
   left_join(zone_sites, by = join_by(source, site, lon, lat)) |> 
@@ -276,18 +292,41 @@ extract_pixels_all("OLCI-B", "GULF_OF_LION"); gc()
 
 # Validation stats + figures  --------------------------------------------
 
-validate_sensor("SEXTANT")
-validate_sensor("MODIS")
-validate_sensor("MERIS")
-validate_sensor("OLCI-A")
-validate_sensor("OLCI-B")
+# SEXTANT
+validate_sensor("SEXTANT", "all")
+validate_sensor("SEXTANT", "small")
+
+# MODIS
+validate_sensor("MODIS", "all")
+validate_sensor("MODIS", "small")
+
+# MERIS
+validate_sensor("MERIS", "all")
+validate_sensor("MERIS", "small")
+
+# OLCI-A
+validate_sensor("OLCI-A", "all")
+validate_sensor("OLCI-A", "small")
+
+# OLCI-B
+validate_sensor("OLCI-B", "all")
+validate_sensor("OLCI-B", "small")
 
 
 # Validation tables -------------------------------------------------------
 
+# Get stats files
+files_stats <- dir("output/MATCH_UP_DATA/FRANCE/STATISTICS", pattern = "_stats_", full.names = TRUE)
+files_stats_lm <- files_stats[grepl("_lm_", files_stats)]
+files_stats_area <- files_stats[!files_stats %in% files_stats_lm]
+files_stats_all <- files_stats_area[grepl("_all", files_stats_area)]
+files_stats_small <-  files_stats_area[grepl("_small", files_stats_area)]
+
 # Basic tables
-zone_all_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/", 
-                              pattern = "_stats.csv", full.names = TRUE), read_csv) |> 
+zone_all_stats <- map_dfr(files_stats_all, read_csv) |> 
+  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
+  filter(!variable %in% c("POC"))
+zone_small_stats <- map_dfr(files_stats_small, read_csv) |> 
   filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
   filter(!variable %in% c("POC"))
 
@@ -295,11 +334,19 @@ zone_all_stats <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE/STATISTICS/",
 zone_all_stats_global <- zone_all_stats |> 
   filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
   filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
-  dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
+  # dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
   arrange(Error) |> 
   mutate(Error = round(Error),
          Bias = round(Bias))
-write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global.csv")
+write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_all.csv")
+zone_small_stats_global <- zone_small_stats |> 
+  filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
+  filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
+  # dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
+  arrange(Error) |> 
+  mutate(Error = round(Error),
+         Bias = round(Bias))
+write_csv(zone_small_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_small.csv")
 
 # Get high level stats
 zone_all_stats_top <- zone_all_stats |> 
