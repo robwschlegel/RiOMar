@@ -23,6 +23,13 @@ zones_bbox <- data.frame(zone = zones_list,
                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone")
 
+# Create FRANCE bounding box with same structure as zones_bbox
+france_bbox <- data.frame(zone = "FRANCE",
+                         lon_min = c(-7.8),
+                         lon_max = c(10.3),
+                         lat_min  = c(41.2),
+                         lat_max = c(51.5)) 
+
 
 # Pixels ------------------------------------------------------------------
 
