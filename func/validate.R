@@ -355,3 +355,68 @@ zone_all_stats_top <- zone_all_stats |>
 # Fancy tables
 validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
 
+
+# Time series analyses ----------------------------------------------------
+
+# Load MODIS SST and in situ temperatures
+zone_median_SST <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE", pattern = "zone_median_MODIS_", 
+                               full.names = TRUE), data.table::fread) |> 
+  mutate(date = as.Date(date)) |> 
+  filter(variable == "SST")
+# write_csv(zone_median_SST, "output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
+# zone_median_SST <- read_csv("output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
+
+# Load in situ data
+zone_data_in_situ <- read_csv("data/INSITU_data/zone_data_in_situ.csv")
+
+# List number of unique sites per source
+zone_data_in_situ |> dplyr::select(source, site) |> distinct() |> 
+  summarise(site_count = n(), .by = "source")
+
+# List date range for each source of in situ data
+zone_data_in_situ |> dplyr::select(source, date) |> 
+  summarise(min_date = min(date), max_date = max(date), .by = "source")
+
+# List the variables used in the in situ data
+zone_data_in_situ |> dplyr::select(source, variable) |> distinct()
+
+# Join
+zone_all_TEMP <- zone_data_in_situ |> 
+  filter(variable == "TEMP") |> 
+  group_by(site) |> 
+  mutate(count = n()) |> 
+  ungroup() |> 
+  filter(count > 90) |> 
+  mutate(variable_sat = "SST") |> 
+  left_join(zone_median_SST, by = c("zone", "source", "site", "date", "variable_sat" = "variable")) |> 
+  filter(value > 0, median > 0) |> 
+  dplyr::rename(value_in_situ = value, value_satellite = median) |> 
+  mutate(season = case_when(
+    month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
+    month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
+  dplyr::select(zone, dplyr::everything())
+
+# Basic plot
+plot_temp_compare <- zone_all_TEMP |> 
+  mutate(zone_pretty = factor(zone_pretty,
+                              levels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion"))) |> 
+  filter(date >= "2004-07-04") |> 
+  ggplot(aes(x = date, y = value_in_situ)) +
+  geom_point(aes(group = site, shape = source), show.legend = FALSE) +
+  geom_point(aes(y = value_satellite, group = site, shape = source), colour = "red", show.legend = FALSE) +
+  geom_smooth(method = "lm", colour = "black", se = FALSE) +
+  geom_smooth(aes(y = value_satellite), method = "lm", colour = "red", se = FALSE) +
+  facet_wrap(~zone_pretty) +
+  labs(title = "Comparison of in situ TEMP (black) and MODIS SST (red)",
+       y = "Temperature (°C)", x = NULL) +
+  theme(plot.title = element_text(size = 25, face = "bold"),
+        axis.title = element_text(size = 23),
+        axis.text = element_text(size = 20),
+        strip.text = element_text(size = 23),
+        legend.title = element_text(size = 23),
+        legend.text = element_text(size = 20),
+        legend.position = "bottom",
+        panel.border = element_rect(colour = "black", fill = NA))
+plot_temp_compare
+ggsave("figures/comparison_TEMP_SST.png", height = 10, width = 16)
+
