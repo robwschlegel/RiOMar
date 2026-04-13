@@ -9,14 +9,16 @@
 
 # The packages needed for this script
 library(tidyverse)
+library(furrr)
 library(raster) # Used here to select specific pixels in a .nc file
 library(ncdf4)
+library(tidync)
 library(sf) # Used for complex shape files
 library(scales) # For better plot labels
 library(ggExtra) # For histogram border plots
 library(gt) # For fancy tables
 library(geosphere) # For pixel distances
-library(doParallel); registerDoParallel(cores = detectCores()-2)
+library(doParallel); registerDoParallel(cores = detectCores()-6)
 
 # The shared functions
 source("func/util.R")
@@ -229,31 +231,17 @@ ggsave("figures/map_in_situ_stations.png", height = 14, width = 15.5, bg = "whit
 
 # Create the data.frames of pixel matchups
 ## SEXTANT
-write_pixels(zone_sites, "SEXTANT")
+write_pixel_coords("SEXTANT", "SPM")
+write_pixel_coords("SEXTANT", "CHLA")
 
-## MODIS
-write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "MODIS")
-write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "MODIS")
-write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "MODIS")
-write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "MODIS")
+# NB: The ODATIS-MR extractions are now made on the expert data, which are housed on Rspro2
+# Therefore the following code is not run on the local machine, but on Rspro2, 
+# and the resulting files are then transferred to the local machine for validation analyses
 
-## MERIS
-write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "MERIS")
-write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "MERIS")
-write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "MERIS")
-write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "MERIS")
-
-## OLCI-A
-write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "OLCI-A")
-write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "OLCI-A")
-write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "OLCI-A")
-write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "OLCI-A")
-
-## OLCI-B
-write_pixels(filter(zone_sites, zone == "BAY_OF_SEINE"), "OLCI-B")
-write_pixels(filter(zone_sites, zone == "SOUTHERN_BRITTANY"), "OLCI-B")
-write_pixels(filter(zone_sites, zone == "BAY_OF_BISCAY"), "OLCI-B")
-write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "OLCI-B")
+# MODIS
+# MERIS
+# OLCI-A
+# OLCI-B
 
 
 # Extract satellite data --------------------------------------------------
@@ -261,33 +249,14 @@ write_pixels(filter(zone_sites, zone == "GULF_OF_LION"), "OLCI-B")
 # SEXTANT
 extract_pixels_all("SEXTANT")
 
+# NB: The ODATIS-MR extractions are now made on the expert data, which are housed on Rspro2
+# Therefore the following code is not run on the local machine, but on Rspro2, 
+# and the resulting files are then transferred to the local machine for validation analyses
+
 # MODIS
-# TODO: This can be optimized with a map or walk function
-# But it isn't bad to have more control over the process...
-# Though, one could walk through this entire section, all sensors and zones, in one function call...
-# Could also use m_ply()
-extract_pixels_all("MODIS", "BAY_OF_SEINE"); gc()
-extract_pixels_all("MODIS", "SOUTHERN_BRITTANY"); gc()
-extract_pixels_all("MODIS", "BAY_OF_BISCAY"); gc()
-extract_pixels_all("MODIS", "GULF_OF_LION"); gc()
-
 # MERIS
-extract_pixels_all("MERIS", "BAY_OF_SEINE"); gc()
-extract_pixels_all("MERIS", "SOUTHERN_BRITTANY"); gc()
-extract_pixels_all("MERIS", "BAY_OF_BISCAY"); gc()
-extract_pixels_all("MERIS", "GULF_OF_LION"); gc()
-
 # OLCI-A
-extract_pixels_all("OLCI-A", "BAY_OF_SEINE"); gc()
-extract_pixels_all("OLCI-A", "SOUTHERN_BRITTANY"); gc()
-extract_pixels_all("OLCI-A", "BAY_OF_BISCAY"); gc()
-extract_pixels_all("OLCI-A", "GULF_OF_LION"); gc()
-
 # OLCI-B
-extract_pixels_all("OLCI-B", "BAY_OF_SEINE"); gc()
-extract_pixels_all("OLCI-B", "SOUTHERN_BRITTANY"); gc()
-extract_pixels_all("OLCI-B", "BAY_OF_BISCAY"); gc()
-extract_pixels_all("OLCI-B", "GULF_OF_LION"); gc()
 
 
 # Validation stats + figures  --------------------------------------------

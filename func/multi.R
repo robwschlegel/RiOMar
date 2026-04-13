@@ -1360,6 +1360,11 @@ ggplot(df_combined, aes(x = Time, y = Signal, color = Type)) +
   theme(legend.position = "none")
 
 
+# RegimeChange example ---------------------------------------------------
+
+# https://cran.r-project.org/web/packages/RegimeChange/index.html
+
+
 # BEAST example -----------------------------------------------------------
 
 library(Rbeast)
