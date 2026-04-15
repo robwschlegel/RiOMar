@@ -88,6 +88,11 @@ get_pixels <- function(target_site, sat_grid, sat_rast, n_pixels, dist_range = 1
   
   # Get the pixel IDs and exit
   pixel_coords$cell_numbers <- as.integer(raster::cellFromXY(sat_rast, xy = pixel_coords))
+
+  # Clean up and exit
+  pixel_coords <- pixel_coords |> 
+    mutate(zone = target_site$zone, source = target_site$source, site = target_site$site) |> 
+    dplyr::select(zone, source, site, lon, lat, dist, cell_numbers)
   return(pixel_coords)
 }
 
@@ -299,7 +304,8 @@ process_pixels <- function(sat_name, var_name){
         summarise(median = median(value, na.rm = TRUE), 
                   mean = mean(value, na.rm = TRUE),
                   sd = sd(value, na.rm = TRUE),
-                  n = n(), .by = c("zone", "source", "site", "date", "variable"))
+                  n = n(), 
+                  .by = c("zone", "source", "site", "date", "variable"))
       data.table::fwrite(zone_median_all, file_name_median_all)
       rm(zone_median_all); gc()
     }
@@ -326,7 +332,8 @@ process_pixels <- function(sat_name, var_name){
         summarise(median = median(value, na.rm = TRUE), 
                   mean = mean(value, na.rm = TRUE),
                   sd = sd(value, na.rm = TRUE),
-                  n = n(), .by = c("zone", "source", "site", "date", "variable"))
+                  n = n(), 
+                  .by = c("zone", "source", "site", "date", "variable"))
       data.table::fwrite(zone_median_small, file_name_median_small)
       rm(zone_median_small); gc()
     }
@@ -1068,7 +1075,10 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
   # Split the variable names
   var_name_is <- str_split(var_name, "_")[[1]][1]
   var_name_sat <- str_split(var_name, "_")[[1]][2]
-  
+  cor_name <- str_split(var_name, "_")[[1]][3]
+  proc_name <- str_split(var_name, "_")[[1]][4]
+  grid_name <- str_split(var_name, "_")[[1]][5]
+
   # Get axis labels
   plot_meta_is <- var_labels(var_name_is)
   plot_meta_sat <- var_labels(var_name_sat)
@@ -1080,7 +1090,10 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
   # Subset datasets for chosen variable
   match_up_df_var <- match_up_df |> 
     filter(variable == var_name_is,
-           variable_sat == var_name_sat) |> 
+           variable_sat == var_name_sat,
+           correction == cor_name,
+           processing == proc_name,
+          grid_size == grid_name) |> 
     mutate(zone_pretty = factor(zone,
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                                 labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")))
@@ -1092,18 +1105,21 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
   colour_values <- colours_of_stations()
   
   # Get stats to plot
-  if(var_name_sat == 'SST'){
+  if(var_name_sat %in% c("SST", "SST-NIGHT")){
     Error_value <- match_up_stats_var$Error
     Bias_value <- match_up_stats_var$Bias
     Slope_value <- match_up_stats_var$Slope
+    # R2_value <- match_up_stats_var$r2 # Not currently calculated
   } else {
     Error_value <- match_up_stats_var$Error
     Bias_value <- match_up_stats_var$Bias
     Slope_value <- match_up_stats_var$Slope_log
+    # R2_value <- match_up_stats_var$r2_log # Not currently calculated
   }
   
   # Create title and subtitle
   plot_title = paste(sat_name, var_name_sat, "vs.", "in situ", var_name_is)
+  plot_subtitle = paste("Correction:", cor_name, "| Processing:", proc_name, "| Grid size:", grid_name)
   
   # Create the plot
   scatterplot <- ggplot(data = match_up_df_var, aes(x = value_in_situ, y = value_satellite)) + 
@@ -1127,17 +1143,17 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
     
     annotate(geom = 'text', x = plot_meta_is$axis_limits[1], y = plot_meta_sat$axis_limits[2], 
              hjust = 0, vjust = 1, color = "black", size = 12.5,
-             # label = paste('Error = ', round(ifelse(Error_value |> is.numeric(), Error_value, NA), 1), "%\n",
-             #               'Bias = ', round(ifelse(Bias_value |> is.numeric(), Bias_value, NA), 1), " %\n",
-             #               # TODO: Change this to show Slope_log or Slope depending on the variable tested (e.g. SST or not)
-             #               # 'R²_log = ', round(statistics_values$r2_log, 2),"\n",
-             #               'Slope = ', round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
-             #               'n = ', nrow(match_up_df_var), sep = "")) +
-             label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
-                           # 'R² = ', round(statistics_values$r2_log, 2),"\n",
-                           "n = ", nrow(match_up_df_var), sep = "")) +
+             label = paste('Error = ', round(ifelse(Error_value |> is.numeric(), Error_value, NA), 1), "%\n",
+                           'Bias = ', round(ifelse(Bias_value |> is.numeric(), Bias_value, NA), 1), " %\n",
+                           # TODO: Change this to show Slope_log or Slope depending on the variable tested (e.g. SST or not)
+                          #  'R²_log = ', round(R2_value, 2),"\n", # Not currently calculated
+                           'Slope = ', round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
+                           'n = ', nrow(match_up_df_var), sep = "")) +
+            #  label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
+            #                # 'R² = ', round(statistics_values$r2_log, 2),"\n",
+            #                "n = ", nrow(match_up_df_var), sep = "")) +
     
-    labs(title = plot_title) +
+    labs(title = plot_title, subtitle = plot_subtitle) +
     
     scale_color_manual(name = "zone", values = colour_values, drop = FALSE) +
     
@@ -1156,7 +1172,7 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
           legend.position = c(0.8, 0.2),
           legend.text = element_text(size = 30),
           legend.margin = margin(5, 10, 5, 5),
-          plot.subtitle = element_text(hjust = 0.5, color = "black", face = "bold.italic"),
+          plot.subtitle = element_text(size = 20, hjust = 0.5, color = "black", face = "bold.italic"),
           plot.title = element_text(color = plot_meta_is$var_colour, face = "bold", size = 35))
   # scatterplot
   
@@ -1186,7 +1202,7 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
     geom_col(aes(y = n), fill = "white", colour = plot_meta_is$var_colour, linewidth = 1.5) + 
     scale_x_continuous(breaks = seq(1998, 2025, by = 3), name = "", labels = function(x) substring(x, 3, 4)) +
     scale_y_continuous(expand = c(0,0), name = "n per year") +
-    labs(title = plot_title) +
+    labs(title = plot_title, subtitle = plot_subtitle) +
     ggplot_theme() +
     theme(plot.title = element_text(color = plot_meta_is$var_colour, face = "bold", size = 35))
   # bar_plot_freq_per_year
@@ -1202,7 +1218,7 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
     scale_x_continuous(breaks = 1:12, name = "", labels = function(x) month.abb[x]) +
     scale_y_continuous(expand = c(0,0), name = "n per month") +
     coord_cartesian(xlim = c(1,12)) +
-    labs(title = plot_title) +
+    labs(title = plot_title, subtitle = plot_subtitle) +
     ggplot_theme() +
     theme(plot.title = element_text(color = plot_meta_is$var_colour, face = "bold", size = 35))
   # bar_plot_freq_per_month
@@ -1243,7 +1259,7 @@ validate_sensor <- function(sat_name, median_base){
     filter(n >= pixel_n_cut, cv <= 0.20) |> 
     # Complete all dates
     complete(date = seq(min(date), max(date), by = "day"), fill = list(median = NA), 
-             nesting(zone, source, site, variable))
+             nesting(zone, source, site, variable))    
   
   # Make variable name conversions as necessary
   if(sat_name == "SEXTANT"){
@@ -1256,8 +1272,11 @@ validate_sensor <- function(sat_name, median_base){
       mutate(variable_is = variable) |> 
       mutate(variable = case_when(variable == "CHLA" ~ "CHL",
                                   variable == "TUR" ~ "SPM",
-                                  TRUE ~ variable))
-
+                                  TRUE ~ variable)) |> 
+      mutate(correction = "Standard",
+             processing = "OC5",
+             grid_size = case_when(median_base == "small" ~ "1x1",
+                                   median_base == "all" ~ "3x3"))
   } else {
     zone_median <- zone_median |> 
       mutate(variable_is = case_when(variable == "CHL" ~ "CHLA",
@@ -1292,27 +1311,28 @@ validate_sensor <- function(sat_name, median_base){
     mutate(date = floor_date(date, unit = "month")) |> 
     summarise(value_in_situ = mean(value_in_situ, na.rm = TRUE),
               value_satellite = mean(value_satellite, na.rm = TRUE),
-              .by = c("zone", "zone_pretty", "source", "season", "date", "variable", "variable_sat"))
+              .by = c("correction", "processing", "grid_size", "zone", "zone_pretty", "source", "season", "date", "variable", "variable_sat"))
   
   # Calculate linear model stats to look at change over time
   zone_in_situ_monthly_lm <- zone_all_in_situ_monthly |> 
     filter(value_in_situ > 0) |> 
-    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+    group_by(correction, processing, grid_size, zone, zone_pretty, source, variable, variable_sat) |> 
     do(broom::tidy(lm(value_in_situ ~ date, data = .))) |> 
     filter(term == "date") |> 
     dplyr::rename(slope_is = estimate, p_is = p.value) |> 
-    dplyr::select(zone:variable_sat, slope_is, p_is)
+    dplyr::select(correction:variable_sat, slope_is, p_is)
   zone_sat_monthly_lm <- zone_all_in_situ_monthly |> 
     filter(value_satellite > 0) |> 
-    group_by(zone, zone_pretty, source, variable, variable_sat) |> 
+    group_by(correction, processing, grid_size, zone, zone_pretty, source, variable, variable_sat) |> 
     do(broom::tidy(lm(value_satellite ~ date, data = .))) |> 
     filter(term == "date") |> 
     dplyr::rename(slope_sat = estimate, p_sat = p.value) |> 
-    dplyr::select(zone:variable_sat, slope_sat, p_sat)
+    dplyr::select(correction:variable_sat, slope_sat, p_sat)
   
   # Combine results
   zone_all_monthly_lm <- left_join(zone_in_situ_monthly_lm, zone_sat_monthly_lm,
-                                   by = join_by(zone, zone_pretty, source, variable, variable_sat)) |> 
+                                   by = join_by(correction, processing, grid_size, zone, zone_pretty, 
+                                                source, variable, variable_sat)) |> 
     # Convert to values / year
     mutate(slope_is = slope_is*365.25, slope_sat = slope_sat*365.25)
   
@@ -1336,51 +1356,63 @@ validate_sensor <- function(sat_name, median_base){
   # TODO: Think of a way to optimise this
   # Stats for all groups together by variable
   zone_in_situ_stats_01 <- zone_all_in_situ |> mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all groups together by variable and season
   zone_in_situ_stats_02 <- zone_all_in_situ |> mutate(zone = "GLOBAL", source = "ALL", site = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all zones by variable
   zone_in_situ_stats_03 <- zone_all_in_situ |> mutate(source = "ALL", site = "ALL", season = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all zones by variable and season
   zone_in_situ_stats_04 <- zone_all_in_situ |> mutate(source = "ALL", site = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all sources by variable
   zone_in_situ_stats_05 <- zone_all_in_situ |> mutate(zone = "GLOBAL", site = "ALL", season = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all sources by variable and season
   zone_in_situ_stats_06 <- zone_all_in_situ |> mutate(zone = "GLOBAL", site = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all zones and sources by variable
   zone_in_situ_stats_07 <- zone_all_in_situ |> mutate(site = "ALL", season = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all zones and sources by variable and season
   zone_in_situ_stats_08 <- zone_all_in_situ |> mutate(site = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all sites by variable
   zone_in_situ_stats_09 <- zone_all_in_situ |> mutate(site = "ALL", season = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for all sites by variable and season
   zone_in_situ_stats_10 <- zone_all_in_situ |> mutate(site = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for each site by variable
   zone_in_situ_stats_11 <- zone_all_in_situ |> mutate(season = "ALL") |> 
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Stats for each site by variable and season
   zone_in_situ_stats_12 <- zone_all_in_situ |>
-    summarise(compute_stats(value_in_situ, value_satellite), .by = c("zone", "source", "site", "season", "variable", "variable_sat"))
+    summarise(compute_stats(value_in_situ, value_satellite), 
+      .by = c("correction", "processing", "grid_size", "zone", "source", "site", "season", "variable", "variable_sat"))
   
   # Bind all together
   zone_all_in_situ_stats <- bind_rows(zone_in_situ_stats_01, zone_in_situ_stats_02, zone_in_situ_stats_03,
@@ -1397,7 +1429,11 @@ validate_sensor <- function(sat_name, median_base){
      zone_in_situ_stats_10, zone_in_situ_stats_11, zone_in_situ_stats_12); gc()
   
   # Run all of the plots per variable pairing
-  zone_all_in_situ_stats$variabl_combi <- paste0(zone_all_in_situ_stats$variable,"_",zone_all_in_situ_stats$variable_sat)
+  zone_all_in_situ_stats$variabl_combi <- paste0(zone_all_in_situ_stats$variable,"_",
+                                                 zone_all_in_situ_stats$variable_sat, "_",
+                                                 zone_all_in_situ_stats$correction, "_",
+                                                 zone_all_in_situ_stats$processing, "_",
+                                                 zone_all_in_situ_stats$grid_size)
   plyr::l_ply(unique(zone_all_in_situ_stats$variabl_combi), validation_plots, .parallel = TRUE,
                      sat_name = sat_name, median_base = median_base,
                      match_up_df = zone_all_in_situ, match_up_stats = zone_all_in_situ_stats)
