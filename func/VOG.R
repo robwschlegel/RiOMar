@@ -18,28 +18,78 @@ library(furrr)
 # Functions --------------------------------------------------------------
 
 # Helper to extract data for a given shapefile from a given .csv file
-# file_name = panache_files[1]; polygon_sf = VOG_shape
+# file_name = panache_files[1025]; polygon_sf = VOG_shape
 extract_csv <- function(file_name, polygon_sf){
 
   # Read and convert .csv file
-  df_sf <- st_as_sf(read_csv(file_name, show_col_types = FALSE), 
-                    coords = c("lon", "lat"), crs = 4326)
+  df_csv <- read_csv(file_name, show_col_types = FALSE)
+  df_sf <- st_as_sf(df_csv, coords = c("lon", "lat"), crs = 4326)
+  # df_union <- st_union(df_sf)
+  # df_poly <- st_polygonize(st_cast(df_union, "MULTILINESTRING"))
+  # df_poly <- st_polygonize(df_union)
+  # df_poly <- concaveman::concaveman(df_union)
+  # df_poly <- sf::st_sf(geometry = df_poly)
   
-  # Subset points within the polygon
-  df_within <- data.frame()
-  for(i in 1:nrow(polygon_sf)){
-    df_within_sub <- df_sf[st_within(df_sf, polygon_sf[i,], sparse = FALSE), ]
-    df_within_sub$Name <- polygon_sf$Name[i]
-    df_within <- rbind(df_within, df_within_sub)
-  }
+  # Get date and create corresponding SEXTANT file name
+  file_date <- as.Date(basename(file_name))
+  file_date_flat <- format(file_date, "%Y%m%d")
+  file_date_day <- format(file_date, "%d")
+  file_date_month <- format(file_date, "%m")
+  file_date_year <- format(file_date, "%Y")
+  sextant_file <- paste0("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/",
+                         file_date_year, "/", file_date_month, "/", file_date_day, "/", 
+                         file_date_flat, "-EUR-L4-SPIM-ATL-v01-fv01-OI.nc")
+  
+  # Then get the data from the corresponding day of SEXTANT data
+  if(file.exists(sextant_file)){
 
-  # Convert back to data.frame
-  df_res <- df_within |> 
-    mutate(lon = st_coordinates(df_within)[, 1],
-           lat = st_coordinates(df_within)[, 2],
-           date = as.Date(basename(file_name))) |> 
-    st_drop_geometry() |> 
-    dplyr::select(Name, date, lon, lat, mask)
+    # Load daa roughly to shape of .csv file
+    sextant_data <- tidync::tidync(sextant_file) |> 
+      tidync::hyper_filter(lon = between(lon, range(df_csv$lon)[1]-0.05, range(df_csv$lon)[2]+0.05),
+                           lat = between(lat, range(df_csv$lat)[1]-0.05, range(df_csv$lat)[2]+0.05)) |>
+      tidync::hyper_tibble() |> 
+      dplyr::select(lon, lat, spm = analysed_spim) |> 
+      mutate(lon = round(as.numeric(lon) / 0.005) * 0.005, 
+             lat = round(as.numeric(lat), 2),
+             spm = round(spm, 2))
+
+    # Convert to sf
+    sextant_sf <- st_as_sf(sextant_data, coords = c("lon", "lat"), crs = 4326)
+
+    # Subset points within the polygon
+    df_within <- data.frame()
+    for(i in 1:nrow(polygon_sf)){
+      df_within_sub <- sextant_sf[st_within(sextant_sf, polygon_sf[i,], sparse = FALSE), ]
+      df_within_sub$Name <- polygon_sf$Name[i]
+      df_within <- rbind(df_within, df_within_sub)
+    }
+    
+    # Convert back to data.frame
+    df_within_flat <- df_within |> 
+      mutate(lon = st_coordinates(df_within)[, 1],
+             lat = st_coordinates(df_within)[, 2],
+             date = as.Date(basename(file_name))) |> 
+      st_drop_geometry() |> 
+      dplyr::select(Name, date, lon, lat, spm)
+
+    # Join rows where lat AND lon are within ±0.01 degrees (~1km)
+    df_res <- fuzzyjoin::geo_join(
+        df_within_flat, df_csv,
+        by = c("lat", "lon"),
+        max_dist = 1,
+        method = "haversine" ) |> 
+      filter(mask == TRUE) |> 
+      dplyr::select(Name, date, lon = lon.x, lat = lat.x, spm)
+    
+  } else {
+
+    # Or return empty data.frame with zone names and date if no SEXTANT file
+    df_res <- data.frame()
+    for(i in 1:nrow(polygon_sf)){
+      df_res_sub <- data.frame(Name = polygon_sf$Name, date = file_date, lon = NA, lat = NA, spm = NA)
+      df_res <- rbind(df_res, df_res_sub)
+    }
+  }
   return(df_res)
 }
 
@@ -82,12 +132,15 @@ plan(sequential)
 # Test visuals -----------------------------------------------------------
 
 ggplot() +
+  # Pixels from the VOG shape output showing SPM values
+  geom_raster(data = filter(pixel_ts_VOG_zones, date == "1999-01-01"),
+              aes(x = lon, y = lat, fill = spm)) +
   # Pixels from the VOG shape output
-  geom_raster(data = filter(pixel_ts_VOG_shape, date == "1998-01-01"),
-              aes(x = lon, y = lat), fill = "blue") +
+  # geom_raster(data = filter(pixel_ts_VOG_shape, date == "1999-01-01"),
+  #             aes(x = lon, y = lat), colour = "blue") +
   # Pixels from the VOG zones output
-  geom_raster(data = filter(pixel_ts_VOG_zones, date == "1998-01-01"),
-            aes(x = lon, y = lat), fill = "green") +
+  # geom_raster(data = filter(pixel_ts_VOG_zones, date == "1999-01-01"),
+  #           aes(x = lon, y = lat), colour = "green") +
   # VOG shape
   geom_sf(data = VOG_shape, fill  = NA, colour = "black", linewidth = 0.8) +
   # VOG zones
@@ -98,7 +151,7 @@ ggplot() +
     ylim = st_bbox(VOG_shape$geometry)[c("ymin", "ymax")],
     expand = TRUE) +
   # Pretty
-  labs(title = "VOG rasters plus extracted data", fill  = "Mask",
+  labs(title = "VOG rasters plus extracted data", fill  = "SPM",
        x = NULL, y = NULL) + 
   theme_minimal()
 
