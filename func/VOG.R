@@ -24,11 +24,6 @@ extract_csv <- function(file_name, polygon_sf){
   # Read and convert .csv file
   df_csv <- read_csv(file_name, show_col_types = FALSE)
   df_sf <- st_as_sf(df_csv, coords = c("lon", "lat"), crs = 4326)
-  # df_union <- st_union(df_sf)
-  # df_poly <- st_polygonize(st_cast(df_union, "MULTILINESTRING"))
-  # df_poly <- st_polygonize(df_union)
-  # df_poly <- concaveman::concaveman(df_union)
-  # df_poly <- sf::st_sf(geometry = df_poly)
   
   # Get date and create corresponding SEXTANT file name
   file_date <- as.Date(basename(file_name))
@@ -65,21 +60,12 @@ extract_csv <- function(file_name, polygon_sf){
     }
     
     # Convert back to data.frame
-    df_within_flat <- df_within |> 
+    df_res <- df_within |> 
       mutate(lon = st_coordinates(df_within)[, 1],
              lat = st_coordinates(df_within)[, 2],
              date = as.Date(basename(file_name))) |> 
       st_drop_geometry() |> 
       dplyr::select(Name, date, lon, lat, spm)
-
-    # Join rows where lat AND lon are within ±0.01 degrees (~1km)
-    df_res <- fuzzyjoin::geo_join(
-        df_within_flat, df_csv,
-        by = c("lat", "lon"),
-        max_dist = 1,
-        method = "haversine" ) |> 
-      filter(mask == TRUE) |> 
-      dplyr::select(Name, date, lon = lon.x, lat = lat.x, spm)
     
   } else {
 
@@ -131,9 +117,12 @@ plan(sequential)
 
 # Test visuals -----------------------------------------------------------
 
+pixel_ts_VOG_shape <- read_csv("data/VOG_shapes/pixel_ts_VOG_shape.csv")
+pixel_ts_VOG_zones <- read_csv("data/VOG_shapes/pixel_ts_VOG_zones.csv")
+
 ggplot() +
   # Pixels from the VOG shape output showing SPM values
-  geom_raster(data = filter(pixel_ts_VOG_zones, date == "1999-01-01"),
+  geom_raster(data = filter(pixel_ts_VOG_shape, date == "2000-10-26"),
               aes(x = lon, y = lat, fill = spm)) +
   # Pixels from the VOG shape output
   # geom_raster(data = filter(pixel_ts_VOG_shape, date == "1999-01-01"),
