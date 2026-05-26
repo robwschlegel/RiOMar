@@ -18,7 +18,7 @@ library(scales) # For better plot labels
 library(ggExtra) # For histogram border plots
 library(gt) # For fancy tables
 library(geosphere) # For pixel distances
-library(doParallel); registerDoParallel(cores = detectCores()-6)
+# library(doParallel); registerDoParallel(cores = detectCores()-6)
 
 # The shared functions
 source("func/util.R")
@@ -26,7 +26,7 @@ source("func/util.R")
 
 # Satellite times ---------------------------------------------------------
 
-# Get all L3 satellite daily start and end times when overhead France
+# Get all satellite daily start and end times when overhead France
 # This could be used to correctly filter the in situ data by time when possible
 ## SEXTANT
 ### NB: Handled differently because the values are always the same and downloading all files takes an hour...
@@ -57,7 +57,7 @@ times_MODIS_SST <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODAT
 save(times_MODIS_SST, file = "metadata/times_MODIS_SST.RData")
 load("metadata/times_MODIS_SST.RData")
 
-# ## MERIS
+## MERIS
 times_MERIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
 save(times_MERIS, file = "metadata/times_MERIS.RData")
@@ -247,6 +247,7 @@ write_pixel_coords("SEXTANT", "CHLA")
 # Extract satellite data --------------------------------------------------
 
 # SEXTANT
+## Roughly 1 hour per variable
 extract_pixels_all("SEXTANT")
 
 # NB: The ODATIS-MR extractions are now made on the expert data, which are housed on Rspro2

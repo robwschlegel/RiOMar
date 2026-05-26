@@ -70,7 +70,7 @@ get_sat_grid <- function(file_name){
 }
 
 # Create indexes of which pixels match the 1 km range grid around the in situ sites
-# target_site = zone_site_df[10,]; dist_range = 1; sat_rast = rast_sat
+# target_site = zone_site_df[10,]; n_pixels = 9; dist_range = 1; sat_rast = rast_sat
 # rm(site_sp, site_buffer, cropped_rast, pixel_coords)
 get_pixels <- function(target_site, sat_grid, sat_rast, n_pixels, dist_range = 1){
   
@@ -132,6 +132,9 @@ write_pixel_coords <- function(sat_name, var_name_full){
       sat_var <- paste0(var_name_full,"_mean")
   }
   
+  # Get number of pixels to extract based on product type
+  n_pixels <- ifelse(sat_name == "SEXTANT", 9, 49)
+
   # Get the grid and raster bases
   grid_sat <- get_sat_grid(nc_file_base)
   rast_sat <- raster::raster(nc_file_base, varname = sat_var)
@@ -141,7 +144,7 @@ write_pixel_coords <- function(sat_name, var_name_full){
   zone_pixels <- future_map_dfr(1:nrow(zone_sites),
                                 function(i) get_pixels(target_site = zone_sites[i,], 
                                                        sat_grid = grid_sat, sat_rast = rast_sat, 
-                                                       dist_range = 1),
+                                                       n_pixels = n_pixels, dist_range = 1),
                                 .options = furrr_options(seed = TRUE))
   plan(sequential)
   
@@ -263,7 +266,12 @@ process_pixels <- function(sat_name, var_name){
     var_name_file <- var_name
   }
   files_var <- dir(files_path, recursive = TRUE, full.names = TRUE, pattern = var_name_file)
-  
+
+  # Filter out .png files from SEXTANT folders
+  if(sat_name == "SEXTANT"){
+    files_var <- files_var[!grepl(".png", files_var)]
+  }
+
   # Extract data for all files and save
   if(length(files_var) > 0){
 
@@ -275,9 +283,9 @@ process_pixels <- function(sat_name, var_name){
       message("Started ",var_name," extraction at : ", Sys.time())
       zone_pixels <- read_csv(paste0("metadata/zone_pixels_",file_stub,".csv"), show_col_types = FALSE)
 
-      plan(multisession, workers = parallel::detectCores() - 6)
+      plan(multisession, workers = parallel::detectCores() - 2)
       zone_data_var <- future_map_dfr(files_var, extract_pixels, df = zone_pixels,
-                                  .options = furrr_options(seed = TRUE))
+                                      .options = furrr_options(seed = TRUE))
       
       # Save results
       message("Saving ",var_name," extraction at : ", Sys.time())
@@ -644,7 +652,7 @@ plume_clim_calc <- function(zone){
       zoo::na.trim() |> 
       mutate(zone = zone, .before = "date")
   )
-  df_clim <- ts2clm(df_plume, x = date, y = plume_area, climatologyPeriod = c(min(df_plume$date), max(df_plume$date))) |> 
+  df_clim <- heatwaveR::ts2clm(df_plume, x = date, y = plume_area, climatologyPeriod = c(min(df_plume$date), max(df_plume$date))) |> 
     dplyr::select(zone, date, doy, plume_area, seas, thresh) |> 
     dplyr::rename(plume_seas = seas, plume_thresh = thresh)
 }
@@ -889,7 +897,7 @@ comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label
 comparison_plot_save <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2, file_stub){
   comp_list <- plyr::dlply(df, c("zone"), comparison_plot, var_1 = var_1, var_2 = var_2, 
                            colour_1 = colour_1, colour_2 = colour_2, label_1 = label_1, label_2 = label_2)
-  comp_fig <- comp_list[[2]] + comp_list[[4]] + comp_list[[1]] + comp_list[[3]] + plot_layout(ncol = 1, axes = "collect")
+  comp_fig <- comp_list[[2]] + comp_list[[4]] + comp_list[[1]] + comp_list[[3]] + patchwork::plot_layout(ncol = 1, axes = "collect")
   ggsave(filename = paste0("figures/",file_stub,".png"), plot = comp_fig, width = 24, height = 24, dpi = 300)
 }
 
@@ -1146,7 +1154,7 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
              label = paste('Error = ', round(ifelse(Error_value |> is.numeric(), Error_value, NA), 1), "%\n",
                            'Bias = ', round(ifelse(Bias_value |> is.numeric(), Bias_value, NA), 1), " %\n",
                            # TODO: Change this to show Slope_log or Slope depending on the variable tested (e.g. SST or not)
-                          #  'R²_log = ', round(R2_value, 2),"\n", # Not currently calculated
+                           # 'R²_log = ', round(R2_value, 2),"\n", # Not currently calculated
                            'Slope = ', round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
                            'n = ', nrow(match_up_df_var), sep = "")) +
             #  label = paste("Slope = ", round(ifelse(Slope_value |> is.numeric(), Slope_value, NA), 2),"\n",
@@ -1228,7 +1236,7 @@ validation_plots <- function(var_name, sat_name, median_base, match_up_df, match
 }
 
 # Run all validation stats and produce the plots
-# sat_name = "SEXTANT"; median_base = "small"
+# sat_name = "SEXTANT"; median_base = "all"
 # sat_name = "MODIS"; median_base = "all"
 # sat_name = "OLCI-A"; median_base = "all"
 validate_sensor <- function(sat_name, median_base){
@@ -1254,7 +1262,7 @@ validate_sensor <- function(sat_name, median_base){
   sat_files <- sat_files[grepl(paste0("_",median_base), sat_files)]
   zone_median <- map_dfr(sat_files, data.table::fread) |> mutate(date = as.Date(date)) |> 
     # Remove all rows that are below the pixel cutoff and CV cutoff of 20%
-    mutate(sd = case_when(n == 1 ~ 0, TRUE ~ sd), # Necessary for CV for 1 pixel count matchups for SEXTANT 'small'
+    mutate(sd = case_when(n <= 2 ~ 0, TRUE ~ sd), # Necessary for CV for 1 pixel count matchups for SEXTANT 'small'
            cv = sd / median) |> 
     filter(n >= pixel_n_cut, cv <= 0.20) |> 
     # Complete all dates
@@ -1277,17 +1285,26 @@ validate_sensor <- function(sat_name, median_base){
              processing = "OC5",
              grid_size = case_when(median_base == "small" ~ "1x1",
                                    median_base == "all" ~ "3x3"))
+    rm(zone_median_tur); gc()
   } else {
     zone_median <- zone_median |> 
-      mutate(variable_is = case_when(variable == "CHL" ~ "CHLA",
-                                     variable == "CHL1" ~ "CHLA",  
-                                     variable == "SST" ~ "TEMP",
-                                     variable == "SST-NIGHT" ~ "TEMP",
-                                     variable == "T" ~ "TUR",
-                                    #  variable == "CDOM" ~ "POC", # Just to see what happens
-                                    #  variable == "NRRS555" ~ "CHLA", # Just to see what happens
-                                    #  variable == "NRRS560" ~ "CHLA", # Just to see what happens
-                                     TRUE ~ variable))
+      mutate(variable_is = case_when(grepl("CHL", variable) ~ "CHLA",
+                                     grepl("SST", variable) ~ "TEMP",
+                                     grepl("SPM", variable) ~ "SPM",
+                                     grepl("T-FNU", variable) ~ "TUR",
+                                     TRUE ~ variable)) |> 
+      mutate(correction = case_when(grepl("-AC", variable) ~ "AC",
+                                     grepl("-PO", variable) ~ "PO",
+                                     grepl("-NS", variable) ~ "NS")) |> 
+      mutate(processing = case_when(grepl("-GONS-", variable) ~ "GONS",
+                                     grepl("-OC5-", variable) ~ "OC5",
+                                     grepl("-G-", variable) ~ "G",
+                                     grepl("-R-", variable) ~ "R",
+                                     grepl("-FNU-", variable) ~ "FNU")) |> 
+      mutate(grid_size = case_when(median_base == "small" ~ "3x3",
+                                  median_base == "all" ~ "7x7")) |> 
+      # Clean up variable names for further use
+      mutate(variable = gsub("-AC|-PO|-NS|-GONS-|-OC5-|-G-|-R-|-FNU-", "", variable))
   }
   
   # Load in situ data and complete the date column
