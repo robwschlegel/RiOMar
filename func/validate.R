@@ -293,17 +293,13 @@ files_stats_all <- files_stats_area[grepl("_all", files_stats_area)]
 files_stats_small <-  files_stats_area[grepl("_small", files_stats_area)]
 
 # Basic tables
-zone_all_stats <- map_dfr(files_stats_all, read_csv) |> 
-  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
-  filter(!variable %in% c("POC"))
-zone_small_stats <- map_dfr(files_stats_small, read_csv) |> 
-  filter(!variable_sat %in% c("NRRS560", "NRRS555", "CDOM")) |> 
-  filter(!variable %in% c("POC"))
+zone_all_stats <- map_dfr(files_stats_all, read_csv, show_col_types = FALSE)
+zone_small_stats <- map_dfr(files_stats_small, read_csv, show_col_types = FALSE)
 
 # Get global stats
 zone_all_stats_global <- zone_all_stats |> 
   filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
-  filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
+  # filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
   # dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
   arrange(Error) |> 
   mutate(Error = round(Error),
@@ -311,7 +307,7 @@ zone_all_stats_global <- zone_all_stats |>
 write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_all.csv")
 zone_small_stats_global <- zone_small_stats |> 
   filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
-  filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
+  # filter(variable != "TEMP") |> # Remove this as it's not ocean colour related
   # dplyr::select(sensor, variable, variable_sat, n, Slope_log, Bias, Error) |> 
   arrange(Error) |> 
   mutate(Error = round(Error),
