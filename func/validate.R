@@ -296,6 +296,11 @@ files_stats_small <-  files_stats_area[grepl("_small", files_stats_area)]
 zone_all_stats <- map_dfr(files_stats_all, read_csv, show_col_types = FALSE)
 zone_small_stats <- map_dfr(files_stats_small, read_csv, show_col_types = FALSE)
 
+# Get just Southern Brittany stats
+zone_SB_stats <- zone_all_stats |> 
+  filter(zone == "SOUTHERN_BRITTANY")
+write_csv(files_stats_all_SB, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_all_SB.csv")
+
 # Get global stats
 zone_all_stats_global <- zone_all_stats |> 
   filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
