@@ -285,6 +285,12 @@ validate_sensor("OLCI-B", "small")
 
 # Validation tables -------------------------------------------------------
 
+# Load in situ site list
+in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
+
+# Filter in situ stations to just those within a zone
+zone_sites <- in_situ_site_list |> filter(!is.na(zone))
+
 # Get stats files
 files_stats <- dir("output/MATCH_UP_DATA/FRANCE/STATISTICS", pattern = "_stats_", full.names = TRUE)
 files_stats_lm <- files_stats[grepl("_lm_", files_stats)]
@@ -299,7 +305,14 @@ zone_small_stats <- map_dfr(files_stats_small, read_csv, show_col_types = FALSE)
 # Get just Southern Brittany stats
 zone_SB_stats <- zone_all_stats |> 
   filter(zone == "SOUTHERN_BRITTANY")
-write_csv(files_stats_all_SB, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_all_SB.csv")
+write_csv(zone_SB_stats, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_all_SB.csv")
+zone_SB_stats_global <- zone_SB_stats |> 
+  filter(source == "ALL", site == "ALL", season == "ALL") |> 
+  arrange(Error) |> 
+  dplyr::select(zone, sensor, correction, processing, grid_size, source, site, season, variable, variable_sat, n, Slope, Slope_log, Bias, Error, MAPE, MSA, RMSE)
+write_csv(zone_SB_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_SB.csv")
+zone_SB_sites <- zone_sites |> filter(zone == "SOUTHERN_BRITTANY")
+write_csv(zone_SB_sites, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_sites_SB.csv")
 
 # Get global stats
 zone_all_stats_global <- zone_all_stats |> 
