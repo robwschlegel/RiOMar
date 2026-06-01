@@ -1479,7 +1479,8 @@ validation_tables <- function(file_path, sat_name) {
   
   # Load all output stats
   # TODO: Clean up zone names and order by latitude
-  stat_files <- map_dfr(dir(file_path, pattern = sat_name, full.names = TRUE), read_csv) |> 
+  stat_files <- map_dfr(dir(file_path, pattern = paste0(sat_name,"_stats_all"), full.names = TRUE), read_csv) |> 
+    filter(zone != "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |> 
     dplyr::select(zone, Bias, Error, n, variable) |> 
     mutate_at(vars(-zone, -variable), ~ round(., 1)) |> 
     mutate(var_label = paste("When compared with in situ", ifelse(variable == 'TUR', 'TURB', variable))) |>
