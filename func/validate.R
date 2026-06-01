@@ -18,7 +18,7 @@ library(scales) # For better plot labels
 library(ggExtra) # For histogram border plots
 library(gt) # For fancy tables
 library(geosphere) # For pixel distances
-# library(doParallel); registerDoParallel(cores = detectCores()-6)
+# library(doParallel); registerDoParallel(cores = detectCores()-6) # NB: Trying to move away from this
 
 # The shared functions
 source("func/util.R")
@@ -39,39 +39,46 @@ times_SEXTANT <- data.frame(date_start = ymd(unlist(lapply(str_split(basename(di
 save(times_SEXTANT, file = "metadata/times_SEXTANT.RData")
 load("metadata/times_SEXTANT.RData")
 
+# Set cores for following calculations
+plan(multicore, workers = parallel::detectCores() - 2)
+
 ## MODIS
-times_MODIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
-                               pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+times_MODIS <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
+                               pattern = "SPM", full.names = TRUE), get_start_end_time)
 save(times_MODIS, file = "metadata/times_MODIS.RData")
 load("metadata/times_MODIS.RData")
 
 ### Double check that times are the same for any region
 # Yes, start and end times are exactly the same
-times_MODIS_check <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", pattern = "SPM", full.names = TRUE),
-                                 get_start_end_time, .parallel = TRUE)
+times_MODIS_check <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", 
+                                     pattern = "SPM", full.names = TRUE), get_start_end_time)
 times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |>
   mutate(start_diff = start_time...1 - start_time...3, end_diff = end_time...2 - end_time...4)
-### SST are night time
-times_MODIS_SST <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
-                               pattern = "SST", full.names = TRUE), get_start_end_time, .parallel = TRUE)
-save(times_MODIS_SST, file = "metadata/times_MODIS_SST.RData")
+
+### SST-NIGHT are meant to have a different time
+times_MODIS_SST_NIGHT <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
+                                         pattern = "SST-NIGHT", full.names = TRUE), get_start_end_time)
+save(times_MODIS_SST_NIGHT, file = "metadata/times_MODIS_SST_NIGHT.RData")
+load("metadata/times_MODIS_SST_NIGHT.RData")
+### SST day time
+## These are calculated on rs-pro2 where the expert data are located
 load("metadata/times_MODIS_SST.RData")
 
 ## MERIS
-times_MERIS <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
-                               pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+times_MERIS <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
+                               pattern = "SPM", full.names = TRUE), get_start_end_time)
 save(times_MERIS, file = "metadata/times_MERIS.RData")
 load("metadata/times_MERIS.RData")
 
 ## OLCI-A
-times_OLCI_A <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
-                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+times_OLCI_A <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
+                                pattern = "SPM", full.names = TRUE), get_start_end_time)
 save(times_OLCI_A, file = "metadata/times_OLCI_A.RData")
 load("metadata/times_OLCI_A.RData")
 
 ## OLCI-B
-times_OLCI_B <- plyr::ldply(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
-                                pattern = "SPM", full.names = TRUE), get_start_end_time, .parallel = TRUE)
+times_OLCI_B <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
+                                pattern = "SPM", full.names = TRUE), get_start_end_time)
 save(times_OLCI_B, file = "metadata/times_OLCI_B.RData")
 load("metadata/times_OLCI_B.RData")
 
@@ -79,6 +86,7 @@ load("metadata/times_OLCI_B.RData")
 times_ALL <- bind_rows(mutate(times_SEXTANT, sat_name = "SEXTANT"),
                        mutate(times_MODIS, sat_name = "MODIS"),
                        mutate(times_MODIS_SST, sat_name = "MODIS (SST)"),
+                       mutate(times_MODIS_SST_NIGHT, sat_name = "MODIS (SST-NIGHT)"),
                        mutate(times_MERIS, sat_name = "MERIS"),
                        mutate(times_OLCI_A, sat_name = "OLCI-A"),
                        mutate(times_OLCI_B, sat_name = "OLCI-B")) |>
@@ -98,7 +106,7 @@ time_plot <- ggplot(data = times_ALL, aes(x = date, y = start_hms)) +
        title = "SEXTANT and ODATIS-MR sensor availability and overhead times") +
   theme_bw()
 # time_plot
-ggsave("figures/all_sensors_time.png", width = 8, height = 4)
+ggsave("figures/all_sensors_time.png", time_plot, width = 8, height = 4)
 
 
 # Load in situ ------------------------------------------------------------
@@ -174,14 +182,14 @@ SOMLIT_clean <- right_join(SOMLIT, zone_sites, by = c("source", "site", "lon", "
 zone_data_in_situ <- bind_rows(REPHY_clean, SOMLIT_clean) |> 
   # Get only variables of interest
   filter(variable %in% c('TEMP', 'SAL', 'POC', 'SPM', 'CHLA', 'TUR')) |> 
-  # Create HMS filter differently for TEMP from all other variables
-  # Filter from times 10:00 to 15:00 for non-SST; 00:00 to 04:00 for TEMP
-  mutate(hms_idx = case_when(variable != "TEMP" & time >= hms("10:00:00") & time <= hms("15:00:00") ~ 1,
-                             variable == "TEMP" & time >= hms("21:00:00") | time <= hms("09:00:00") ~ 1,
-                             TRUE ~ 0)) |> 
-  filter(hms_idx == 1) |>
+  # Create additional HMS filter for night-time TEMP
+  # Filter from times 10:00 to 15:00; 00:00 to 04:00 for TEMP
+  mutate(time_class = case_when(time >= hms("10:00:00") & time <= hms("14:00:00") ~ "day",
+                                variable == "TEMP" & time >= hms("00:00:00") | time <= hms("09:00:00") ~ "night")) |> 
+  filter(time_class %in% c("day", "night")) |>
+  filter(!(variable != "TEMP" & time_class == "night")) |>
   # Create daily means
-  summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "variable")) |> 
+  summarise(value = mean(value, na.rm = TRUE), .by = c("source", "site", "lon", "lat", "date", "time_class", "variable")) |> 
   left_join(zone_sites, by = join_by(source, site, lon, lat)) |> 
   dplyr::select(zone, zone_pretty, source, everything())
 write_csv(zone_data_in_situ, "data/INSITU_data/zone_data_in_situ.csv")
@@ -194,14 +202,39 @@ write_csv(zone_data_in_situ, "data/INSITU_data/zone_data_in_situ.csv")
 if(!exists("borders_FR")) borders_FR <- read_sf("data/FRANCE_shapefile/gadm41_FRA_0.shp")
 if(!exists("rivers_FR")) rivers_FR <- st_intersection(read_sf("data/HydroRIVERS_v10_eu_shp/HydroRIVERS_v10_eu.shp"), borders_FR)
 
+# Labels for number of sites per zone
+zone_site_counts <- zone_sites |>
+  count(zone, zone_pretty, source, name = "site_count") |>
+  complete(nesting(zone, zone_pretty), source = levels(zone_sites[["source"]]), fill = list(site_count = 0)) |>
+  arrange(zone_pretty, source) |>
+  summarise(zone_label = paste0(source, " = ", site_count, collapse = "\n"),
+            .by = c("zone", "zone_pretty"))
+
 # Map all in situ stations, highlighting the zones and the stations used
-# TODO: Add text labels showing the number of REPHY and SOMLIT stations per zone
+zone_site_labels <- zone_site_counts |>
+  left_join(dplyr::select(zones_bbox, zone, lon_min, lon_max, lat_min, lat_max), by = "zone") |>
+  mutate(label_lon = case_when(zone == "GULF_OF_LION" ~ lon_min + 0.3,
+                               zone == "BAY_OF_SEINE" ~ lon_max + 0.1,
+                               zone == "BAY_OF_BISCAY" ~ lon_max + 0.5,
+                               zone == "SOUTHERN_BRITTANY" ~ lon_max + 0.5),
+         label_lat = case_when(zone == "GULF_OF_LION" ~ lat_max + 0.8,
+                               zone == "BAY_OF_SEINE" ~ lat_min,
+                               zone == "BAY_OF_BISCAY" ~ lat_min + 1.3,
+                               zone == "SOUTHERN_BRITTANY" ~ lat_min + 1))
+
 in_situ_station_map <- ggplot() +
   geom_sf(data = borders_FR, color = "black", fill = "sienna4", inherit.aes = FALSE) +
   geom_sf(data = rivers_FR, color = "lightblue", inherit.aes = FALSE, linewidth = 0.2) +
   geom_rect(data = zones_bbox, fill = NA, linewidth = 2, show.legend = FALSE,
             aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max, colour = zone_pretty)) +
-  # coord_map("moll") +
+  geom_label(data = zone_site_labels, show.legend = FALSE,
+             aes(x = label_lon, y = label_lat, label = zone_label, colour = zone_pretty),
+             hjust = 0, vjust = 1, size = 7, linewidth = 3.0,
+             fill = "white", alpha = 1, inherit.aes = FALSE) +
+  geom_label(data = zone_site_labels,
+             aes(x = label_lon, y = label_lat, label = zone_label),
+             hjust = 0, vjust = 1, size = 7, linewidth = 0.0,
+             fill = "white", alpha = 1, inherit.aes = FALSE) +
   coord_sf(xlim = c(-5, 10), ylim = c(41.5, 51)) +
   geom_point(data = in_situ_site_list,
              aes(x = lon, y = lat, shape = source), color = "black", size = 4) +
@@ -209,9 +242,6 @@ in_situ_station_map <- ggplot() +
              aes(x = lon, y = lat, shape = source), color = "red", size = 3) +
   geom_point(data = filter(in_situ_site_list, !is.na(zone)),
              aes(x = lon, y = lat, shape = source, color = zone_pretty), size = 3) +
-  # ggrepel::geom_text_repel(data =  filter(in_situ_site_list, source == "SOMLIT"), aes(x = lon, y = lat, label = site),
-  #                 color = "red", size = 5, max.overlaps = 20) +
-  # labs(title = paste(nrow(SOMLIT_stations), "SOMLIT stations"), x = NULL, y = NULL) +
   labs(x = NULL, y = NULL) +
   scale_x_continuous(labels = scales::unit_format(unit = "°E")) +
   scale_y_continuous(labels = scales::unit_format(unit = "°N")) +
@@ -301,6 +331,7 @@ files_stats_small <-  files_stats_area[grepl("_small", files_stats_area)]
 # Basic tables
 zone_all_stats <- map_dfr(files_stats_all, read_csv, show_col_types = FALSE)
 zone_small_stats <- map_dfr(files_stats_small, read_csv, show_col_types = FALSE)
+write_csv(zone_all_stats, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_all.csv")
 
 # Get just Southern Brittany stats
 zone_SB_stats <- zone_all_stats |> 

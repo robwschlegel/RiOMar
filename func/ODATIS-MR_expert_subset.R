@@ -30,19 +30,28 @@ library(raster)
 
 # Simple wrapper to extract start and end times of an ODATIS-MR file
 # file_name <- "../ODATIS-MR/MODIS/L3m_20020704__FRANCE_03_MOD_CDOM-NS_DAY_00.nc"
+# file_name <- files_MODIS_SST[1]
 get_start_end_time <- function(file_name){
   
   # Get global info
-  nc_data <- nc_open(file_name)
-  
-  # Extract dates accordingly
-  df_time <- mutate(start_time = as.POSIXct(gsub("T|Z", " ", ncatt_get(nc_data, varid = 0)[["start_time"]]), format = "%Y%m%d %H%M%S", tz = "GMT"),
-                     end_time = as.POSIXct(gsub("T|Z", " ", ncatt_get(nc_data, varid = 0)[["end_time"]]), format = "%Y%m%d %H%M%S", tz = "GMT")) |> 
-    dplyr::select(start_time, end_time)
+  tryCatch({
+    nc_data <- nc_open(file_name)
 
-  # Exit
-  nc_close(nc_data)
-  return(df_time)
+    # Get start and end dates formatted from global attributes
+    start_time <- as.POSIXct(gsub("T|Z", " ", ncatt_get(nc_data, varid = 0)[["start_time"]]), format = "%Y%m%d %H%M%S", tz = "GMT")
+    end_time <- as.POSIXct(gsub("T|Z", " ", ncatt_get(nc_data, varid = 0)[["end_time"]]), format = "%Y%m%d %H%M%S", tz = "GMT")
+  
+    # Combine into data.frame for easier handling and exit
+    df_time <- data.frame(start_time = start_time, end_time = end_time)
+
+    # Exit
+    nc_close(nc_data)
+    return(df_time)
+
+  }, error = function(e) {
+    message(file_name, " can not be opened : ",e$message)
+    return()
+  })
 }
 
 # Function to extract lon/lat subset from a netCDF file and convert to a dataframe
@@ -459,6 +468,19 @@ extract_pixels_all <- function(sat_name){
 # save(OLCIB_SPM_G_AC_sub, file = "output/OLCIB_SPM_G_AC_sub.RData")
 # save(OLCIB_SPM_R_PO_sub, file = "output/OLCIB_SPM_R_PO_sub.RData")
 # save(OLCIB_SPM_G_PO_sub, file = "output/OLCIB_SPM_G_PO_sub.RData")
+
+
+# MODIS SST overhead times -----------------------------------------------
+
+# MODIS SST files
+## NB: Specifically do not want NIGHT files
+files_MODIS_SST <- dir("../ODATIS-MR/FRANCE/MODIS", pattern = "SST", full.names = TRUE) |> 
+  stringr::str_subset("SST-PO") # Just get polymer correciton files
+plan(multicore, workers = parallel::detectCores() - 2)
+times_MODIS_SST <- future_map_dfr(files_MODIS_SST, get_start_end_time)
+plan(sequential)
+save(times_MODIS_SST, file = "metadata/times_MODIS_SST.RData")
+load("metadata/times_MODIS_SST.RData")
 
 
 # Pixels for validation --------------------------------------------------

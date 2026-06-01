@@ -1269,10 +1269,10 @@ validate_sensor <- function(sat_name, median_base){
     # Remove all rows that are below the pixel cutoff and CV cutoff of 20%
     mutate(sd = case_when(n <= 2 ~ 0, TRUE ~ sd), # Necessary for CV for 1 pixel count matchups for SEXTANT 'small'
            cv = sd / median) |> 
-    filter(n >= pixel_n_cut, cv <= 0.20) |> 
+    filter(n >= pixel_n_cut, cv <= 0.20) #|> 
     # Complete all dates
-    complete(date = seq(min(date), max(date), by = "day"), fill = list(median = NA), 
-             nesting(zone, source, site, variable))    
+    # complete(date = seq(min(date), max(date), by = "day"), fill = list(median = NA), 
+    #          nesting(zone, source, site, variable))    
   
   # Make variable name conversions as necessary
   if(sat_name == "SEXTANT"){
@@ -1315,19 +1315,22 @@ validate_sensor <- function(sat_name, median_base){
   
   # Load in situ data and complete the date column
   zone_data_in_situ <- read_csv("data/INSITU_data/zone_data_in_situ.csv", show_col_types = FALSE) |> 
-    dplyr::select(-lon, -lat) |> 
-    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA), 
-             nesting(zone, zone_pretty, source, site, variable))
+    dplyr::select(-lon, -lat) #|> 
+    # complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA), 
+    #          nesting(zone, zone_pretty, source, site, time_class, variable))
   
   # Combine extracted sat data with in situ
   zone_all_in_situ_base <- zone_data_in_situ |> 
-    left_join(zone_median, by = c("zone", "source", "site", "date", "variable" = "variable_is")) |>
+    left_join(zone_median, by = c("zone", "source", "site", "date", "variable" = "variable_is"),
+              relationship = "many-to-many") |> # For day and night time classes for SST
     dplyr::rename(value_in_situ = value, value_satellite = median, variable_sat = variable.y) |> 
     filter(!is.na(variable_sat)) |> 
+    filter(!(variable_sat == "SST" & time_class == "night")) |>
+    filter(!(variable_sat == "SST-NIGHT" & time_class == "day")) |>
     mutate(season = case_when(
       month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
       month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
-    dplyr::select(zone, dplyr::everything()) |> 
+    dplyr::select(zone, dplyr::everything(), -time_class) |> 
     mutate(variable_combi = paste(variable, variable_sat, correction, processing, grid_size, sep = "_"))
 
   # Create monthly average TS for lm analysis
@@ -1364,9 +1367,11 @@ validate_sensor <- function(sat_name, median_base){
   write_csv(zone_all_monthly_lm, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_lm_stats_",median_base,".csv"))
 
   # Plot the linear TS matchups
-  plyr::l_ply(unique(zone_all_in_situ_monthly$variable_combi), validation_lm_plots, 
+  plan(multicore, workers = 10)
+  future_walk(unique(zone_all_in_situ_monthly$variable_combi), validation_lm_plots, 
               sat_name = sat_name, median_base = median_base,
               df = zone_all_in_situ_monthly, df_stats = zone_all_monthly_lm)
+  plan(sequential)
   
   # Remove any missing values for stats matchups
   zone_all_in_situ <- zone_all_in_situ_base |> 
@@ -1377,7 +1382,6 @@ validate_sensor <- function(sat_name, median_base){
   #   geom_point(aes(colour = source, shape = variable)) +
   #   facet_wrap(~site, scales = "free")
   
-  # TODO: Think of a way to optimise this
   # Stats for all groups together by variable
   zone_in_situ_stats_01 <- zone_all_in_situ |> mutate(zone = "GLOBAL", source = "ALL", site = "ALL", season = "ALL") |> 
     summarise(compute_stats(value_in_situ, value_satellite), 
@@ -1443,7 +1447,7 @@ validate_sensor <- function(sat_name, median_base){
                                       zone_in_situ_stats_04, zone_in_situ_stats_05, zone_in_situ_stats_06,
                                       zone_in_situ_stats_07, zone_in_situ_stats_08, zone_in_situ_stats_09,
                                       zone_in_situ_stats_10, zone_in_situ_stats_11, zone_in_situ_stats_12) |> 
-    mutate(sensor = sat_name, .before = "zone")
+    mutate(sensor = sat_name, .before = "correction")
   
   # Save results
   write_csv(zone_all_in_situ_stats, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_stats_",median_base,".csv"))
@@ -1458,9 +1462,11 @@ validate_sensor <- function(sat_name, median_base){
                                                  zone_all_in_situ_stats$correction, "_",
                                                  zone_all_in_situ_stats$processing, "_",
                                                  zone_all_in_situ_stats$grid_size)
-  plyr::l_ply(unique(zone_all_in_situ_stats$variable_combi), validation_plots, .parallel = TRUE,
+  plan(multicore, workers = 10)
+  future_walk(unique(zone_all_in_situ_stats$variable_combi), validation_plots,
                      sat_name = sat_name, median_base = median_base,
                      match_up_df = zone_all_in_situ, match_up_stats = zone_all_in_situ_stats)
+  plan(sequential)
 }
 
 
