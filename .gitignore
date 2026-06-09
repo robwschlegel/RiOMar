@@ -12,6 +12,7 @@ data/TIDES
 data/ROFI
 data/HydroRIVERS_v10_eu_shp
 data/VOG_shapes
+data/summer_school
 
 # Large outputs
 output/MATCH_UP_DATA
@@ -25,6 +26,9 @@ output/ETANG_DE_BERRE
 # Figures
 figures/ARTICLE/FIGURES/*/DATA
 figures/surface_daily_maps*
+
+# Other content
+notebooks
 
 # C extensions
 *.so

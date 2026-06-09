@@ -49,7 +49,14 @@
 ## also account for the lon/lat of the centroid and how that relates to the other drivers
 # be able to say if the plume is increasing or decreasing in size so that the drivers on that day can be categorised under what the plume is doing
 
-# 
+# Ideas for driver decomposition
+# A SOM analysis of the spatial footprint during given drivers may work.
+## Average the primary drivers over the timespan of the given large plume
+## Then see if the SOM organises them by surface signature. I.e. size, centroid, shape, direction, duration
+# Or PCA/ordination of days of panache given certain values for variables
+# Use rle() to determine contiguous events temporarily
+# Look at articles in pCloud folder for other analysis ideas and in situ data sources
+
 
 
 # Libraries ---------------------------------------------------------------
