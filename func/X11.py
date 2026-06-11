@@ -1183,7 +1183,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     ; temporal_decomp_V2_6_x11, Var, month, hbad
     ;
     ; INPUTS:
-    ; Var:  vector representing the ANNUAL TIME SERIES  to be decomposed (12 months cycle including bad values)
+    ; Var:  vector representing the ANNUAL TIME SERIES to be decomposed (12 months cycle including bad values)
     ; month: vector of month
     ; hbad: bad value
     ; data: ouput structure
@@ -1256,7 +1256,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
     if isinstance(dates, str) : 
         dates = pd.to_datetime(dates)
     
-    var = pd.Series(values, index= dates )
+    var = pd.Series(values, index=dates)
 
     if time_frequency == "ANNUAL" : 
         full_date_range = [pd.Timestamp(f'{date.year}-07-01') for date in 
@@ -1270,9 +1270,6 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
         full_date_range = [pd.Timestamp(f'{date.year}-{date.month:02d}-{the_day:02d}') 
                              for date in pd.to_datetime( np.unique( pd.date_range(start=dates.min(), end=dates.max(), freq = '1D').strftime('%Y-%m') ) )
                              for the_day in [ 4, 12, 20, 28]]
-        
-    if time_frequency == "INITIAL" : 
-        full_date_range = dates
         
     var_reindexed = var.reindex(full_date_range, fill_value=np.nan)  
     # var_reindexed[np.isnan(var_reindexed)] = missing_values_are
@@ -1398,7 +1395,7 @@ def temporal_decomp_V2_7_x11(values, dates, time_frequency,
                 var_to_use.loc[dates_outliers] = np.nan
     
     # GAPS FILLING using EVF METHOD
-    test_missing = np.where( np.isnan(var_to_use) )[0]
+    test_missing = np.where(np.isnan(var_to_use))[0]
     count_missing = len(test_missing)
 
     var_interpolated = var_to_use
