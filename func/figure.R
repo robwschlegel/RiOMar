@@ -26,7 +26,8 @@ library(ggpubr)
 # Utils -------------------------------------------------------------------
 
 create_the_basic_map <- function(map_df, var_name, 
-                                 in_situ_fixed_station = NULL, cruise_stations = NULL, 
+                                 in_situ_fixed_station = NULL, 
+                                 cruise_stations = NULL, 
                                  glider_stations = NULL,
                                  legend_limits = NULL) {
   

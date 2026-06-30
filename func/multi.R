@@ -9,7 +9,7 @@
 # Basic time series comparisons to get seasonal and interannual comparisons
 ## Perform seasonal smoothing with heatwaveR
 ## also look into fixing the tidal range time series
-## ultimately the point is to reduce the data in such a way that the time series can be related to one another in some way
+## ultimately the point is to reduce the data in such a way that the time series can be related to one another
 ## what does an extreme event analysis reveal?
 ### how do X11 and STL differ?
 ## Look at seasonal Trends per month, not long term

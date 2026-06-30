@@ -52,13 +52,13 @@ for zone in zones_list:
                      regional_map_dir = "output/REGIONAL_MAPS",
                      plume_dir = "output/FIXED_THRESHOLD")
     
-# Daily plums with a dynamic threshold
+# Daily plumes with a dynamic threshold
 for zone in zones_list:
     apply_plume_mask(sextant_spm_all,
                      Zones = [zone],
                      time_step = 'DAILY',
                      nb_cores = 14,
-                     dynamic_thresh = False,
+                     dynamic_thresh = True,
                      regional_map_dir = "output/REGIONAL_MAPS",
                      plume_dir = "output/DYNAMIC_THRESHOLD")
 

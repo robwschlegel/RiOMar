@@ -39,9 +39,11 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 # ### X11 analyses
 # =============================================================================
 
-# NB: X11 is best used on weekly or monthyl data, not daily
-# For a daily analysis it will be better to use STL decomposition
-# I will need to implement this if daily results are necessary
+# NB: X11 can only be used on weekly or monthly data, not daily
+
+# TODO: Only run this on the daily output. 
+# Adapt the plume_time_step argument to always point towards daily data. 
+# X11 script should then be prompted to perform a weekly analysis on these daily data.
 
 # Full analysis in one go
 Apply_X11_method_on_time_series(sextant_spm_all,
