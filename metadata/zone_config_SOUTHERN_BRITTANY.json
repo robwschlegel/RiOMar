@@ -1,0 +1,12 @@
+{
+  "zone": "SOUTHERN_BRITTANY",
+  "input_path": "/home/calanus/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/",
+  "bathymetry_path": "/home/calanus/RiOMar/output/panache/SOUTHERN_BRITTANY/Bathy_data.pkl",
+  "coast_shapefile": "/home/calanus/RiOMar/data/FRANCE_shapefile/gadm41_FRA_0.shp",
+  "output_dir": "/home/calanus/RiOMar/output/panache/SOUTHERN_BRITTANY",
+  "overwrite": false,
+  "gif": false,
+  "nb_cores": 12,
+  "dynamic_threshold": false,
+  "variable_name": "analysed_spim"
+}

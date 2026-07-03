@@ -22,6 +22,7 @@ output/FIXED_THRESHOLD
 output/DYNAMIC_THRESHOLD
 output/STATS
 output/ETANG_DE_BERRE
+output/panache
 
 # Figures
 figures/ARTICLE/FIGURES/*/DATA

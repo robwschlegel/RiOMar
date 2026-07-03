@@ -9,7 +9,9 @@
 #### Modules
 # =============================================================================
 
-import os, sys
+import os
+import sys
+import subprocess
 import matplotlib as mpl
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
@@ -41,6 +43,14 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 # =============================================================================
 # ### Detect plumes
 # =============================================================================
+
+# Run panache module directly via terminal
+# NB: Takes roughly 20 minutes per zone
+subprocess.run("panache metadata/zone_config_GULF_OF_LION.json", shell=True)
+# os.system("panache metadata/zone_config_GULF_OF_LION.json")
+subprocess.run("panache metadata/zone_config_BAY_OF_BISCAY.json", shell=True)
+subprocess.run("panache metadata/zone_config_SOUTHERN_BRITTANY.json", shell=True)
+subprocess.run("panache metadata/zone_config_BAY_OF_SEINE.json", shell=True)
 
 # Plume detection for all zones and daily results
 for zone in zones_list:
