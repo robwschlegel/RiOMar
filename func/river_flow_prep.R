@@ -5,6 +5,9 @@
 # TODO: Double check all rivers are in the correct zone
 # I.e. the Lay river appears incorrect.
 
+# TODO: Investigate the Vilaine
+# It has a lot of missing data. So much so it can't be used.
+
 
 # Setup -------------------------------------------------------------------
 
@@ -64,7 +67,7 @@ load_HP <- function(file_name){
 }
 
 # HydroPortail preparation function
-# zone <- zones_list[3]
+# zone <- zones_list[4]
 prep_HP <- function(zone){
   
   # Automagic directory names
@@ -267,7 +270,8 @@ prep_HP <- function(zone){
     # Combine and save
     vilaine <- left_join(vilaine_5, vilaine_1, by = "date") |> mutate(debit = ifelse(is.na(debit.y), debit.x, debit.y)) |>
       complete(date = seq.Date(min(date), max(date), by = "day")) |> arrange(date) |> dplyr::select(date, debit)
-    write_csv(vilaine, file.path(dir_main, "vilaine.csv"))
+    # TODO: Reactivate once the Vilaine data is fixed.
+    # write_csv(vilaine, file.path(dir_main, "vilaine.csv"))
     
   } else if(zone == "BAY_OF_BISCAY"){
     

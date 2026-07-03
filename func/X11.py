@@ -1565,7 +1565,7 @@ def Apply_X11_method_on_time_series(core_arguments, Zones,
 
         # Create weekly means
         ts_data_binned = ts_data_reduced.groupby([ts_data_reduced['date'].dt.to_period('M'), 'bin']).agg({var_to_use: 'mean'}).reset_index()
-        ts_data_binned['date'] = pd.to_datetime( ts_data_binned['date'].astype(str) + "-" + ts_data_binned['bin'].astype(str), format = "%Y-%m-%d" )
+        ts_data_binned['date'] = pd.to_datetime(ts_data_binned['date'].astype(str) + "-" + ts_data_binned['bin'].astype(str), format = "%Y-%m-%d")
 
         apply_X11_method_and_save_results(values=ts_data_binned[var_to_use].tolist(), variable_name=var_to_use,
                                           dates=ts_data_binned.date, info=info,

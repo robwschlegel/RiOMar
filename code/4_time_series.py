@@ -16,8 +16,8 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-import util
-import X11
+# import util
+# import X11
 from X11 import Apply_X11_method_on_time_series
 
 # Set matplotlib backend to prevent plots from displaying
@@ -42,25 +42,14 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 
 # NB: X11 can only be used on weekly or monthly data, not daily
 
-# TODO: Only run this on the daily output. 
-# Adapt the plume_time_step argument to always point towards daily data. 
-# X11 script should then be prompted to perform a weekly analysis on these daily data.
-
 # Full analysis in one go
 Apply_X11_method_on_time_series(sextant_spm_all,
+                                # Zones = ["SOUTHERN_BRITTANY"],
                                 Zones = zones_list,
                                 plume_time_step = "WEEKLY",
                                 plume_dir_in = "output/panache",
                                 X11_dir_out = "output/panache",
                                 include_river_flow = True)
-
-# Full analysis in one go with dynamic threshold
-# Apply_X11_method_on_time_series(sextant_spm_all,
-#                                 Zones = zones_list,
-#                                 plume_time_step = "WEEKLY",
-#                                 plume_dir_in = "output/DYNAMIC_THRESHOLD",
-#                                 X11_dir_out = "output/DYNAMIC_THRESHOLD",
-#                                 include_river_flow = True)
 
 
 # =============================================================================
