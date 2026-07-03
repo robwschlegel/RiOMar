@@ -2,6 +2,9 @@
 
 # This script combines and cleans output files from HydroPortail
 
+# TODO: Double check all rivers are in the correct zone
+# I.e. the Lay river appears incorrect.
+
 
 # Setup -------------------------------------------------------------------
 

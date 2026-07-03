@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# The code needed to run the time series analyses used in the RiOMar project. 
-# It can be designed to be called by the Makefile.
+# The code needed to run the time series analyses.
 
 
 # =============================================================================
 #### Modules
 # =============================================================================
 
-import os, sys
+import os
+import sys
 import matplotlib as mpl
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-import util, X11
+import util
+import X11
 from X11 import Apply_X11_method_on_time_series
 
 # Set matplotlib backend to prevent plots from displaying
@@ -49,17 +50,17 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 Apply_X11_method_on_time_series(sextant_spm_all,
                                 Zones = zones_list,
                                 plume_time_step = "WEEKLY",
-                                plume_dir_in = "output/FIXED_THRESHOLD",
-                                X11_dir_out = "output/FIXED_THRESHOLD",
+                                plume_dir_in = "output/panache",
+                                X11_dir_out = "output/panache",
                                 include_river_flow = True)
 
 # Full analysis in one go with dynamic threshold
-Apply_X11_method_on_time_series(sextant_spm_all,
-                                Zones = zones_list,
-                                plume_time_step = "WEEKLY",
-                                plume_dir_in = "output/DYNAMIC_THRESHOLD",
-                                X11_dir_out = "output/DYNAMIC_THRESHOLD",
-                                include_river_flow = True)
+# Apply_X11_method_on_time_series(sextant_spm_all,
+#                                 Zones = zones_list,
+#                                 plume_time_step = "WEEKLY",
+#                                 plume_dir_in = "output/DYNAMIC_THRESHOLD",
+#                                 X11_dir_out = "output/DYNAMIC_THRESHOLD",
+#                                 include_river_flow = True)
 
 
 # =============================================================================

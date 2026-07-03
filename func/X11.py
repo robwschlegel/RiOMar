@@ -21,7 +21,7 @@ sys.path.append( func_dir )
 
 from util import (get_all_cases_to_process_for_regional_maps_or_plumes_or_X11,
                   path_to_fill_to_where_to_save_satellite_files,
-                  fill_the_sat_paths, load_csv_files_in_the_package_folder, define_parameters)
+                  fill_the_sat_paths, load_csv_files, define_parameters)
 
 
 # =============================================================================
@@ -33,7 +33,7 @@ def apply_X11_method_and_save_results(values, variable_name, dates, info, X11_di
     filtered_values, filtered_dates = keep_the_dates_within_full_year(values, pd.to_datetime(dates))
 
     if info.Temporal_resolution == 'WEEKLY':
-        filtered_values = pd.Series(filtered_values).rolling(3, center=True, min_periods=1).median().to_numpy()
+        filtered_values = pd.Series(filtered_values).rolling(3, center=True, min_periods=1).median(numeric_only=True).to_numpy()
 
     results = temporal_decomp_V2_7_x11(values=filtered_values, dates=filtered_dates,
                                        time_frequency=info.Temporal_resolution,
@@ -1542,31 +1542,43 @@ def Apply_X11_method_on_time_series(core_arguments, Zones,
     for i, info in cases_to_process.iterrows():
 
         # info = cases_to_process.iloc[i]
+        
+        file_names_pattern = f"{plume_dir_in}/{info.Zone}/Results.csv"
 
-        file_names_pattern = (fill_the_sat_paths(info,
-                                                 path_to_fill_to_where_to_save_satellite_files(
-                                                     plume_dir_in + "/" + info.Zone),
-                                                 local_path=True)
-                              .replace(info.atmospheric_correction, f'{info.atmospheric_correction}/PLUME_DETECTION')
-                              .replace('/*/*/*', '/Time_series_of_plume_area_and_SPM_threshold.csv'))
-
-        if os.path.exists(file_names_pattern) == False:
+        if not os.path.exists(file_names_pattern):
             print(f'File does not exists : {file_names_pattern}')
             continue
 
         ts_data = pd.read_csv(file_names_pattern)
+        ts_data['date'] = pd.to_datetime(ts_data['date'])
 
-        apply_X11_method_and_save_results(values=ts_data[var_to_use].tolist(), variable_name=var_to_use,
-                                          dates=ts_data.date, info=info,
+        # Set bin integers
+        bin_centers = [4, 12, 20, 28]
+        def assign_bin(day):
+            return min(bin_centers, key=lambda x: abs(x - day))
+        
+        # Apply the function to create a 'bin' column
+        ts_data_reduced = ts_data.copy()
+        ts_data_reduced['bin'] = ts_data_reduced['date'].dt.day.apply(assign_bin)
+        ts_data_reduced = ts_data_reduced.loc[:,['date', 'bin', var_to_use]]
+        ts_data_reduced[var_to_use] = pd.to_numeric(ts_data_reduced[var_to_use])
+
+        # Create weekly means
+        ts_data_binned = ts_data_reduced.groupby([ts_data_reduced['date'].dt.to_period('M'), 'bin']).agg({var_to_use: 'mean'}).reset_index()
+        ts_data_binned['date'] = pd.to_datetime( ts_data_binned['date'].astype(str) + "-" + ts_data_binned['bin'].astype(str), format = "%Y-%m-%d" )
+
+        apply_X11_method_and_save_results(values=ts_data_binned[var_to_use].tolist(), variable_name=var_to_use,
+                                          dates=ts_data_binned.date, info=info,
                                           X11_dir_out=X11_dir_out)
 
         if include_river_flow:
-            river_flow_data = load_csv_files_in_the_package_folder(RIVER_FLOW=True, Zone_of_river_flow=info.Zone,
-                                                                   RIVER_FLOW_time_resolution=info.Temporal_resolution)
+            river_flow_data = load_csv_files(RIVER_FLOW=True, 
+                                             Zone_of_river_flow=info.Zone,
+                                             RIVER_FLOW_time_resolution=info.Temporal_resolution)
 
             apply_X11_method_and_save_results(values=river_flow_data.Values.tolist(),
                                               variable_name='river_flow',
-                                              dates=river_flow_data.Date,
+                                              dates=river_flow_data.date,
                                               info=info.replace({info.Satellite_variable: "River_flow",
                                                                  info.atmospheric_correction: "",
                                                                  info.sensor_name: "",

@@ -24,7 +24,7 @@ from util import (add_array_to_dict, path_to_fill_to_where_to_save_satellite_fil
                   create_arborescence, find_sat_data_files, merge_dicts, get_empty_paths,
                   return_the_parameter_name_based_on_file_name, get_non_empty_paths,
                   extract_the_time_from_the_satellite_file, access_item_in_a_dictionnary, 
-                  extract_dataframes_iterative, load_csv_files_in_the_package_folder,
+                  extract_dataframes_iterative, load_csv_files,
                   get_the_values_from_a_list_comprehension, define_parameters, get_all_cases_to_process)
 
 
@@ -42,7 +42,7 @@ def get_insitu_measurements(zones = ['FRANCE']) :
     QC_values_to_keep = [2,6,7]
     Depth_threshold = 10    
 
-    SOMLIT_data = load_csv_files_in_the_package_folder(SOMLIT = True)
+    SOMLIT_data = load_csv_files(SOMLIT = True)
     SOMLIT_data['SOURCE'] = 'SOMLIT'
     SOMLIT_data["TIME"] = pd.to_datetime(SOMLIT_data["DATE"] + " " + SOMLIT_data["HEURE"], format="%Y-%m-%d %H:%M:%S")
 
@@ -113,7 +113,7 @@ def get_insitu_measurements(zones = ['FRANCE']) :
     QC_values_to_keep = ['Bon']
     Depth_threshold = 10
 
-    REPHY_data = load_csv_files_in_the_package_folder(REPHY = True)         
+    REPHY_data = load_csv_files(REPHY = True)         
     REPHY_data["TIME"] = pd.to_datetime(REPHY_data["Date"] + " " + REPHY_data["Heure"], format="%Y-%m-%d %H:%M:%S")
     REPHY_data["Valeur_mesure"] = REPHY_data["Valeur_mesure"].str.replace(",", ".").astype(float)
     REPHY_data['SOURCE'] = 'REPHY'

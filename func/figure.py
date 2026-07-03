@@ -18,7 +18,7 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (load_csv_files_in_the_package_folder, path_to_fill_to_where_to_save_satellite_files,
+from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files,
                   align_bathymetry_to_resolution, define_parameters)
 from validate import get_insitu_measurements
 from plume import (reduce_resolution,

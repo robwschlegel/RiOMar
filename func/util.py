@@ -304,7 +304,7 @@ def get_all_cases_to_process(core_arguments) :
 
 def get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments) : 
 
-    all_possibilities = expand_grid( Zone = core_arguments['Zones'],
+    all_possibilities = expand_grid(Zone = core_arguments['Zones'],
                                     Data_source = core_arguments['Data_sources'], 
                                     sensor_name = core_arguments['Sensor_names'], 
                                     atmospheric_correction = core_arguments['Atmospheric_corrections'],
@@ -312,7 +312,7 @@ def get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments) 
                                     Satellite_variable = core_arguments['Satellite_variables'],
                                     Temporal_resolution = (core_arguments['Temporal_resolution'] if 'Temporal_resolution' in core_arguments 
                                                        else core_arguments['Temporal_resolution'] if 'Temporal_resolution' in core_arguments 
-                                                       else '') )
+                                                       else ''))
     all_possibilities['atmospheric_correction'] = all_possibilities.apply(lambda row: 'Standard' 
                                                                         if row['Data_source'] == 'SEXTANT' 
                                                                         else row['atmospheric_correction'], axis=1)
@@ -524,9 +524,19 @@ def unique_years_between_two_dates(start_date: str, end_date: str):
 
 def load_shapefile_data() : 
     
-    france_shapefile = load_csv_files_in_the_package_folder(FRANCE_shapefile = True)
+        shp_folder = os.path.join( proj_dir, 'data', 'FRANCE_shapefile' )  # Directly get the package folder path
     
-    return france_shapefile 
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # Extract all necessary shapefile components
+            for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
+                # shp_file = shp_folder / f'gadm41_FRA_0{ext}'
+                shp_file = os.path.join(shp_folder, f'gadm41_FRA_0{ext}')
+                if os.path.exists(shp_file): # Ensure the file exists before copying
+                    shutil.copy(shp_file, os.path.join(tmp_dir, f'gadm41_FRA_0{ext}'))
+    
+            # Read the shapefile from the temporary directory
+            shapefile_path = os.path.join(tmp_dir, 'gadm41_FRA_0.shp')
+            return gpd.read_file(shapefile_path)
             
     # try : 
     #     france_shapefile = pygadm.Items(name="FRANCE", content_level=0)
@@ -541,105 +551,72 @@ def extract_and_format_date_from_path(path):
     return ''.join(match.groups()) if match else None   
 
 
-def load_csv_files_in_the_package_folder(SOMLIT = False, REPHY = False, FRANCE_shapefile = False, 
-                                         RIVER_FLOW = False, Zone_of_river_flow = None, 
-                                         RIVER_FLOW_time_resolution = ''):
+def load_csv_files(SOMLIT = False, REPHY = False, 
+                   RIVER_FLOW = False, Zone_of_river_flow = None, 
+                   RIVER_FLOW_time_resolution = ''):
     
     if SOMLIT : 
-        SOMLIT_dir = os.path.join( proj_dir, 'data', 'INSITU_data', 'SOMLIT' )
-        SOMLIT_data = os.path.join( SOMLIT_dir, 'Somlit.csv' )
+        SOMLIT_dir = os.path.join(proj_dir, 'data', 'INSITU_data', 'SOMLIT')
+        SOMLIT_data = os.path.join(SOMLIT_dir, 'Somlit.csv')
         return (pd.read_csv(SOMLIT_data, sep = ";", header = 2).iloc[1:]
                                 .rename(columns = {'gpsLat*':'LATITUDE', 
                                                    'gpsLong*':'LONGITUDE',
                                                    'nomSite*':"Site"}))
         
     if REPHY : 
-        REPHY_dir = os.path.join( proj_dir, 'data', 'INSITU_data', 'REPHY' )
-        REPHY_data = os.path.join( REPHY_dir, 'Table1_REPHY_hydro_RIOMAR.csv.gz' )
+        REPHY_dir = os.path.join(proj_dir, 'data', 'INSITU_data', 'REPHY')
+        REPHY_data = os.path.join(REPHY_dir, 'Table1_REPHY_hydro_RIOMAR.csv.gz')
         return pd.read_csv(REPHY_data, sep = ";", header = 0, encoding = "ISO-8859-1", compression = {'method' : 'gzip'})
         
-    if FRANCE_shapefile : 
-        
-        shp_folder = os.path.join( proj_dir, 'data', 'FRANCE_shapefile' )  # Directly get the package folder path
-    
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            # Extract all necessary shapefile components
-            for ext in ['.shp', '.shx', '.dbf', '.prj', '.cpg']:
-                # shp_file = shp_folder / f'gadm41_FRA_0{ext}'
-                shp_file = os.path.join(shp_folder, f'gadm41_FRA_0{ext}')
-                if os.path.exists(shp_file): # Ensure the file exists before copying
-                    shutil.copy(shp_file, os.path.join(tmp_dir, f'gadm41_FRA_0{ext}'))
-    
-            # Read the shapefile from the temporary directory
-            shapefile_path = os.path.join(tmp_dir, 'gadm41_FRA_0.shp')
-            return gpd.read_file(shapefile_path)
-
     if RIVER_FLOW : 
         
-        where_are_river_data = os.path.join( proj_dir, 'data', 'RIVER_FLOW', Zone_of_river_flow)
+        where_are_river_data = os.path.join(proj_dir, 'data', 'RIVER_FLOW', Zone_of_river_flow)
         
-        files_to_load = glob.glob(os.path.join(where_are_river_data, '*'))
+        files_to_load = glob.glob(os.path.join(where_are_river_data, '*.csv'))
         
         # Convert file paths to Path objects for consistent handling
-        files_to_read = [Path(f) for f in files_to_load if Path(f).suffix in ('.txt', '.dat', '.csv', '.ascii')]
+        files_to_read = [Path(f) for f in files_to_load if Path(f).suffix in ('.csv')]
 
         # Load each file into a dictionary of DataFrames
         data_dict = {}
         for file in files_to_read:
-            ext = file.suffix.lower()
-            if ext == '.csv':
-                df = pd.read_csv(file)
-            if ext == '.ascii' : 
-                df = pd.DataFrame( np.loadtxt(file) )
-            else:
-                df = pd.read_table(file, sep=None, engine='python', header = None)  # Auto-detect separator
+            df = pd.read_csv(file)
             data_dict[file.name] = df  # Store in dictionary
                     
-        for key, the_df in data_dict.items() : 
-            
-            if Zone_of_river_flow == 'GULF_OF_LION' :
-                
-                the_df.columns = ['Flow', 'Year', 'Month', 'Day']
-                the_df['Date'] = pd.to_datetime(the_df['Year'].astype(int).astype(str) + '-' + 
-                                                the_df['Month'].apply(lambda x: str(int(x)).zfill(2)) + '-' + 
-                                                the_df['Day'].apply(lambda x: str(int(x)).zfill(2)) ) 
-                
-            if np.isin( Zone_of_river_flow, ['BAY_OF_BISCAY', 'SOUTHERN_BRITTANY', 'BAY_OF_SEINE']) :
-                
-                the_df.columns = ['Date', 'Time', 'Flow']
-                the_df['Date'] = pd.to_datetime(the_df['Date'], format = "%d/%m/%Y" ) 
-
-            data_dict[key] = the_df.loc[:,['Flow', 'Date']]
+        for key, the_df in data_dict.items() :             
+            the_df.columns = ['date', 'debit']
+            the_df['date'] = pd.to_datetime(the_df['date'], format = "%Y-%m-%d")
+            data_dict[key] = the_df.loc[:,['date', 'debit']]
     
-        final_df = pd.concat(data_dict.values()).groupby("Date", as_index=False).agg(Values=('Flow', 'sum'), n_rivers=('Flow', 'count'))
-        final_df = final_df[ final_df.n_rivers == len(files_to_read) ]
+        final_df = pd.concat(data_dict.values()).groupby("date", as_index=False).agg(Values=('debit', 'sum'), n_rivers=('debit', 'count'))
+        final_df = final_df[final_df.n_rivers == len(files_to_read)]
         
         bin_centers = [4, 12, 20, 28]
         def assign_bin(day):
             return min(bin_centers, key=lambda x: abs(x - day))
         
         # Apply the function to create a 'bin' column
-        final_df['bin'] = final_df['Date'].dt.day.apply(assign_bin)
-        final_df_reduced = final_df.loc[:,['Date', 'bin', 'Values']]
+        final_df_reduced = final_df.copy()
+        final_df_reduced['bin'] = final_df_reduced['date'].dt.day.apply(assign_bin)
+        final_df_reduced = final_df_reduced.loc[:,['date', 'bin', 'Values']]
         final_df_reduced['Values'] = pd.to_numeric(final_df_reduced['Values'])
         
-        # TODO: There is no 'DAILY' logic gate so I added one and closed this chain of logic gates
         if RIVER_FLOW_time_resolution == 'DAILY' :
-            final_df = final_df_reduced
+            final_df = final_df
 
         elif RIVER_FLOW_time_resolution == 'WEEKLY' : 
-            final_df_binned = final_df_reduced.groupby([final_df_reduced['Date'].dt.to_period('M'), 'bin']).agg({'Values': 'mean'}).reset_index()
-            final_df_binned['Date'] = pd.to_datetime( final_df_binned['Date'].astype(str) + "-" + final_df_binned['bin'].astype(str), format = "%Y-%m-%d" )
+            final_df_binned = final_df_reduced.groupby([final_df_reduced['date'].dt.to_period('M'), 'bin']).agg({'Values': 'mean'}).reset_index()
+            final_df_binned['date'] = pd.to_datetime( final_df_binned['date'].astype(str) + "-" + final_df_binned['bin'].astype(str), format = "%Y-%m-%d" )
             final_df = final_df_binned
             
         elif RIVER_FLOW_time_resolution == 'MONTHLY' :     
-            final_df_binned = final_df_reduced.groupby([final_df_reduced['Date'].dt.to_period('M')]).agg({'Values': 'mean'}).reset_index()
-            final_df_binned['Date'] = pd.to_datetime( final_df_binned['Date'].astype(str) + "-" + "15", format = "%Y-%m-%d" )
+            final_df_binned = final_df_reduced.groupby([final_df_reduced['date'].dt.to_period('M')]).agg({'Values': 'mean'}).reset_index()
+            final_df_binned['date'] = pd.to_datetime( final_df_binned['date'].astype(str) + "-" + "15", format = "%Y-%m-%d" )
             final_df = final_df_binned
 
         elif RIVER_FLOW_time_resolution == 'ANNUAL' :     
-            final_df_binned = final_df_reduced.groupby([final_df_reduced['Date'].dt.to_period('Y')]).agg({'Values': 'mean'}).reset_index()
-            final_df_binned['Date'] = pd.to_datetime( final_df_binned['Date'].astype(str) + "-06-30", format = "%Y-%m-%d" )
+            final_df_binned = final_df_reduced.groupby([final_df_reduced['date'].dt.to_period('Y')]).agg({'Values': 'mean'}).reset_index()
+            final_df_binned['date'] = pd.to_datetime( final_df_binned['date'].astype(str) + "-06-30", format = "%Y-%m-%d" )
             final_df = final_df_binned
             
         else : 

@@ -34,7 +34,7 @@ zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTAN
 # =============================================================================
 
 # Download all Chl a data from 1998 to 2025
-# NB: This takes a few hours and usesd ~280 GB of disk spaces
+# NB: This takes a few hours and uses ~280 GB of disk spaces
 # NB: Several days of data are missing
 sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'Sensor_names':["merged"],
@@ -54,7 +54,7 @@ Download_satellite_data(sextant_chla_all,
 # =============================================================================
 
 # Download all SPM data from 1998 to 2025
-# NB: This takes a few hours and usesd ~280 GB of disk spaces
+# NB: This takes a few hours and uses ~280 GB of disk spaces
 # NB: Several days of data are missing
 sextant_spm_all = {'Data_sources':['SEXTANT'],
                    'Sensor_names':["merged"],
