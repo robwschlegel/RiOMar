@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Manuscipt content
+/manuscript
+
 # Downloaded data
 data/SEXTANT
 data/DOWNLOAD_REPORTS
