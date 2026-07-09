@@ -275,81 +275,6 @@ def flood_fill(data, start, SPM_threshold, directions):
     return mask, done_pixels
 
 
-def find_high_value_pixels(data, center_lat, center_lon, radius_km, SPM_threshold):
-        
-    """
-    Identify pixels in a 2D dataset that are within a specified radius from a given center point 
-    and have values exceeding a threshold.
-
-    Parameters
-    ----------
-    data : numpy.ndarray
-        A 2D array representing the input data (e.g., satellite data).
-    center_lat : float
-        Latitude of the center point in degrees.
-    center_lon : float
-        Longitude of the center point in degrees.
-    radius_km : float
-        Radius within which pixels are considered, in kilometers.
-    SPM_threshold : float
-        Threshold value. Pixels with values greater than this threshold will be included in the mask.
-
-    Returns
-    -------
-    numpy.ndarray
-        A boolean 2D array where `True` indicates pixels that are within the specified radius 
-        and exceed the threshold.
-
-    Notes
-    -----
-    The function uses the Haversine formula to calculate the great-circle distance between
-    each pixel and the specified center point. Only pixels within the radius and above the
-    threshold are included in the returned mask.
-
-    Examples
-    --------
-    >>> import numpy as np
-    >>> # Create a sample 2D dataset with latitudes and longitudes
-    >>> lat = np.linspace(-10, 10, 5)  # 5 latitudes from -10 to 10 degrees
-    >>> lon = np.linspace(-20, 20, 5)  # 5 longitudes from -20 to 20 degrees
-    >>> data = np.random.rand(len(lat), len(lon)) * 100  # Random data values
-    >>> # Define center and parameters
-    >>> center_lat = 0
-    >>> center_lon = 0
-    >>> radius_km = 1000
-    >>> SPM_threshold = 50
-    >>> mask = find_high_value_pixels(data, center_lat, center_lon, radius_km, SPM_threshold)
-    >>> print(mask)
-    [[False  True False ...  True]
-     [ True False False ...]]
-    """
-    
-    # Earth's radius in kilometers
-    earth_radius_km = 6371.0
-
-    # Convert latitude and longitude to radians
-    lat_radians = np.deg2rad(data.lat)
-    lon_radians = np.deg2rad(data.lon)
-    
-    # Center point in radians
-    center_lat_rad = np.deg2rad(center_lat)
-    center_lon_rad = np.deg2rad(center_lon)
-    
-    # Calculate distances using Haversine formula
-    dlat = lat_radians - center_lat_rad
-    dlon = lon_radians - center_lon_rad
-    a = np.sin(dlat / 2.0)**2 + np.cos(center_lat_rad) * np.cos(lat_radians) * np.sin(dlon / 2.0)**2
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
-    distances = earth_radius_km * c
-    
-    # Create a mask for pixels within the specified radius and above the SPM_threshold
-    mask_radius = distances <= radius_km
-    mask_SPM_threshold = data > SPM_threshold
-    mask = mask_radius & mask_SPM_threshold
-    
-    return mask
-
-
 def make_the_plot(path_to_the_figure_file_to_save, ds, ds_reduced, france_shapefile,
                   lon_range_of_the_map_to_plot, lat_range_of_the_map_to_plot, 
                   bathymetric_threshold, bathymetry_data_aligned_to_reduced_map, thresholds,
@@ -758,48 +683,6 @@ def Set_cloudy_regions_to_True(ds_reduced, mask_area, land_mask, SPM_threshold) 
     return mask_area
 
 
-def load_and_resize_files(file_name_config) : 
-    
-    """
-    Loads a file and resizes its map data based on the provided configuration.
-
-    Parameters
-    ----------
-    file_name_config : list
-        A list where:
-        - file_name_config[0] (str): The file path to load.
-        - file_name_config[1] (int): The desired width for resizing.
-        - file_name_config[2] (int): The desired height for resizing.
-
-    Returns
-    -------
-    numpy.ndarray
-        A resized version of the map data.
-    
-    Notes
-    -----
-    The function assumes the input file contains a dictionary-like structure
-    with a "Basin_map" key or directly contains "map_data". If "Basin_map" is present,
-    its "map_data" is used.
-    """
-    
-    # Load the file specified in the configuration.
-    data = load_file(file_name_config[0])
-    
-    # Check if the file contains a "Basin_map" key. If so, extract its value.
-    if 'Basin_map' in data : 
-        data = data['Basin_map']
-        
-    # Extract the "map_data" from the file contents.
-    data = data['map_data']
-    
-    # Resize the map data to the specified width and height.
-    resized_data = reduce_resolution(data, file_name_config[1], file_name_config[2])
-    
-    # Return the resized map data.
-    return resized_data
-
-
 def compute_gradient_with_directions_vectorized(spm_map, start_point, directions, max_steps, 
                                                 lower_high_values_to = None,
                                                 create_X_intermediates_between_each_direction = 1):
@@ -1067,48 +950,6 @@ def find_SPM_threshold(spm_map, land_mask, start_point, directions, max_steps, m
     return SPM_threshold, filtered_points, gradient_points
 
 
-def find_first_nan_after_finite(arr):
-    
-    """
-    Detects the first NaN value that occurs after finite values in a 3D array.
-
-    Parameters
-    ----------
-    arr : ndarray
-        3D array of shape (n_steps, 1, n_directions), where the second dimension is 1.
-
-    Returns
-    -------
-    first_nan_indices : ndarray
-        Array containing the index of the first NaN value after finite values for each direction.
-        If no such NaN exists, returns -1 for that direction.
-    """
-    
-    # Check if the input array has shape (100, 1, 5)
-    # assert arr.shape[1] == 1, "The second dimension must be 1."
-    
-    # Flatten the array along the second dimension
-    flattened = arr[:, :]
-    
-    # Masks for NaN and finite values
-    nan_mask = np.isnan(flattened)
-    finite_mask = np.isfinite(flattened)
-
-    # Find the index of the first finite value for each direction
-    first_finite_idx = np.argmax(finite_mask, axis=0)
-
-    # Mask to exclude leading NaNs and consider only after the first finite value
-    mask_after_finite = np.arange(flattened.shape[0])[:, None] > first_finite_idx[None, :]
-    
-    # Mask for NaNs that occur after finite values
-    nan_after_finite = nan_mask & mask_after_finite
-
-    # Find the first NaN index after finite values for each direction
-    first_nan_idx = np.where(np.any(nan_after_finite, axis=0), np.argmax(nan_after_finite, axis=0), -1)
-    
-    return first_nan_idx
-
-
 def pixels_far_from_land(land_mask, pixel_positions, distance_threshold):
     
     """
@@ -1226,41 +1067,6 @@ def last_true_block(arr):
         last_start = 0  
 
     return last_start, last_end
-
-
-def load_and_filter_arrays(file_name):
-    
-    """
-    Loads a file and filters its arrays based on specific criteria.
-
-    Parameters
-    ----------
-    file_name : str
-        Path to the file to load.
-
-    Returns
-    -------
-    dict
-        A dictionary containing filtered arrays and other values from the file.
-    """
-    
-    # Load the file into a dictionary
-    d = load_file(file_name)
-    
-    # Initialize an empty dictionary for filtered results
-    filtered_dict = {}
-    
-    # Iterate through the dictionary items
-    for key, value in d.items():
-        
-        # Check if the value is a NumPy array or a Pandas DatetimeIndex
-        if isinstance(value, np.ndarray) or isinstance(value, pd.DatetimeIndex) :
-            if len(value) <= 10:  # Include arrays with length <= 10
-                filtered_dict[key] = value
-        else:
-            filtered_dict[key] = value # Include non-NumPy values
-            
-    return filtered_dict
 
 
 def assemble_and_order_directions(directions_1, directions_2, order_of_elements) : 
