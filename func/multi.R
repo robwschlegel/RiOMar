@@ -912,10 +912,10 @@ multi_plot <- function(df_stl){
 }
 
 # Load STL calculated above
-load("output/STATS/stl_all.RData")
+# load("output/STATS/stl_all.RData")
 
 # Create plots
-multi_plot(stl_all)
+# multi_plot(stl_all)
 
 
 # Missing data ------------------------------------------------------------

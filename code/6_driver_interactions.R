@@ -69,9 +69,8 @@ library(gratia)
 library(ranger)
 library(iml)
 
-# Run multi-driver analyses
-# source("func/util.R")    # zones, zone_meta, get_zone_meta, load_driver, load_plume_ts
-source("func/multi.R")   # zone_meta, get_zone_meta, load_driver, combine_plume_driver, zones
+# Run multi-driver analyses and load project common functions
+source("func/multi.R")
 
 if (!dir.exists("output/STATS")) dir.create("output/STATS", recursive = TRUE)
 
