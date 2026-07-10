@@ -26,8 +26,8 @@ if (!require("CopernicusMarine")) {
 # Set your Copernicus Marine credentials
 # You can get these by registering at https://marine.copernicus.eu/
 # It's recommended to store credentials securely, not in the script
-Sys.setenv(COPERNICUS_MARINE_USERNAME = "rschlegel1")
-Sys.setenv(COPERNICUS_MARINE_PASSWORD = "RobertCMEMS2018")
+# Sys.setenv(COPERNICUS_MARINE_USERNAME = "")
+# Sys.setenv(COPERNICUS_MARINE_PASSWORD = "")
 
 # GLORYS dataset parameters - modify these according to your needs
 # Dataset ID for GLORYS global reanalysis (example for physics)

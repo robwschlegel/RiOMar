@@ -1,5 +1,71 @@
 # func/multi.R
 # Loads all drivers of plume size, performs stats, plots results
+#
+# REFACTOR (2026-07) -------------------------------------------------------
+# func/flow.R, func/wind.R, func/tide.R, func/ROFI.R, and func/surface.R have
+# been consolidated into this file. Each of those scripts independently
+# reimplemented the same "resolve zone from river mouth -> load driver ->
+# load plume -> combine -> STL -> correlate (incl. lagged) -> plot" pipeline
+# for a single driver (river flow, wind, tide, ROFI/coastal-current extent).
+# That pattern is now written once, below, and parameterised by driver name.
+# util.R already centralised the raw *loading* functions (load_river_flow,
+# load_tide_gauge, load_wind_sub, load_ROFI, load_plume_ts) and a few
+# generic helpers (lagged_correlation, make_pretty_title, stl_single,
+# sec_axis_adjustement_factors) -- the individual driver scripts had mostly
+# stopped using those and re-derived their own inline versions instead. This
+# refactor routes everything back through those existing util.R functions.
+#
+# What changed, concretely:
+#   - The zone/gauge lookup if/else block that was copy-pasted 3x in flow.R,
+#     once each in wind.R/tide.R/surface.R, and again (slightly differently)
+#     in multi_stl() below, is now the single `zone_meta` table + get_zone_meta().
+#   - The inline plume-CSV-loading block in flow.R/wind.R/tide.R (which used
+#     the raw `area_of_the_plume_mask_in_km2` column name and skipped the
+#     day-gap `complete()` step) is replaced by the existing
+#     util.R::load_plume_ts(), which already does this correctly.
+#   - The on-/off-shore wind classification duplicated in wind.R, surface.R,
+#     and multi_stl() below is now wind_add_direction().
+#   - flow.R/wind.R/tide.R's near-identical "4-panel" comparison plot
+#     (raw driver ts / plume ts / scatter / lag-correlation) is now
+#     plot_driver_plume_comparison().
+#   - wind.R/tide.R's inline dual-y-axis STL plot (a hand-copy of
+#     figure.R::make_the_X11_plot_of_river_and_plume(), hard-coded there to
+#     the "river_flow" column name) is now plot_driver_plume_dual_axis(),
+#     which is the generalisation flagged as a TODO in
+#     manuscript/make_figures_tables.R for Figures 7-9.
+#   - flow.R's flow_plume_trend_plus() (the Sutton et al. 2022-style
+#     AR(1)/STL-weighted HAC trend estimator manuscript.tex Sec. 2.6.1
+#     refers to) was river-flow-specific; it is now driver_plume_trend(),
+#     usable for any driver.
+#   - ROFI.R's comp_ROFI_plume() had the richest correlation structure
+#     (daily/monthly/annual lag correlations) of the four scripts; that
+#     structure is now the shared driver_plume_correlation() /
+#     driver_plume_timesteps(), used for every driver, not just currents.
+#   - surface.R's two pixel-level, multi-driver spatial functions
+#     (surface_plot, surface_plot_daily_maps) are carried over with light
+#     cleanup (now use zone_meta / make_pretty_title instead of their own
+#     inline zone lookups); these are conceptually different from the
+#     time-series comparisons above (per-pixel maps, not per-day series) so
+#     they keep their own section rather than being folded into the
+#     driver_plume_* functions.
+#   - func/flow.R, func/wind.R, func/tide.R, func/ROFI.R, func/surface.R now
+#     just source() this file for backwards compatibility -- nothing that
+#     called them directly should need to change, but new work should target
+#     the functions here instead.
+#   - Not touched / out of scope: func/VOG.R (a separate side-study, not a
+#     plume-driver comparison), func/sentinel.R (Sentinel NetCDF loading
+#     utility), func/analyse_spatiotemporal.R (one-off exploratory script for
+#     a non-RiOMar bounding box), func/river_flow_prep.R, func/glorys_download.R,
+#     func/ODATIS-MR_expert_subset.R (upstream data prep/download, not
+#     driver-vs-plume analysis).
+#
+# NB: This refactor has not been executed against real data (no R available
+# in the environment it was written in) -- the composition of already-tested
+# util.R functions was checked function-by-function for signature and
+# semantic equivalence with the code it replaces, but please run it and spot
+# check a zone or two against the old figures/*.png outputs before trusting
+# it blindly, and keep the old flow.R/wind.R/tide.R/ROFI.R/surface.R content
+# in git history in case anything needs to be recovered.
 
 
 # Analysis ideas ----------------------------------------------------------
@@ -23,6 +89,7 @@
 ## number of times pixel is flagged related to the size of the total panache when it is flagged
 ### Would need to relate wind with time lag to this as well
 ## could also tally the shape of the panache whenever pixel is flagged
+# NB: surface_plot() below (merged in from func/surface.R) is a first pass at this idea.
 
 # Other analyses
 ## Get mean offshore distance of centroid
@@ -57,109 +124,642 @@
 # Use rle() to determine contiguous events temporarily
 # Look at articles in pCloud folder for other analysis ideas and in situ data sources
 
+# NB: For the *interaction* between drivers specifically (not just each
+# driver individually vs. plume, which is what this file covers), see
+# manuscript/driver_interactions_review.md and code/6_driver_interactions.R,
+# which implement the GLM-with-interactions / GAM / regime-stratification
+# road map agreed from that literature review.
 
 
 # Libraries ---------------------------------------------------------------
 
-source("func/util.R")
 library(tidyverse)
 library(tidync)
 library(heatwaveR) # For seasonal smoothing analysis
 library(seasonal) # For X11 analysis (currently not used)
 library(RcppRoll) # For running means to get STL interannual signals closer to X11
 library(patchwork)
+library(sandwich) # For HAC covariance tests (driver_plume_trend)
+library(lmtest) # For more detailed linear model tests (driver_plume_trend)
 library(doParallel); doParallel::registerDoParallel(cores = 14)
+
+# Common function
+source("func/util.R")
 
 # Zones
 zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
 
 
+# Zone / gauge metadata -----------------------------------------------------
+
+# Canonical river mouth -> zone -> tide gauge lookup. Replaces the identical
+# if/else block that was previously copy-pasted in flow_comp(), flow_trend(),
+# flow_plume_trend_plus() (all three in the old flow.R), tide_calc() (tide.R),
+# spatial_wind_calc() (wind.R), surface_plot() (surface.R), and multi_stl()
+# further down this file.
+zone_meta <- river_mouths |>
+  dplyr::mutate(
+    zone = dplyr::case_when(
+      mouth_name == "Seine"       ~ "BAY_OF_SEINE",
+      mouth_name == "Gironde"     ~ "BAY_OF_BISCAY",
+      mouth_name == "Loire"       ~ "SOUTHERN_BRITTANY",
+      mouth_name == "Grand Rhone" ~ "GULF_OF_LION",
+      TRUE ~ NA_character_
+    ),
+    gauge = dplyr::case_when(
+      zone == "BAY_OF_SEINE"      ~ "LE_HAVRE",
+      zone == "BAY_OF_BISCAY"     ~ "PORT-BLOC",
+      zone == "SOUTHERN_BRITTANY" ~ "SAINT-NAZAIRE",
+      zone == "GULF_OF_LION"      ~ "MARSEILLE",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Look up zone metadata by either the river mouth name (as used in
+# river_mouths/zone_meta) or the zone code (as used in zones_bbox / output/
+# paths). Exactly one of mouth_name / zone_name should be supplied.
+# get_zone_meta(mouth_name = "Seine")
+# get_zone_meta(zone_name = "GULF_OF_LION")
+get_zone_meta <- function(mouth_name = NULL, zone_name = NULL){
+  if(!is.null(mouth_name)){
+    out <- dplyr::filter(zone_meta, mouth_name == !!mouth_name)
+  } else if(!is.null(zone_name)){
+    out <- dplyr::filter(zone_meta, zone == !!zone_name)
+  } else {
+    stop("Supply either mouth_name or zone_name to get_zone_meta().")
+  }
+  if(nrow(out) != 1) stop("Zone/mouth not recognised in zone_meta.")
+  return(out)
+}
+
+
+# Driver loading ------------------------------------------------------------
+
+# Shared on-/off-shore wind classification. Previously duplicated verbatim
+# (down to the same TODO comment) in wind.R::spatial_wind_calc(),
+# surface.R::surface_plot(), and multi_stl() further down this file.
+# TODO (carried over from the originals): think of a more sophisticated way
+# to classify on-/off-shore than a hard-coded sign check per zone.
+wind_add_direction <- function(df_wind, zone_name){
+  if(zone_name %in% c("BAY_OF_BISCAY", "SOUTHERN_BRITTANY")){
+    df_wind <- df_wind |> dplyr::mutate(direction = ifelse(u < 0, "off", "on"))
+  } else if(zone_name == "BAY_OF_SEINE"){
+    df_wind <- df_wind |> dplyr::mutate(direction = ifelse(v > 0, "off", "on"))
+  } else if(zone_name == "GULF_OF_LION"){
+    df_wind <- df_wind |> dplyr::mutate(direction = ifelse(v < 0, "off", "on"))
+  } else {
+    stop("Zone not recognised for wind direction classification.")
+  }
+  df_wind |>
+    dplyr::mutate(wind_spd = round(sqrt(u^2 + v^2), 2),
+                  # NB: wind_dir is where the wind is coming FROM, not going to
+                  wind_dir = round((270 - (atan2(v, u) * (180 / pi))) %% 360))
+}
+
+# Load one driver's daily time series for a zone, in a common two-column
+# (date, value) shape so downstream functions don't need to know which
+# driver they're looking at. Generalises the per-driver loading blocks
+# previously duplicated across flow.R/wind.R/tide.R/ROFI.R.
+# load_driver("flow", get_zone_meta(zone_name = "GULF_OF_LION"))
+load_driver <- function(driver_name, meta){
+  driver_name <- match.arg(driver_name, c("flow", "tide", "wind", "current"))
+
+  if(driver_name == "flow"){
+    df <- load_river_flow(paste0("data/RIVER_FLOW/", meta$zone)) |>
+      dplyr::select(date, value = flow)
+
+  } else if(driver_name == "tide"){
+    df <- load_tide_gauge(paste0("data/TIDES/", meta$gauge)) |>
+      dplyr::select(date, value = tide_range, tide_mean)
+
+  } else if(driver_name == "wind"){
+    lon_round <- plyr::round_any(meta$mouth_lon, 0.5)
+    lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
+    lon_range <- c(lon_round - 0.5, lon_round + 0.5)
+    lat_range <- c(lat_round - 0.5, lat_round + 0.5)
+    wind_files <- dir(paste0("~/pCloudDrive/data/WIND/", meta$zone), pattern = "_daily_", full.names = TRUE)
+    df_wind <- purrr::map_dfr(wind_files, load_wind_sub, lon_range, lat_range) |>
+      wind_add_direction(meta$zone)
+    df <- df_wind |> dplyr::select(date, value = wind_spd, wind_dir, direction, u, v)
+
+  } else if(driver_name == "current"){
+    # "current" = coastal-current / ROFI extent, i.e. the closest observational
+    # proxy this project has for the "coastal ocean currents" driver discussed
+    # in manuscript/driver_interactions_review.md. NB: no ROFI data for the
+    # Gulf of Lion (see comment on the old ROFI.R::walk(zones[1:3], ...) call).
+    rofi_files <- dir("data/ROFI", full.names = TRUE)
+    df_rofi <- purrr::map_dfr(rofi_files, load_ROFI) |>
+      dplyr::filter(zone == meta$zone)
+    if(nrow(df_rofi) == 0) stop("No ROFI/current data available for zone ", meta$zone)
+    df <- df_rofi |> dplyr::select(date, value = ROFI_surface)
+  }
+
+  return(df)
+}
+
+
+# Combine plume + one driver --------------------------------------------
+
+# Load plume + a single driver for one zone, join on date, and add STL
+# interannual columns for both. This is the core object every comparison
+# function below operates on.
+# combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"))
+combine_plume_driver <- function(driver_name, meta){
+
+  df_plume  <- load_plume_ts(meta$zone)                    # util.R -- already handles gap-filling + 20000km^2 outlier removal
+  df_driver <- load_driver(driver_name, meta)
+
+  df <- dplyr::left_join(df_plume, df_driver, by = "date") |>
+    zoo::na.trim()
+
+  start_date <- min(df$date)
+  df$plume_stl  <- stl_single(df$plume_area, "inter", start_date)  # util.R
+  df$driver_stl <- stl_single(df$value,      "inter", start_date)
+
+  df <- df |> dplyr::mutate(driver_name = driver_name, zone = meta$zone, .before = "date")
+  return(df)
+}
+
+
+# Multi-timestep correlation -------------------------------------------------
+
+# Aggregate a combine_plume_driver() data.frame to daily/monthly/annual means.
+# Generalises the timestep aggregation from the old ROFI.R::comp_ROFI_plume().
+driver_plume_timesteps <- function(df){
+  df_daily <- df |> dplyr::mutate(timestep = "daily")
+
+  df_monthly <- df |>
+    dplyr::mutate(date = round_date(date, "month") + days(14)) |>
+    dplyr::summarise(plume_area = mean(plume_area, na.rm = TRUE),
+                      value = mean(value, na.rm = TRUE), .by = "date") |>
+    dplyr::mutate(timestep = "monthly")
+
+  df_annual <- df |>
+    dplyr::mutate(date = as.Date(paste0(year(date), "-07-01"))) |>
+    dplyr::summarise(plume_area = mean(plume_area, na.rm = TRUE),
+                      value = mean(value, na.rm = TRUE), .by = "date") |>
+    dplyr::mutate(timestep = "annual")
+
+  list(daily = df_daily, monthly = df_monthly, annual = df_annual)
+}
+
+# Daily/monthly/annual (lagged) correlation between plume area and one driver.
+# Uses util.R::lagged_correlation() (x = plume_area gets lagged, y = driver
+# value is the fixed reference) instead of the three near-identical inline
+# tibble(lag = ..., cor = map_dbl(...)) blocks previously in
+# flow.R/wind.R/tide.R, and the daily/monthly/annual structure previously
+# unique to ROFI.R::comp_ROFI_plume().
+driver_plume_correlation <- function(df, max_lag_daily = 30){
+  ts_list <- driver_plume_timesteps(df)
+
+  cor_daily <- lagged_correlation(x = ts_list$daily$plume_area, y = ts_list$daily$value, max_lag_daily) |>
+    dplyr::mutate(timestep = "daily")
+  cor_monthly <- lagged_correlation(x = ts_list$monthly$plume_area, y = ts_list$monthly$value, 12) |>
+    dplyr::mutate(timestep = "monthly")
+  n_annual_lag <- max(0, min(10, nrow(ts_list$annual) - 1))
+  cor_annual <- lagged_correlation(x = ts_list$annual$plume_area, y = ts_list$annual$value, n_annual_lag) |>
+    dplyr::mutate(timestep = "annual")
+
+  dplyr::bind_rows(cor_daily, cor_monthly, cor_annual) |>
+    dplyr::mutate(timestep = factor(timestep, levels = c("daily", "monthly", "annual")))
+}
+
+
+# Plotting --------------------------------------------------------------
+
+# Driver display metadata (label + colour), used by the plotting functions
+# below so callers only need to pass a driver_name.
+driver_display <- tibble::tribble(
+  ~driver_name, ~driver_label,             ~driver_colour,
+  "flow",       "River flow (m^3 s-1)",    "blue",
+  "tide",       "Tidal range (m)",         "darkgreen",
+  "wind",       "Wind speed (m s-1)",      "purple",
+  "current",    "ROFI / current extent (km^2)", "orchid"
+)
+
+# The 4-panel (a-d) comparison plot previously duplicated in
+# flow.R::flow_comp(), wind.R::spatial_wind_calc(), and tide.R::tide_calc():
+#   a) raw driver time series
+#   b) raw plume-area time series
+#   c) driver vs. plume scatter (+ linear fit)
+#   d) lagged correlation (plume lagged behind driver, 0-30 days)
+# mouth_name is used only for the plot title / output file name.
+plot_driver_plume_comparison <- function(df, driver_name, mouth_name){
+
+  disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
+  cor_df <- driver_plume_correlation(df) |> dplyr::filter(timestep == "daily")
+
+  driver_plot <- ggplot(df, aes(x = date, y = value)) +
+    geom_line() +
+    labs(y = disp$driver_label, x = NULL) +
+    scale_x_date(expand = c(0, 0)) +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  panache_plot <- ggplot(df, aes(x = date, y = plume_area)) +
+    geom_line() +
+    labs(y = "plume area (km^2)", x = NULL) +
+    scale_x_date(expand = c(0, 0)) +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  driver_plume_cor_plot <- ggplot(df, aes(x = value, y = plume_area)) +
+    geom_point(alpha = 0.7) +
+    geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 2) +
+    labs(y = "plume area (km^2)", x = disp$driver_label) +
+    theme(panel.border = element_rect(fill = NA, colour = "black"), legend.position = "bottom")
+
+  driver_plume_cor_lag_plot <- ggplot(cor_df, aes(x = lag, y = cor)) +
+    geom_point() +
+    labs(x = paste("lag plume after", disp$driver_name, "(days)"), y = "correlation (r)") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  plot_title <- grid::textGrob(paste0(mouth_name, " : ", driver_name, " vs plume size"),
+                               gp = grid::gpar(fontsize = 16, fontface = "bold", col = "black"))
+  ts_plot <- ggpubr::ggarrange(driver_plot, panache_plot, ncol = 1, nrow = 2, labels = c("a)", "b)"), align = "v")
+  cor_plot <- ggpubr::ggarrange(driver_plume_cor_plot, driver_plume_cor_lag_plot, ncol = 1, nrow = 2, labels = c("c)", "d)"), heights = c(1, 0.3))
+  full_plot <- ggpubr::ggarrange(ts_plot, cor_plot, ncol = 2, nrow = 1)
+  full_plot_title <- ggpubr::ggarrange(plot_title, full_plot, ncol = 1, nrow = 2, heights = c(0.05, 1)) + ggpubr::bgcolor("white")
+
+  ggsave(filename = paste0("figures/cor_plot_", driver_name, "_plume_", mouth_name, ".png"),
+         plot = full_plot_title, width = 12, height = 6, dpi = 600)
+  invisible(full_plot_title)
+}
+
+# Dual-y-axis STL plot (plume_stl on the left axis, driver_stl scaled onto
+# the right axis). Generalises the inline duplicate of
+# figure.R::make_the_X11_plot_of_river_and_plume() that wind.R and tide.R had
+# each hand-copied and hard-coded to their own driver; also closes the TODO
+# left in manuscript/make_figures_tables.R for Figures 7-9 (wind/wave/tide
+# X11 panels), which asked for exactly this generalisation.
+plot_driver_plume_dual_axis <- function(df, driver_name, zone_name){
+
+  disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
+
+  scaling_factor <- sec_axis_adjustement_factors(var_to_scale = df$driver_stl, var_ref = df$plume_stl)
+  df <- df |> dplyr::mutate(driver_scaled = driver_stl * scaling_factor$diff + scaling_factor$adjust)
+  unique_years <- df$date |> year() |> unique()
+
+  pl <- ggplot(data = df) +
+    geom_point(aes(x = date, y = plume_stl), color = "brown") +
+    geom_path(aes(x = date, y = plume_stl), color = "brown") +
+    geom_point(aes(x = date, y = driver_scaled), color = disp$driver_colour) +
+    geom_path(aes(x = date, y = driver_scaled), color = disp$driver_colour) +
+    scale_x_date(name = "",
+                 breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(),
+                 labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist()) +
+    scale_y_continuous(name = "Plume area (km²)",
+                       sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
+                                           name = disp$driver_label)) +
+    labs(title = zone_name) +
+    ggplot_theme() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+          plot.subtitle = element_text(hjust = 0.5),
+          axis.text.y.left = element_text(color = "brown"),
+          axis.ticks.y.left = element_line(color = "brown"),
+          axis.line.y.left = element_line(color = "brown"),
+          axis.title.y.left = element_text(color = "brown", margin = unit(c(0, 7.5, 0, 0), "mm")),
+          axis.text.y.right = element_text(color = disp$driver_colour),
+          axis.ticks.y.right = element_line(color = disp$driver_colour),
+          axis.line.y.right = element_line(color = disp$driver_colour),
+          axis.title.y.right = element_text(color = disp$driver_colour, margin = unit(c(0, 0, 0, 7.5), "mm")),
+          panel.border = element_rect(linetype = "solid", fill = NA))
+
+  ggsave(filename = paste0("figures/dual_axis_", driver_name, "_plume_", zone_name, ".png"),
+         plot = pl, width = 12, height = 6, dpi = 300)
+  invisible(pl)
+}
+
+# Weighted-least-squares trend estimator with AR(1)/STL-based weights and a
+# Newey-West (HAC) standard error correction, following the monthly time
+# series adjustment methodology of Sutton et al. (2022) referenced in
+# manuscript.tex Sec. 2.6.1. Generalises flow.R::flow_plume_trend_plus(),
+# which implemented this for river flow only; used here for any driver.
+# driver_plume_trend(combine_plume_driver("flow", get_zone_meta(mouth_name = "Grand Rhone")), "flow", "Grand Rhone")
+driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL){
+
+  disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
+
+  df <- df |>
+    dplyr::mutate(doy = yday(date), month = month(date), year = year(date))
+  if(!is.null(end_date)) df <- dplyr::filter(df, date <= as.Date(end_date))
+
+  # De-trend to get day-of-year and monthly climatological adjustments
+  df_resid <- df |>
+    dplyr::mutate(driver_resid = residuals(lm(value ~ date, na.action = na.exclude)),
+                  plume_resid  = residuals(lm(plume_area ~ date, na.action = na.exclude)))
+
+  df_doy_clim <- df_resid |>
+    dplyr::summarise(driver_resid_doy = mean(driver_resid, na.rm = TRUE),
+                      plume_resid_doy = mean(plume_resid, na.rm = TRUE), .by = "doy") |>
+    dplyr::mutate(driver_resid_doy_clim = driver_resid_doy - mean(driver_resid_doy, na.rm = TRUE),
+                  plume_resid_doy_clim  = plume_resid_doy - mean(plume_resid_doy, na.rm = TRUE))
+  df_month_clim <- df_resid |>
+    dplyr::summarise(driver_resid_monthly = mean(driver_resid, na.rm = TRUE),
+                      plume_resid_monthly = mean(plume_resid, na.rm = TRUE), .by = "month") |>
+    dplyr::mutate(driver_resid_monthly_clim = driver_resid_monthly - mean(driver_resid_monthly, na.rm = TRUE),
+                  plume_resid_monthly_clim  = plume_resid_monthly - mean(plume_resid_monthly, na.rm = TRUE))
+
+  df_daily <- df |>
+    dplyr::left_join(df_doy_clim, by = "doy") |>
+    dplyr::mutate(driver_doy_adj = value - driver_resid_doy_clim,
+                  plume_doy_adj  = plume_area - plume_resid_doy_clim) |>
+    dplyr::mutate(date_int = seq_len(dplyr::n()), .after = "date")
+
+  df_monthly <- df |>
+    dplyr::mutate(date = floor_date(date, "month")) |>
+    dplyr::summarise(driver_monthly = mean(value, na.rm = TRUE),
+                      plume_monthly = mean(plume_area, na.rm = TRUE), .by = c("year", "month", "date")) |>
+    dplyr::left_join(df_month_clim, by = "month") |>
+    dplyr::mutate(driver_monthly_adj = driver_monthly - driver_resid_monthly_clim,
+                  plume_monthly_adj  = plume_monthly - plume_resid_monthly_clim) |>
+    dplyr::mutate(date_int = seq_len(dplyr::n()), .after = "date")
+
+  # AR(1)-weighted / STL-weighted / unweighted linear models + HAC SEs
+  ar_weights_func <- function(val_col, start_year, time_step){
+    ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
+    ar_model <- ar(ts_obj, order.max = 1)
+    phi_est <- ar_model$ar
+    sigma_est <- sqrt(phi_est)
+    error_variance <- sigma_est^2 / (1 - phi_est^2)
+    rep((1 / (error_variance^2)), length(val_col))
+  }
+  stl_weights_func <- function(val_col, start_year, time_step){
+    ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
+    stl_ts <- stl(ts_obj, s.window = "periodic")
+    stl_var <- as.vector(stl_ts$time.series[, "remainder"])
+    1 / (stl_var^2)
+  }
+  lm_HAC_weights_func <- function(weight_choice, val_col, date_col){
+    start_year <- year(min(date_col))
+    time_step <- if(length(val_col) < 1000) 12 else 365
+    weights <- switch(weight_choice,
+                      ar = ar_weights_func(val_col, start_year, time_step),
+                      stl = stl_weights_func(val_col, start_year, time_step),
+                      rep(1, length(val_col)))
+    lm_model <- lm(val_col ~ date_col, weights = weights)
+    lm_model_HAC <- coeftest(lm_model, vcov = vcovHAC(lm_model))
+    tibble::tibble(n = length(val_col), time_step = time_step, start_year = start_year,
+                   weight_choice = weight_choice, intercept = lm_model_HAC[1, 1],
+                   slope = lm_model_HAC[2, 1], slope_se = lm_model_HAC[2, 2],
+                   slope_t = lm_model_HAC[2, 3], slope_p = lm_model_HAC[2, 4])
+  }
+
+  wls_driver_daily   <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_daily$driver_doy_adj, date_col = df_daily$date)
+  wls_driver_monthly <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_monthly$driver_monthly_adj, date_col = df_monthly$date)
+  wls_plume_daily    <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_daily$plume_doy_adj, date_col = df_daily$date)
+  wls_plume_monthly  <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_monthly$plume_monthly_adj, date_col = df_monthly$date)
+
+  stats <- dplyr::bind_rows(
+    dplyr::mutate(wls_driver_daily,   variable = "driver", timestep = "daily"),
+    dplyr::mutate(wls_driver_monthly, variable = "driver", timestep = "monthly"),
+    dplyr::mutate(wls_plume_daily,    variable = "plume",  timestep = "daily"),
+    dplyr::mutate(wls_plume_monthly,  variable = "plume",  timestep = "monthly")
+  ) |>
+    dplyr::mutate(driver_name = driver_name, mouth_name = mouth_name,
+                  slope_annualised = dplyr::case_when(timestep == "daily" ~ slope * 365.25,
+                                                      timestep == "monthly" ~ slope * 365.25,
+                                                      TRUE ~ slope), .before = "n")
+
+  # Plot (daily = ar-weighted line; monthly = ar-weighted line), labelled with slope + p-value
+  trend_labels_driver <- dplyr::filter(stats, variable == "driver", weight_choice == "ar")
+  trend_labels_plume  <- dplyr::filter(stats, variable == "plume",  weight_choice == "ar")
+  x_daily <- min(df_daily$date) + days(round(0.05 * as.numeric(diff(range(df_daily$date)))))
+  x_monthly <- min(df_daily$date) + days(round(0.45 * as.numeric(diff(range(df_daily$date)))))
+
+  pl_plume <- ggplot(data = df_daily, aes(x = date, y = plume_area)) +
+    geom_point(colour = "sienna", alpha = 0.1) +
+    geom_point(aes(y = plume_doy_adj), colour = "darkblue", alpha = 0.1) +
+    geom_point(data = df_monthly, aes(y = plume_monthly), colour = "sienna", alpha = 0.6, size = 3) +
+    geom_point(data = df_monthly, aes(y = plume_monthly_adj), colour = "darkred", size = 3) +
+    geom_abline(data = dplyr::filter(trend_labels_plume, timestep == "daily"),
+                aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkblue") +
+    geom_abline(data = dplyr::filter(trend_labels_plume, timestep == "monthly"),
+                aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkred") +
+    labs(x = NULL, y = "Plume area [km^2]",
+         title = paste0(mouth_name, " : plume area after statistical treatment (vs. ", driver_name, ")"),
+         subtitle = "Red = adjusted monthly values; blue = adjusted daily values; brown = original data") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  pl_driver <- ggplot(data = df_daily, aes(x = date, y = value)) +
+    geom_point(colour = "purple", alpha = 0.1) +
+    geom_point(aes(y = driver_doy_adj), colour = "darkblue", alpha = 0.1) +
+    geom_point(data = df_monthly, aes(y = driver_monthly), colour = "purple", alpha = 0.6, size = 3) +
+    geom_point(data = df_monthly, aes(y = driver_monthly_adj), colour = "darkred", size = 3) +
+    geom_abline(data = dplyr::filter(trend_labels_driver, timestep == "daily"),
+                aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkblue") +
+    geom_abline(data = dplyr::filter(trend_labels_driver, timestep == "monthly"),
+                aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkred") +
+    labs(x = NULL, y = disp$driver_label,
+         title = paste0(mouth_name, " : ", driver_name, " after statistical treatment"),
+         subtitle = "Red = adjusted monthly values; blue = adjusted daily values; purple = original data") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  pl_combi <- ggpubr::ggarrange(pl_plume, pl_driver, ncol = 1, nrow = 2)
+  ggsave(filename = paste0("figures/trends_plume_", driver_name, "_adj_", mouth_name, ".png"),
+         pl_combi, width = 12, height = 10)
+
+  return(stats)
+}
+
+
+# Runners ---------------------------------------------------------------
+
+# Run the full comparison + trend suite for one driver across all four river
+# mouths, returning the combined correlation and trend statistics (these feed
+# manuscript.tex Table 6 "driver_stats" once finalised). This is the direct
+# replacement for the old:
+#   plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_comp)
+#   plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_trend)
+#   plyr::d_ply(.data = river_mouths, .variables = "row_name", .fun = flow_plume_trend_plus, .parallel = TRUE)
+# (and the wind.R / tide.R / ROFI.R equivalents), now driver-agnostic.
+# run_driver_suite("flow")
+run_driver_suite <- function(driver_name){
+
+  mouths <- if(driver_name == "current") dplyr::filter(zone_meta, zone != "GULF_OF_LION") else zone_meta  # no ROFI data for the Gulf of Lion
+
+  results <- purrr::pmap(mouths, function(...){
+    meta <- tibble::tibble(...)
+    df <- combine_plume_driver(driver_name, meta)
+
+    plot_driver_plume_comparison(df, driver_name, meta$mouth_name)
+    plot_driver_plume_dual_axis(df, driver_name, meta$zone)
+    cor_stats <- driver_plume_correlation(df) |> dplyr::mutate(mouth_name = meta$mouth_name, zone = meta$zone, driver_name = driver_name)
+    trend_stats <- driver_plume_trend(df, driver_name, meta$mouth_name)
+
+    list(correlation = cor_stats, trend = trend_stats)
+  })
+
+  list(
+    correlation = purrr::map_dfr(results, "correlation"),
+    trend = purrr::map_dfr(results, "trend")
+  )
+}
+
+# Run all four drivers for all zones. NB: this recreates every figure
+# previously produced by running flow.R + wind.R + tide.R + ROFI.R in
+# sequence; it is not run automatically on source() (see bottom of file).
+run_all_driver_suites <- function(){
+  purrr::map(c("flow", "tide", "wind", "current"), run_driver_suite) |>
+    purrr::set_names(c("flow", "tide", "wind", "current"))
+}
+
+
+# Surface / pixel-level multi-driver maps ------------------------------
+# Carried over from func/surface.R with light cleanup (zone_meta /
+# make_pretty_title instead of an inline zone lookup); conceptually distinct
+# from the time-series work above since these operate per-pixel rather than
+# per-day, so they keep their own section.
+
+# Load all daily plume pixels for a zone, join on-date driver values, and
+# summarise per pixel (count, driver ranges, on-/off-shore wind proportion).
+# zone_name <- "GULF_OF_LION"
+surface_plot <- function(zone_name){
+
+  meta <- get_zone_meta(zone_name = zone_name)
+
+  # Zone-specific plotting bounding boxes (wider than the driver-search box
+  # used elsewhere, purely for map extent) -- unchanged from surface.R
+  bbox_wide <- switch(zone_name,
+    "BAY_OF_SEINE"      = list(lon_W = -1.0, lon_E = 0.5, lat_N = 0.5, lat_S = -0.2),
+    "BAY_OF_BISCAY"     = list(lon_W = -3.0, lon_E = 0.1, lat_N = 1.0, lat_S = -0.5),
+    "SOUTHERN_BRITTANY" = list(lon_W = -3.0, lon_E = 0.2, lat_N = 0.5, lat_S = -1.0),
+    "GULF_OF_LION"      = list(lon_W = -2.0, lon_E = 3.0, lat_N = 0.0, lat_S = -2.5),
+    stop("Zone not recognised.")
+  )
+  lon_round <- plyr::round_any(meta$mouth_lon, 0.5); lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
+  lon_range_wide <- c(lon_round + bbox_wide$lon_W, lon_round + bbox_wide$lon_E)
+  lat_range_wide <- c(lat_round + bbox_wide$lat_S, lat_round + bbox_wide$lat_N)
+
+  # Load all daily plume maps for the zone
+  plume_dir <- paste0("output/REGIONAL_PLUME_DETECTION/", zone_name, "/SEXTANT/SPM/merged/Standard/PLUME_DETECTION/DAILY")
+  plume_files <- dir(plume_dir, pattern = ".csv", recursive = TRUE, full.names = TRUE)
+  df_plume <- plyr::ldply(plume_files, load_plume_surface, .parallel = TRUE)  # util.R
+
+  # Load drivers via the shared loader
+  df_flow <- load_driver("flow", meta) |> dplyr::rename(flow = value)
+  df_tide <- load_driver("tide", meta) |> dplyr::rename(tide_range = value)
+  df_wind <- load_driver("wind", meta) |> dplyr::rename(wind_spd = value)
+
+  df_full <- df_plume |>
+    dplyr::left_join(df_flow, by = "date") |>
+    dplyr::left_join(df_tide, by = "date") |>
+    dplyr::left_join(df_wind, by = "date")
+
+  suppressWarnings(
+    df_pixel <- dplyr::summarise(df_full,
+                                 count = dplyr::n(),
+                                 flow_min = min(flow, na.rm = TRUE), flow_mean = mean(flow, na.rm = TRUE), flow_max = max(flow, na.rm = TRUE),
+                                 tide_range_min = min(tide_range, na.rm = TRUE), tide_range_mean = mean(tide_range, na.rm = TRUE), tide_range_max = max(tide_range, na.rm = TRUE),
+                                 wind_spd_min = min(wind_spd, na.rm = TRUE), wind_spd_mean = mean(wind_spd, na.rm = TRUE), wind_spd_max = max(wind_spd, na.rm = TRUE),
+                                 count_on = sum(direction == "on", na.rm = TRUE), count_off = sum(direction == "off", na.rm = TRUE),
+                                 .by = c("lon", "lat")) |>
+    dplyr::mutate(prop_n = count / length(unique(df_full$date)),
+                  prop_on = count_on / count, prop_off = count_off / count,
+                  dplyr::across(dplyr::everything(), ~ ifelse(is.finite(.), ., NA)))
+  )
+
+  plot_count <- ggplot(df_pixel, aes(x = lon, y = lat)) +
+    annotation_borders(regions = "France", fill = "grey70") +
+    geom_tile(aes(fill = log10(count))) + scale_fill_viridis_c() +
+    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
+    labs(x = NULL, y = NULL, title = "Plume count (n)") + theme_bw() + theme(legend.position = "bottom")
+
+  plot_count_prop <- ggplot(df_pixel, aes(x = lon, y = lat)) +
+    annotation_borders(regions = "France", fill = "grey70") +
+    geom_tile(aes(fill = prop_n)) + scale_fill_viridis_c() +
+    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
+    labs(x = NULL, y = NULL, title = "Plume count proportion (n/all_days)") + theme_bw() + theme(legend.position = "bottom")
+
+  plot_flow <- df_pixel |>
+    dplyr::select(lon, lat, flow_min, flow_mean, flow_max) |>
+    tidyr::pivot_longer(cols = c(flow_min, flow_mean, flow_max), names_to = "var") |>
+    dplyr::mutate(var = factor(var, levels = c("flow_min", "flow_mean", "flow_max"))) |>
+    ggplot(aes(x = lon, y = lat)) +
+    geom_tile(aes(fill = value)) + scale_fill_viridis_c(option = "A") +
+    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
+    labs(x = NULL, y = NULL, title = "River flow range") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
+
+  plot_wind_spd <- df_pixel |>
+    dplyr::select(lon, lat, wind_spd_min, wind_spd_mean, wind_spd_max) |>
+    tidyr::pivot_longer(cols = c(wind_spd_min, wind_spd_mean, wind_spd_max), names_to = "var") |>
+    dplyr::mutate(var = factor(var, levels = c("wind_spd_min", "wind_spd_mean", "wind_spd_max"))) |>
+    ggplot(aes(x = lon, y = lat)) +
+    geom_tile(aes(fill = value)) + scale_fill_viridis_c(option = "C") +
+    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
+    labs(x = NULL, y = NULL, title = "Wind speed range") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
+
+  plot_wind_dir <- df_pixel |>
+    dplyr::select(lon, lat, prop_on, prop_off) |>
+    tidyr::pivot_longer(cols = c(prop_on, prop_off), names_to = "var") |>
+    dplyr::mutate(var = factor(var, levels = c("prop_on", "prop_off"))) |>
+    ggplot(aes(x = lon, y = lat)) +
+    geom_tile(aes(fill = value)) +
+    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
+    labs(x = NULL, y = NULL, title = "Proportion of on- or off-shore winds") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
+
+  plot_tide_range <- df_pixel |>
+    dplyr::select(lon, lat, tide_range_min, tide_range_mean, tide_range_max) |>
+    tidyr::pivot_longer(cols = c(tide_range_min, tide_range_mean, tide_range_max), names_to = "var") |>
+    dplyr::mutate(var = factor(var, levels = c("tide_range_min", "tide_range_mean", "tide_range_max"))) |>
+    ggplot(aes(x = lon, y = lat)) +
+    geom_tile(aes(fill = value)) + scale_fill_viridis_c(option = "E") +
+    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
+    labs(x = NULL, y = NULL, title = "Tidal range range") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
+
+  plot_multi <- (plot_count | plot_count_prop) / (plot_flow | plot_tide_range) / (plot_wind_spd | plot_wind_dir)
+  ggsave(filename = paste0("figures/surface_stats_", zone_name, ".png"), plot = plot_multi, height = 14, width = 26)
+  invisible(df_pixel)
+}
+
+# Facet daily plume maps by year x month for a zone.
+surface_plot_daily_maps <- function(zone_name){
+
+  df_plume <- plyr::ldply(zone_name, load_plume_surface, .parallel = FALSE) |>  # NB: do not run in parallel, it's done elsewhere
+    dplyr::mutate(year = year(date), month = month(date), doy = yday(date), day = day(date))
+
+  plot_daily <- ggplot(df_plume, aes(x = lon, y = lat)) +
+    geom_tile(aes(fill = day), alpha = 0.3) +
+    scale_fill_viridis_c(option = "A", na.value = "transparent") +
+    labs(x = NULL, y = NULL, fill = "Day of month", title = paste0("Daily plume maps per month and year for ", zone_name)) +
+    facet_grid(year ~ month) + theme_bw() + theme(legend.position = "bottom")
+  ggsave(filename = paste0("figures/surface_daily_maps_", zone_name, ".png"), plot = plot_daily, height = 34, width = 36)
+  invisible(plot_daily)
+}
+
+
 # STL ---------------------------------------------------------------------
 
-# Load all plume and driver data and perform stl
+# Load all plume and driver data and perform stl. Refactored to route through
+# combine_plume_driver()-style loading (still bespoke here because this
+# function needs all four drivers joined at once, not one at a time).
 # zone <- zones[4]
 multi_stl <- function(zone){
-  
-  # Determine meta-data based on zone
-  if(zone == "BAY_OF_SEINE"){
-    gauge = "LE_HAVRE"; mouth_name = "Seine"
-    mouth_lon = 0.145; mouth_lat = 49.43
-  } else if(zone == "BAY_OF_BISCAY"){
-    gauge = "PORT-BLOC"; mouth_name = "Gironde"
-    mouth_lon = -1.05; mouth_lat = 45.59
-  } else if(zone == "SOUTHERN_BRITTANY"){
-    gauge = "SAINT-NAZAIRE"; mouth_name = "Loire"
-    mouth_lon = -2.10; mouth_lat = 47.29
-  } else if(zone == "GULF_OF_LION"){
-    gauge = "MARSEILLE"; mouth_name = "Grand Rhone"
-    mouth_lon = 4.83; mouth_lat = 43.41
-  } else {
-    stop("Zone not recognised.")
-  }
-  
-  # Load panache time series based on river mouth name
-  df_plume <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")) |> 
-    dplyr::select(date:confidence_index_in_perc) |>
-    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
-    dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
-    mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area)) |> 
-    zoo::na.trim()
-  
-  # Standardise last column name so it can be combined across sites
-  colnames(df_plume)[ncol(df_plume)] <- "SPM_threshold"
-  
-  # Load river flow data
-  df_river_flow <- load_river_flow(paste0("data/RIVER_FLOW/",zone))
 
-  # Load tide data
-  df_tide <- load_tide_gauge(paste0("data/TIDES/",gauge))
-  
-  # Load and subset wind data to + 0.5 N and E from mouth
-  lon_round <- plyr::round_any(mouth_lon, 0.5); lat_round <- plyr::round_any(mouth_lat, 0.5)
-  lon_range <- c(lon_round-0.5, lon_round+0.5); lat_range <- c(lat_round-0.5, lat_round+0.5); 
-  wind_files <- dir(paste0("~/pCloudDrive/data/WIND/",zone), pattern = "_daily_", full.names = TRUE)
-  df_wind <- purrr::map_dfr(wind_files, load_wind_sub, lon_range, lat_range)
-  
-  # Determine simple upwelling/downwelling index based on coastal direction (based on river mouth name)
-  # TODO: Think of a more sophisticated way to do this
-  if(zone %in% c("BAY_OF_BISCAY", "SOUTHERN_BRITTANY")){
-    df_wind_updown <- df_wind |> 
-      mutate(direction = ifelse(u < 0, "off", "on"))
-  } else if (zone == "BAY_OF_SEINE"){
-    df_wind_updown <- df_wind |> 
-      mutate(direction = ifelse(v > 0, "off", "on"))
-  } else if (zone == "GULF_OF_LION"){
-    df_wind_updown <- df_wind |> 
-      mutate(direction = ifelse(v < 0, "off", "on"))
-  }
-  
-  # Calculate wind speed and direction
-  # NB: wind_dir is where the wind is coming from, not going to
-  df_wind_full <- df_wind_updown |> 
-    mutate(wind_spd = round(sqrt(u^2 + v^2), 2),
-           wind_dir = round((270-(atan2(v, u)*(180/pi)))%%360))
-  
-  # Combine all dataframes for further stats
-  # NB: The trailing NAs are problematic...
-  df_all <- left_join(df_plume, df_river_flow, by = "date") |> 
-    left_join(df_tide, by = "date") |> 
-    left_join(df_wind_full, by = "date") |> 
-    mutate(plume_seas = stl_single(plume_area, out_col = "seas", start_date = min(df_plume$date)),
-           plume_inter = stl_single(plume_area, out_col = "inter", start_date = min(df_plume$date)),
-           plume_resid = stl_single(plume_area, out_col = "remain", start_date = min(df_plume$date)),
-           flow_seas = stl_single(flow, out_col = "seas", start_date = min(df_plume$date)),
-           flow_inter = stl_single(flow, out_col = "inter", start_date = min(df_plume$date)),
-           flow_resid = stl_single(flow, out_col = "remain", start_date = min(df_plume$date)),
-           tide_seas = stl_single(tide_range, out_col = "seas", start_date = min(df_plume$date)),
-           tide_inter = stl_single(tide_range, out_col = "inter", start_date = min(df_plume$date)),
-           tide_resid = stl_single(tide_range, out_col = "remain", start_date = min(df_plume$date)),
-           wind_seas = stl_single(wind_spd, out_col = "seas", start_date = min(df_plume$date)),
-           wind_inter = stl_single(wind_spd, out_col = "inter", start_date = min(df_plume$date)),
-           wind_resid = stl_single(wind_spd, out_col = "remain", start_date = min(df_plume$date))) |> 
-    mutate(zone = zone, .before = "date")
-  # print(ncol(df_all))
+  meta <- get_zone_meta(zone_name = zone)
 
-  # Exit
+  df_plume <- load_plume_ts(zone) |>
+    dplyr::rename(SPM_threshold = tidyselect::last_col())  # standardise last column name so it combines across sites
+
+  df_river_flow <- load_driver("flow", meta) |> dplyr::rename(flow = value)
+  df_tide <- load_driver("tide", meta) |> dplyr::rename(tide_range = value)
+  df_wind_full <- load_driver("wind", meta) |> dplyr::rename(wind_spd = value)
+
+  df_all <- dplyr::left_join(df_plume, df_river_flow, by = "date") |>
+    dplyr::left_join(df_tide, by = "date") |>
+    dplyr::left_join(df_wind_full, by = "date") |>
+    dplyr::mutate(plume_seas = stl_single(plume_area, out_col = "seas", start_date = min(df_plume$date)),
+                  plume_inter = stl_single(plume_area, out_col = "inter", start_date = min(df_plume$date)),
+                  plume_resid = stl_single(plume_area, out_col = "remain", start_date = min(df_plume$date)),
+                  flow_seas = stl_single(flow, out_col = "seas", start_date = min(df_plume$date)),
+                  flow_inter = stl_single(flow, out_col = "inter", start_date = min(df_plume$date)),
+                  flow_resid = stl_single(flow, out_col = "remain", start_date = min(df_plume$date)),
+                  tide_seas = stl_single(tide_range, out_col = "seas", start_date = min(df_plume$date)),
+                  tide_inter = stl_single(tide_range, out_col = "inter", start_date = min(df_plume$date)),
+                  tide_resid = stl_single(tide_range, out_col = "remain", start_date = min(df_plume$date)),
+                  wind_seas = stl_single(wind_spd, out_col = "seas", start_date = min(df_plume$date)),
+                  wind_inter = stl_single(wind_spd, out_col = "inter", start_date = min(df_plume$date)),
+                  wind_resid = stl_single(wind_spd, out_col = "remain", start_date = min(df_plume$date))) |>
+    dplyr::mutate(zone = zone, .before = "date")
+
   return(df_all)
 }
 
@@ -173,63 +773,59 @@ save(stl_all, file = "output/STATS/stl_all.RData")
 # Load data
 plume_clim <- map_dfr(zones, plume_clim_calc)
 
-  
+
 # Multi-driver comparison -------------------------------------------------
 
-# Plot the results 
+# Plot the results
 # df_stl <- stl_all
 multi_plot <- function(df_stl){
-  
-  # Make pretty plot titles
-  df_pretty <- df_stl |> 
-    mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
-                                  zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
-                                  zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
-                                  zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
-    mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion")))
-  
+
+  # Make pretty plot titles -- now via util.R::make_pretty_title() instead of
+  # an inline case_when() duplicate of the same logic used elsewhere in this
+  # file and in ROFI.R.
+  df_pretty <- make_pretty_title(df_stl)
+
   # One year of data for seasonal plots
-  df_mean <- df_pretty |> 
-    summarise(plume_mean = mean(plume_inter, na.rm = TRUE), 
-              flow_mean = mean(flow_inter, na.rm = TRUE), 
-              wind_mean = mean(wind_inter, na.rm = TRUE), 
+  df_mean <- df_pretty |>
+    summarise(plume_mean = mean(plume_inter, na.rm = TRUE),
+              flow_mean = mean(flow_inter, na.rm = TRUE),
+              wind_mean = mean(wind_inter, na.rm = TRUE),
               tide_mean = mean(tide_inter, na.rm = TRUE), .by = c(zone, plot_title))
-  df_seas <- df_pretty |> 
-    filter(year(date) == 1999) |> 
+  df_seas <- df_pretty |>
+    filter(year(date) == 1999) |>
     mutate(month = month(date, label = TRUE, abbr = TRUE),
-           doy = yday(date)) |> 
-    dplyr::select(zone, plot_title, month, doy, plume_seas, flow_seas, tide_seas, wind_seas) |> 
-    distinct() |> 
+           doy = yday(date)) |>
+    dplyr::select(zone, plot_title, month, doy, plume_seas, flow_seas, tide_seas, wind_seas) |>
+    distinct() |>
     left_join(df_mean, by = c("zone", "plot_title")) |>
     mutate(plume_seas = plume_seas + plume_mean,
            flow_seas = flow_seas + flow_mean,
            tide_seas = tide_seas + tide_mean,
            wind_seas = wind_seas + wind_mean)
-  
+
   # Convenience wrappers for daily, seasonal, and interannual plot
   plot_daily <- function(df, y_col, line_colour, y_label, file_stub){
     unique_years <- df$date |> year() |> unique()
-    pl_daily <- ggplot(data = df) + 
+    pl_daily <- ggplot(data = df) +
       geom_path(aes_string(x = "date", y = y_col), color = line_colour) +
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
       scale_x_date(name = "", expand = c(0,0),
-                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
+                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(),
                    labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
       scale_y_continuous(name = y_label) +
       labs( x = NULL) +
       ggplot_theme()
     ggsave(filename = paste0("figures/",file_stub,"_daily.png"), plot = pl_daily, width = 24, height = 24, dpi = 300)
-    # pl_daily
   }
   plot_seas <- function(df, y_col, line_colour, y_label, file_stub){
     df_sub <- df[,c("plot_title", "month", y_col)]
     colnames(df_sub)[3] = "val"
-    df_sub <- df_sub |> 
+    df_sub <- df_sub |>
       summarise(val_min = min(val, na.rm = TRUE),
                 val_mean = mean(val, na.rm = TRUE),
-                val_max = max(val, na.rm = TRUE), .by = c("plot_title", "month")) |> 
+                val_max = max(val, na.rm = TRUE), .by = c("plot_title", "month")) |>
       mutate(month_int = as.integer(month))
-    pl_seas <- ggplot(data = df_sub, aes(x = month_int)) + 
+    pl_seas <- ggplot(data = df_sub, aes(x = month_int)) +
       geom_ribbon(aes(ymin = val_min, ymax = val_max), fill = line_colour, alpha = 0.3) +
       geom_path(aes(y = val_mean), color = line_colour, linewidth = 2) +
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
@@ -238,80 +834,76 @@ multi_plot <- function(df_stl){
       labs(x = NULL) +
       ggplot_theme()
     ggsave(filename = paste0("figures/",file_stub,"_seas.png"), plot = pl_seas, width = 24, height = 24, dpi = 300)
-    # pl_seas
   }
   plot_inter <- function(df, y_col, line_colour, y_label, file_stub){
     unique_years <- df$date |> year() |> unique()
     colnames(df)[which(colnames(df) == y_col)] <- "value"
-    df_sub <- df |> 
+    df_sub <- df |>
       dplyr::select(plot_title, date, value) |>
       mutate(date = date - lubridate::days(lubridate::wday(date)-1)) |>
-      # mutate(date = round_date(date, unit = "months")) |>
-      filter(date >= min(df$date)) |> 
+      filter(date >= min(df$date)) |>
       group_by(plot_title, date) |>
-      summarise(value = mean(value, na.rm = TRUE), .groups = "keep") |> 
+      summarise(value = mean(value, na.rm = TRUE), .groups = "keep") |>
       group_by(plot_title) |>
-      mutate(running_mean = roll_mean(value, n = 48, fill = NA, align = "center")) |> 
+      mutate(running_mean = roll_mean(value, n = 48, fill = NA, align = "center")) |>
       ungroup()
-    pl_inter <- ggplot(data = df_sub) + 
+    pl_inter <- ggplot(data = df_sub) +
       geom_path(aes(x = date, y = running_mean), color = line_colour, linewidth = 2) +
       facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-      scale_x_date(name = "", 
-                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
+      scale_x_date(name = "",
+                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(),
                    labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
       scale_y_continuous(name = y_label) +
       ggplot_theme()
     ggsave(filename = paste0("figures/",file_stub,"_inter.png"), plot = pl_inter, width = 24, height = 24, dpi = 300)
-    # pl_inter
   }
-  
+
   # Daily time series
   plot_daily(df_pretty, "plume_area", "brown", "Plume area (km^2)", "plume")
-  
+
   # Seasonal time series
   plot_seas(df_seas, "plume_seas", "brown", "Plume area (km^2)", "plume")
   plot_seas(df_seas, "flow_seas", "blue", "River flow (m^3 s-1)", "flow")
   plot_seas(df_seas, "tide_seas", "darkgreen", "Tidal range (m)", "tide")
   plot_seas(df_seas, "wind_seas", "purple", "Wind speed (m s-1)", "wind")
-  
+
   # Interannual time series
   plot_inter(df_pretty, "plume_inter", "brown", "Plume area (km^2)", "plume")
   plot_inter(df_pretty, "flow_inter", "blue", "River flow (m^3 s-1)", "flow")
   plot_inter(df_pretty, "tide_inter", "darkgreen", "Tidal range (m)", "tide")
   plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s-1)", "wind")
-  
+
   # Seasonal comparison plots
   comparison_plot_save(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_seas")
   comparison_plot_save(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_seas")
   comparison_plot_save(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_seas")
-  
+
   # Interannual comparison plots
   comparison_plot_save(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter")
   comparison_plot_save(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_inter")
   comparison_plot_save(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_inter")
-  
+
   # Everything on one plot
-  df_all_scaled <- df_pretty |> 
-    group_by(plot_title) |> 
+  df_all_scaled <- df_pretty |>
+    group_by(plot_title) |>
     mutate(plum_scaled = plume_inter/max(plume_inter, na.rm = TRUE),
            flow_scaled = flow_inter/max(flow_inter, na.rm = TRUE),
            tide_scaled = tide_inter/max(tide_inter, na.rm = TRUE),
-           wind_scaled = wind_inter/max(wind_inter, na.rm = TRUE)) |> 
+           wind_scaled = wind_inter/max(wind_inter, na.rm = TRUE)) |>
     mutate(plum_scaled = plum_scaled/mean(plum_scaled, na.rm = TRUE),
            flow_scaled = flow_scaled/mean(flow_scaled, na.rm = TRUE),
            tide_scaled = tide_scaled/mean(tide_scaled, na.rm = TRUE),
            wind_scaled = wind_scaled/mean(wind_scaled, na.rm = TRUE)) |>
-    dplyr::select(plot_title, date, plum_scaled:wind_scaled) |> 
-    pivot_longer(plum_scaled:wind_scaled) |> 
+    dplyr::select(plot_title, date, plum_scaled:wind_scaled) |>
+    pivot_longer(plum_scaled:wind_scaled) |>
     mutate(date = date - lubridate::days(lubridate::wday(date)-1)) |>
-    # mutate(date = round_date(date, unit = "months")) |>
-    filter(date >= min(df_pretty$date)) |> 
+    filter(date >= min(df_pretty$date)) |>
     group_by(plot_title, name, date) |>
-    summarise(value = mean(value, na.rm = TRUE), .groups = "keep") |> 
+    summarise(value = mean(value, na.rm = TRUE), .groups = "keep") |>
     group_by(plot_title, name) |>
-    mutate(running_mean = roll_mean(value, n = 48, fill = NA, align = "center")) |> 
+    mutate(running_mean = roll_mean(value, n = 48, fill = NA, align = "center")) |>
     ungroup()
-  
+
   all_plot <- ggplot(df_all_scaled, aes(x = date, y = running_mean)) +
     geom_path(aes(colour = name), linewidth = 2) +
     facet_wrap(~plot_title, ncol = 1) +
@@ -329,31 +921,31 @@ multi_plot(stl_all)
 # Missing data ------------------------------------------------------------
 
 # Get missing dates of
-SPM_files_NA <- data.frame(file_name = dir("data/SEXTANT/SPM/", pattern = ".nc", recursive = TRUE)) |> 
-  mutate(base_name = basename(file_name)) |> 
-  separate(base_name, "-", extra = "drop") |> 
-  dplyr::rename(date = `-`) |> 
-  mutate(date = as.Date(date, format = "%Y%m%d")) |> 
-  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+SPM_files_NA <- data.frame(file_name = dir("data/SEXTANT/SPM/", pattern = ".nc", recursive = TRUE)) |>
+  mutate(base_name = basename(file_name)) |>
+  separate(base_name, "-", extra = "drop") |>
+  dplyr::rename(date = `-`) |>
+  mutate(date = as.Date(date, format = "%Y%m%d")) |>
+  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
   filter(is.na(file_name))
 write_csv(SPM_files_NA, "output/STATS/missing_SPM.csv")
-chla_files_NA <- data.frame(file_name = dir("data/SEXTANT/CHLA/", pattern = ".nc", recursive = TRUE)) |> 
-  mutate(base_name = basename(file_name)) |> 
-  separate(base_name, "-", extra = "drop") |> 
-  dplyr::rename(date = `-`) |> 
-  mutate(date = as.Date(date, format = "%Y%m%d")) |> 
-  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
+chla_files_NA <- data.frame(file_name = dir("data/SEXTANT/CHLA/", pattern = ".nc", recursive = TRUE)) |>
+  mutate(base_name = basename(file_name)) |>
+  separate(base_name, "-", extra = "drop") |>
+  dplyr::rename(date = `-`) |>
+  mutate(date = as.Date(date, format = "%Y%m%d")) |>
+  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
   filter(is.na(file_name))
 write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
 
 # Filter down to missing days
-SPM_files_NA_count <- SPM_files |>  
+SPM_files_NA_count <- SPM_files_NA |>
   mutate(year = year(date),
-         month = month(date, label = TRUE, abbr = TRUE)) |> 
+         month = month(date, label = TRUE, abbr = TRUE)) |>
   summarise(miss_count_month_year = n(), .by = c("year", "month"))
-chla_files_NA_count <- chla_files |> 
+chla_files_NA_count <- chla_files_NA |>
   mutate(year = year(date),
-         month = month(date, label = TRUE, abbr = TRUE)) |> 
+         month = month(date, label = TRUE, abbr = TRUE)) |>
   summarise(miss_count_month_year = n(), .by = c("year", "month"))
 
 # Plot
@@ -381,24 +973,24 @@ load_X11 <- function(zone, type = "plume"){
     file_stub = "/X11_ANALYSIS/river_flow/River_flow___WEEKLY.csv"
   }
   suppressMessages(
-  df <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,file_stub)) |> 
-    mutate(zone = zone, .before = "dates") |> 
-    dplyr::rename(date = dates) |> 
-    dplyr::select(zone:Residual_signal) |> 
-    rename_with(~ paste0(.x, "_X11_",type), everything()) 
+  df <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,file_stub)) |>
+    mutate(zone = zone, .before = "dates") |>
+    dplyr::rename(date = dates) |>
+    dplyr::select(zone:Residual_signal) |>
+    rename_with(~ paste0(.x, "_X11_",type), everything())
   )
   colnames(df)[1:2] <- c("zone", "date")
   return(df)
 }
 X11_plume <- map_dfr(zones, load_X11)
 X11_flow <- map_dfr(zones, load_X11, type = "flow")
-X_11_plume_flow <- left_join(X11_plume, X11_flow, by = join_by(zone, date)) |> 
-  dplyr::rename(plume_inter = Interannual_signal_X11_plume, flow_inter = Interannual_signal_X11_flow) |> 
-  left_join(zones_bbox, by = "zone") |> 
+X_11_plume_flow <- left_join(X11_plume, X11_flow, by = join_by(zone, date)) |>
+  dplyr::rename(plume_inter = Interannual_signal_X11_plume, flow_inter = Interannual_signal_X11_flow) |>
+  left_join(zones_bbox, by = "zone") |>
   mutate(plot_title = zone_pretty)
 
 # Get correlation stats
-X_11_plume_flow_stats_all <- X_11_plume_flow |> 
+X_11_plume_flow_stats_all <- X_11_plume_flow |>
   summarise(r = round(cor(plume_inter, flow_inter, use = "pairwise.complete.obs"), 2), .by = "zone")
 
 # Interannual comparison plots
@@ -406,926 +998,39 @@ comparison_plot_save(X_11_plume_flow, "plume_inter", "flow_inter", "brown", "blu
 
 # STL
 load("output/STATS/stl_all.RData")
-stl_sub <- dplyr::select(stl_all, zone, date, flow, tide_range, direction:wind_resid) |> 
+stl_sub <- dplyr::select(stl_all, zone, date, flow, tide_range, direction:wind_resid) |>
   rename_with(~ paste0(.x, "_STL"), everything())
 colnames(stl_sub)[1:7] <- c("zone", "date", "flow", "tide_range", "direction", "wind_spd", "wind_dir")
 
 # heatwaveR
-plume_clim <- map_dfr(zones, plume_clim_calc) |> 
-  # mutate(plume_inter = plume_area - plume_seas) |> 
-  group_by(zone) |> 
-  mutate(plume_seas = plume_seas - mean(plume_seas)) |> 
-  ungroup() |> 
+plume_clim <- map_dfr(zones, plume_clim_calc) |>
+  group_by(zone) |>
+  mutate(plume_seas = plume_seas - mean(plume_seas)) |>
+  ungroup() |>
   mutate(plume_inter = plume_area - plume_seas)
 
 # Combine into one big df
-decomp_df <- left_join(stl_sub, X11_plume, by = c("zone", "date")) |> 
-  left_join(X11_flow, by = c("zone", "date")) |> 
-  mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
-                                zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
-                                zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
-                                zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
-  mutate(plot_title = factor(plot_title, 
-                             levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion"))) |> 
+decomp_df <- left_join(stl_sub, X11_plume, by = c("zone", "date")) |>
+  left_join(X11_flow, by = c("zone", "date")) |>
+  make_pretty_title() |>
   mutate(year = year(date),
          doy = yday(date))
 decomp_df$doy <- mapply(adjust_doy, decomp_df$year, decomp_df$doy)
 decomp_df <- left_join(decomp_df, plume_clim, by = c("zone", "date", "doy"))
 
-
-## Plume comparison --------------------------------------------------------
-
-### Interannual -------------------------------------------------------------
-
-# Extract and prep the interannual values
-plume_inter <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, plume_inter_STL, Interannual_signal_X11_plume, plume_inter) |> 
-  pivot_longer(cols = c(plume_inter_STL, Interannual_signal_X11_plume, plume_inter)) |> 
-  mutate(name = case_when(name == "plume_inter_STL" ~ "plume STL",
-                          name == "Interannual_signal_X11_plume" ~ "plume X11",
-                          name == "plume_inter" ~ "plume smooth")) |> 
-  filter(!is.na(value))
-
-# Line plot of plume size - interannual
-line_plume_inter <- ggplot(plume_inter, aes(x = date, y = value)) +
-  geom_path(aes(colour = name), linewidth = 2) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)") +
-  # scale_colour_manual(key_glyph = "point") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of plume size - interannual
-scatter_plume_inter <- plume_inter |> 
-  pivot_wider(names_from = name, values_from = value) |> 
-  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `plume X11`, y = `plume STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = month)) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = NULL) +
-  # coord_cartesian(ratio = 1) +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_plume_inter <- line_plume_inter + scatter_plume_inter + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_inter_comp.png", plot = multi_plume_inter, height = 20, width = 30)
-
-
-### Seasonal ----------------------------------------------------------------
-
-# Extract and prep the monthly values
-plume_seas <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, doy, plume_seas_STL, Seasonal_signal_X11_plume, plume_seas) |> 
-  pivot_longer(cols = c(plume_seas_STL, Seasonal_signal_X11_plume, plume_seas)) |> 
-  mutate(name = case_when(name == "plume_seas_STL" ~ "plume STL",
-                          name == "Seasonal_signal_X11_plume" ~ "plume X11",
-                          name == "plume_seas" ~ "plume smooth")) |> 
-  filter(!is.na(value))
-  
-# Line plot of plume size - seas
-line_plume_seas <- ggplot(plume_seas, aes(x = date, y = value)) +
-  geom_path(aes(colour = name), alpha = 0.8, linewidth = 2) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)") +
-  # scale_colour_manual(key_glyph = "point") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of plume size - seas
-scatter_plume_seas <- plume_seas |> 
-  pivot_wider(names_from = name, values_from = value) |> 
-  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `plume X11`, y = `plume STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = month)) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = NULL) +
-  # coord_cartesian(ratio = 1) +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_plume_seas <- line_plume_seas + scatter_plume_seas + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_seas_comp.png", plot = multi_plume_seas, height = 20, width = 30)
-
-
-### DOY ---------------------------------------------------------------------
-
-# get the average doy values
-plume_doy <- plume_seas |> 
-  summarise(val_min = min(value, na.rm = TRUE),
-            val_mean = mean(value, na.rm = TRUE),
-            val_max = max(value, na.rm = TRUE), 
-            .by = c("zone", "plot_title", "name", "doy")) |> 
-  arrange(doy)
-
-# Ribbon plot of plume - doy
-line_plume_doy <- ggplot(plume_doy, aes(x = doy, y = val_mean)) +
-  geom_ribbon(aes(fill = name, ymin = val_min, ymax = val_max), alpha = 0.2, show.legend = FALSE) +
-  geom_path(aes(colour = name), linewidth = 2)  +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = "day-of-year", y = "Plume area (km^2)") +
-  # scale_colour_manual(key_glyph = "point") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of plume size - doy
-scatter_plume_doy <- plume_doy |> 
-  dplyr::select(-val_min, -val_max) |> 
-  pivot_wider(names_from = name, values_from = val_mean) |> 
-  # mutate(month = month(doy_adj, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `plume X11`, y = `plume STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = doy), size = 7) +
-  scale_colour_viridis_c() +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = "day-of-year") +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_plume_doy <- line_plume_doy + scatter_plume_doy + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_doy_comp.png", plot = multi_plume_doy, height = 20, width = 30)
-
-
-### Residual ----------------------------------------------------------------
-
-# Extract and prep the interannual values
-plume_resid <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, plume_resid_STL, Residual_signal_X11_plume) |> 
-  pivot_longer(cols = c(plume_resid_STL, Residual_signal_X11_plume)) |> 
-  mutate(name = case_when(name == "plume_resid_STL" ~ "plume STL",
-                          name == "Residual_signal_X11_plume" ~ "plume X11")) |> 
-  filter(!is.na(value))
-
-# Line plot of plume size - residual
-line_plume_resid <- ggplot(plume_resid, aes(x = date, y = value)) +
-  geom_path(aes(colour = name), linewidth = 2) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)") +
-  # scale_colour_manual(key_glyph = "point") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of plume size - residual
-scatter_plume_resid <- plume_resid |> 
-  pivot_wider(names_from = name, values_from = value) |> 
-  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `plume X11`, y = `plume STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = month)) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = NULL) +
-  # coord_cartesian(ratio = 1) +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_plume_resid <- line_plume_resid + scatter_plume_resid + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_resid_comp.png", plot = multi_plume_resid, height = 20, width = 30)
-
-
-### Trends ------------------------------------------------------------------
-
-# Quickly show the trend line and stats for all sites
-plume_trend_daily_all <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, plume_area)
-## Monthly
-plume_trend_monthly_all <- plume_trend_daily_all |> 
-  mutate(date = round_date(date, "month") + days(14)) |> 
-  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
-## Annual
-plume_trend_annual_all <- plume_trend_daily_all |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
-  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
-
-# Calculate trend 
-trend_daily_all <- plume_trend_daily_all |> 
-  summarise(slope = coef(lm(plume_area ~ date))["date"] * 365.25, .by = c("zone", "plot_title"))
-trend_monthly_all <- plume_trend_monthly_all |> 
-  summarise(slope = coef(lm(plume_area ~ date))["date"] * 365.25, .by = c("zone", "plot_title"))
-trend_annual_all <- plume_trend_annual_all |> 
-  summarise(slope = coef(lm(plume_area ~ date))["date"] * 365.25, .by = c("zone", "plot_title"))
-trend_labels_all <- rbind(trend_daily_all, trend_monthly_all, trend_annual_all) |> 
-  mutate(time_step = rep(c("daily", "monthly", "annual"), each = nrow(trend_daily_all)), .before = "slope") |> 
-  arrange(plot_title, time_step) |>
-  mutate(x = as.Date("1998-01-01"),
-         y = c(2300, 2100, 1900, 
-               11000, 10000, 9000, 
-               15000, 13800, 12600, 
-               5500, 5000, 4500))
-
-# Plot all sites as facets
-line_trend_base_all <- ggplot(plume_trend_daily_all, aes(x = date, y = plume_area)) +
-  geom_point(alpha = 0.5, aes(colour = "daily")) +
-  geom_smooth(method = "lm", colour = "black", linewidth = 2) +
-  geom_point(data = plume_trend_monthly_all, size = 4, alpha = 0.5, aes(colour = "monthly")) +
-  geom_smooth(data = plume_trend_monthly_all, method = "lm", colour = "darkblue", linewidth = 2) +
-  geom_point(data = plume_trend_annual_all, size = 7, alpha = 0.5, aes(colour = "annual")) +
-  geom_smooth(data = plume_trend_annual_all, method = "lm", colour = "blue", linewidth = 2) +
-  geom_label(data = trend_labels_all, show.legend = FALSE,
-             aes(x = x, y = y, colour = time_step, size = 6, hjust = 0,
-                 label = paste0(time_step," data slope = ", round(slope, 2), " km^2 yr-1", sep = ""))) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for daily, monthly, and annual mean plume data") +
-  scale_color_manual(name = "Time step",
-                     values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
-                     breaks = c("daily", "monthly", "annual")) +
-  facet_wrap(~plot_title, ncol = 2, scales = "free_y") +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_base_all.png", plot = line_trend_base_all, height = 9, width = 12)
-
-
-# Here we look at only Gulf of Lion to keep the output simpler
-
-# First we start with a linear trend of the raw time series, and another plot with the linear analysis per month
-## Daily data
-plume_trend_daily <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |>
-  dplyr::select(zone, plot_title, date, plume_area)
-## Monthly
-plume_trend_monthly <- plume_trend_daily |> 
-  mutate(date = round_date(date, "month") + days(14)) |> 
-  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
-## Annual
-plume_trend_annual <- plume_trend_daily |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
-  summarise(plume_area = mean(plume_area, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
-# Fit the linear models and extract slopes
-trend_daily <- coef(lm(plume_area ~ date, data = plume_trend_daily))["date"] * 365.25
-trend_monthly <- coef(lm(plume_area ~ date, data = plume_trend_monthly))["date"] * 365.25
-trend_annual <- coef(lm(plume_area ~ date, data = plume_trend_annual))["date"] * 365.25
-
-# Create a little dataframe for plotting the labels
-trend_labels <- data.frame(
-  time_step = c("daily", "monthly", "annual"),
-  slope = c(trend_daily, trend_monthly, trend_annual),
-  x = as.Date(c("1998-01-01", "1998-01-01", "1998-01-01")),
-  y = c(5500, 5000, 4500)
-)
-
-# Plot the three dataframes as time series with linear trends on the same panel
-line_trend_base <- ggplot(plume_trend_daily, aes(x = date, y = plume_area)) +
-  geom_point(alpha = 0.5, aes(colour = "daily")) +
-  geom_smooth(method = "lm", colour = "black", linewidth = 2) +
-  geom_point(data = plume_trend_monthly, size = 4, alpha = 0.5, aes(colour = "monthly")) +
-  geom_smooth(data = plume_trend_monthly, method = "lm", colour = "darkblue", linewidth = 2) +
-  geom_point(data = plume_trend_annual, size = 7, alpha = 0.5, aes(colour = "annual")) +
-  geom_smooth(data = plume_trend_annual, method = "lm", colour = "blue", linewidth = 2) +
-  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
-             colour = c("black", "darkblue", "blue"), size = 6, hjust = 0) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for daily, monthly, and annual mean plume data") +
-  scale_color_manual(name = "Time step",
-                     values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
-                     breaks = c("daily", "monthly", "annual")) +
-  # ggplot_theme() +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
-
-# The same plot comparing the seasonal components
-plume_seas <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |> 
-  dplyr::select(zone, plot_title, date, plume_seas_STL, Seasonal_signal_X11_plume, plume_seas) |> 
-  pivot_longer(cols = c(plume_seas_STL, Seasonal_signal_X11_plume, plume_seas)) |> 
-  mutate(name = case_when(name == "plume_seas_STL" ~ "STL seasonal",
-                          name == "Seasonal_signal_X11_plume" ~ "X11 seasonal",
-                          name == "plume_seas" ~ "smoothed seasonal")) |> 
-  filter(!is.na(value),
-         date <= as.Date("2025-02-14"),
-         date >= as.Date("1999-02-15"))
-
-# Create small dataframe of linear model slopes by name
-trend_seas_STL <- coef(lm(value ~ date, data = filter(plume_seas, name == "STL seasonal")))["date"] * 365.25
-trend_seas_X11 <- coef(lm(value ~ date, data = filter(plume_seas, name == "X11 seasonal")))["date"] * 365.25
-trend_seas_smooth <- coef(lm(value ~ date, data = filter(plume_seas, name == "smoothed seasonal")))["date"] * 365.25
-trend_seas_labels <- data.frame(
-  name = c("STL seasonal", "X11 seasonal", "smoothed seasonal"),
-  slope = c(trend_seas_STL, trend_seas_X11, trend_seas_smooth),
-  x = as.Date(c("1998-01-01", "1998-01-01", "1998-01-01")),
-  y = c(1500, 1300, 1100)
-)
-
-line_trend_seas <- ggplot(plume_seas, aes(x = date, y = value)) +
-  geom_path(alpha = 0.5, aes(colour = name)) +
-  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume seasonal components") +
-  geom_label(data = trend_seas_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
-             colour = c("turquoise4", "chartreuse4", "indianred4"), size = 6, hjust = 0) +
-  scale_color_manual(name = "Decomposition method",
-                     values = c("STL seasonal" = "turquoise4", "X11 seasonal" = "chartreuse4", "smoothed seasonal" = "indianred4"),
-                     breaks = c("STL seasonal", "X11 seasonal", "smoothed seasonal")) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_seas.png", plot = line_trend_seas, height = 6, width = 12)
-
-# The same plot comparing the residual components
-plume_resid <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |> 
-  dplyr::select(zone, plot_title, date, plume_resid_STL, Residual_signal_X11_plume) |> 
-  pivot_longer(cols = c(plume_resid_STL, Residual_signal_X11_plume)) |> 
-  mutate(name = case_when(name == "plume_resid_STL" ~ "STL residual",
-                          name == "Residual_signal_X11_plume" ~ "X11 residual")) |> 
-  filter(!is.na(value)) |> 
-  filter(date <= as.Date("2024-12-31"),
-         date >= as.Date("1999-01-01"))
-
-# Create small dataframe of linear model slopes by name
-trend_resid_STL <- coef(lm(value ~ date, data = filter(plume_resid, name == "STL residual")))["date"] * 365.25
-trend_resid_X11 <- coef(lm(value ~ date, data = filter(plume_resid, name == "X11 residual")))["date"] * 365.25
-trend_resid_labels <- data.frame(
-  name = c("STL residual", "X11 residual"),
-  slope = c(trend_resid_STL, trend_resid_X11),
-  x = as.Date(c("1998-01-01", "1998-01-01")),
-  y = c(4500, 4000)
-)
-
-line_trend_resid <- ggplot(plume_resid, aes(x = date, y = value)) +
-  geom_path(alpha = 0.5, aes(colour = name)) +
-  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume residual components") +
-  geom_label(data = trend_resid_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
-             colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
-  scale_color_manual(name = "Decomposition method",
-                     values = c("STL residual" = "turquoise4", "X11 residual" = "chartreuse4"),
-                     breaks = c("STL residual", "X11 residual")) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_resid.png", plot = line_trend_resid, height = 6, width = 12)
-
-# The same plot comparing the interannual components
-plume_inter <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |> 
-  dplyr::select(zone, plot_title, date, plume_inter_STL, Interannual_signal_X11_plume) |> 
-  pivot_longer(cols = c(plume_inter_STL, Interannual_signal_X11_plume)) |> 
-  mutate(name = case_when(name == "plume_inter_STL" ~ "STL interannual",
-                          name == "Interannual_signal_X11_plume" ~ "X11 interannual")) |> 
-  filter(!is.na(value)) |> 
-  filter(date <= as.Date("2024-12-31"),
-         date >= as.Date("1999-01-01"))
-
-# Create small dataframe of linear model slopes by name
-trend_inter_STL <- coef(lm(value ~ date, data = filter(plume_inter, name == "STL interannual")))["date"] * 365.25
-trend_inter_X11 <- coef(lm(value ~ date, data = filter(plume_inter, name == "X11 interannual")))["date"] * 365.25
-trend_inter_labels <- data.frame(
-  name = c("STL interannual", "X11 interannual"),
-  slope = c(trend_inter_STL, trend_inter_X11),
-  x = as.Date(c("1998-01-01", "1998-01-01")),
-  y = c(2800, 2500)
-)
-
-# Create monthly means for more approximate comparison
-plume_inter_monthly <- plume_inter |> 
-  mutate(date = round_date(date, "month") + days(14)) |> 
-  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
-  mutate(timestep = "monthly")
-
-# Create annual means
-plume_inter_annual <- plume_inter |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
-  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
-  mutate(timestep = "annual")
-
-# Combine to plot all at once
-plume_inter_timesteps <- mutate(plume_inter, timestep = "daily") |> 
-  rbind(plume_inter_monthly) |> 
-  rbind(plume_inter_annual) |> 
-  mutate(timestep = factor(timestep, levels = c("daily", "monthly", "annual")))
-
-# Plot interannual trends
-line_trend_inter <- ggplot(plume_inter_timesteps, aes(x = date, y = value)) +
-  geom_line(data = filter(plume_inter_timesteps, timestep == "daily"), 
-            aes(colour = name, linetype = timestep), alpha = 0.7) +
-  geom_line(data = filter(plume_inter_timesteps, timestep == "monthly"), 
-            aes(colour = name, linetype = timestep), alpha = 0.8, linewidth = 1.5) +
-  geom_line(data = filter(plume_inter_timesteps, timestep == "annual"), 
-            aes(colour = name, linetype = timestep), alpha = 0.9, linewidth = 2.0) +
-  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume interannual components") +
-  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
-             colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
-  scale_color_manual(name = "Decomposition",
-                     values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
-                     breaks = c("STL interannual", "X11 interannual")) +
-  scale_linetype_manual(name = "Time step",
-                     values = c("daily" = "dotted", "monthly" = "dashed", "annual" = "solid"),
-                     breaks = c("daily", "monthly", "annual"),
-                     labels = c("daily/weekly", "monthly", "annual")) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
-
-
-### Proportion --------------------------------------------------------------
-
-# Plot the interannual time series against the raw data
-plume_ts <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |> 
-  filter(date >= as.Date("1999-01-01"), date <= as.Date("2024-12-31")) |> 
-  dplyr::select(zone, plot_title, date, plume_area,
-                plume_seas_STL, plume_inter_STL, plume_resid_STL,
-                Interannual_signal_X11_plume, Seasonal_signal_X11_plume, Residual_signal_X11_plume) |> 
-  mutate(total_STL = plume_seas_STL + plume_inter_STL + plume_resid_STL,
-         total_X11 = Seasonal_signal_X11_plume + Interannual_signal_X11_plume + Residual_signal_X11_plume) |>
-  pivot_longer(cols = plume_area:total_X11) |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
-  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
-  mutate(decomp_group = case_when(name == "plume_area" ~ "base",
-                                  name %in% c("total_STL", "plume_seas_STL", "plume_inter_STL", "plume_resid_STL") ~ "STL",
-                                  name %in% c("total_X11", "Seasonal_signal_X11_plume", "Interannual_signal_X11_plume", "Residual_signal_X11_plume") ~ "X11"),
-         component_group = case_when(name %in% c("plume_area", "total_STL", "total_X11") ~ "total",
-                                     name %in% c("plume_seas_STL", "Seasonal_signal_X11_plume") ~ "seasonal",
-                                     name %in% c("plume_inter_STL", "Interannual_signal_X11_plume") ~ "interannual",
-                                     name %in% c("plume_resid_STL", "Residual_signal_X11_plume") ~ "residual")) |> 
-  mutate(decomp_group = factor(decomp_group, levels = c("base", "X11", "STL")),
-         component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
-
-# Plot the time series' of values
-line_plume_comp_vs_raw <-ggplot(plume_ts, aes(x = date, y = value, colour = component_group, linetype = decomp_group)) +
-  geom_path(linewidth = 1.0) +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)",
-       title = "Decomposition components compared to base plume area (average mean values)") +
-  scale_colour_brewer(palette = "Dark2") +
-  scale_linetype_manual(name = "Decomposition",
-                 values = c("solid", "dashed", "dotted")) +
-                 # values = c("total" = "solid", "seasonal" = "dotdash", "interannual" = "dashed", "residual" = "dotted")) +
-  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_components_vs_raw.png", plot = line_plume_comp_vs_raw, height = 6, width = 12)
-
-# Calculate proportion values
-plume_prop <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |> 
-  filter(date >= as.Date("1999-01-01"), date <= as.Date("2024-12-31")) |> 
-  dplyr::select(zone, plot_title, date, plume_area,
-                plume_seas_STL, plume_inter_STL, plume_resid_STL,
-                Interannual_signal_X11_plume, Seasonal_signal_X11_plume, Residual_signal_X11_plume) |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |>
-  group_by(zone, plot_title, date) |> 
-  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)), .groups = "drop") |>
-  mutate(total_STL = plume_inter_STL + plume_seas_STL + plume_resid_STL,
-         prop_inter_STL = plume_inter_STL / plume_area,
-         prop_seas_STL = plume_seas_STL / plume_area,
-         prop_resid_STL = plume_resid_STL / plume_area,
-         total_X11 = Interannual_signal_X11_plume + Seasonal_signal_X11_plume + Residual_signal_X11_plume,
-         prop_inter_X11 = Interannual_signal_X11_plume / plume_area,
-         prop_seas_X11 = Seasonal_signal_X11_plume / plume_area,
-         prop_resid_X11 = Residual_signal_X11_plume / plume_area) |> 
-  dplyr::select(zone, plot_title, date, plume_area, plume_inter_STL, Interannual_signal_X11_plume,
-                total_STL, prop_inter_STL, prop_seas_STL, prop_resid_STL,
-                total_X11, prop_inter_X11, prop_seas_X11, prop_resid_X11) |>
-  pivot_longer(cols = plume_area:prop_resid_X11) |> 
-  mutate(decomp_group = case_when(name == "plume_area" ~ "base",
-                                  name %in% c("total_STL", "plume_inter_STL",
-                                              "prop_seas_STL", "prop_inter_STL", "prop_resid_STL") ~ "STL",
-                                  name %in% c("total_X11", "Interannual_signal_X11_plume",
-                                              "prop_seas_X11", "prop_inter_X11", "prop_resid_X11") ~ "X11"),
-         component_group = case_when(name %in% c("plume_area", "total_STL", "total_X11") ~ "total",
-                                     name %in% c("prop_seas_STL", "prop_seas_X11") ~ "seasonal",
-                                     name %in% c("prop_inter_STL", "prop_inter_X11") ~ "interannual",
-                                     name %in% c("prop_resid_STL", "prop_resid_X11") ~ "residual"),
-         linear_plot = case_when(name %in% c("plume_area", "plume_inter_STL", "Interannual_signal_X11_plume") ~ "yes")) |> 
-  mutate(decomp_group = factor(decomp_group, levels = c("base", "X11", "STL")),
-         component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
-
-# Get scaling factors for dual axis plot
-scaling_factor_plume_prop <- sec_axis_adjustement_factors(plume_prop$value[plume_prop$component_group == "total"], 
-                                                          plume_prop$value[plume_prop$component_group != "total"])
-
-# Create scaled columns
-plume_prop <- plume_prop |> 
-  mutate(scaled_value = case_when(component_group != "total" ~ value,
-                                  linear_plot == "yes" ~ value * scaling_factor_plume_prop$diff + scaling_factor_plume_prop$adjust))
-                                  # component_group == "total" ~ value * scaling_factor_prop$diff + scaling_factor_prop$adjust))
-
-# Double y-axis plot that shows the total values on the second Y axis, and the proportion values on the first Y axis
-line_plume_prop <- ggplot(filter(plume_prop, component_group != "total"), aes(x = date, y = scaled_value)) +
-  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "black", linewidth = 1.5) +
-  geom_path(data = filter(plume_prop, linear_plot == "yes"),#component_group == "total"),
-            aes(y = scaled_value, colour = decomp_group), linewidth = 1.5) +
-  geom_col(aes(fill = component_group, colour = decomp_group), linewidth = 1.0, position = "dodge", alpha = 0.5) +
-  scale_colour_brewer(palette = "Set1") +
-  scale_fill_manual(values = c("brown", "yellow", "purple")) +
-  scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00"),
-    name = "Proportion of total plume area",
-    sec.axis = sec_axis(transform = ~ {. - scaling_factor_plume_prop$adjust} / scaling_factor_plume_prop$diff,
-                        name = "Average annual plume area (km^2)", breaks = c(600, 800, 1000), labels = c("600", "800", "1000"))
-  ) +
-  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
-  labs(x = NULL, colour = "Decomposition", fill = "Component",
-       title = "Proportion of annual mean base plume area by decomposition method",
-       subtitle = "Second axis shows annual mean base plume area and the STL and X11 interannual values") +
-  # scale_colour_brewer(palette = "Dark2") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_proportion_comparison.png", plot = line_plume_prop, height = 6, width = 12)
-
-
-## River flow comparison ---------------------------------------------------
-
-#### Interannual -------------------------------------------------------------
-
-# Extract and prep the interannual values
-flow_inter <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, flow_inter_STL, Interannual_signal_X11_flow) |> 
-  pivot_longer(cols = c(flow_inter_STL, Interannual_signal_X11_flow)) |> 
-  mutate(name = case_when(name == "flow_inter_STL" ~ "flow STL",
-                          name == "Interannual_signal_X11_flow" ~ "flow X11")) |> 
-  filter(!is.na(value))
-
-# Line plot of flow size - interannual
-line_flow_inter <- ggplot(flow_inter, aes(x = date, y = value)) +
-  geom_path(aes(colour = name), linewidth = 2) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "River flow (m^3 s-1)") + 
-  scale_colour_brewer(palette = "Dark2") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of flow size - interannual
-scatter_flow_inter <- flow_inter |> 
-  pivot_wider(names_from = name, values_from = value) |> 
-  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `flow X11`, y = `flow STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = month)) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = NULL) +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_flow_inter <- line_flow_inter + scatter_flow_inter + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_inter_comp.png", plot = multi_flow_inter, height = 20, width = 30)
-
-
-### Seasonal ----------------------------------------------------------------
-
-# Extract and prep the monthly values
-flow_seas <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, flow_seas_STL, Seasonal_signal_X11_flow) |> 
-  pivot_longer(cols = c(flow_seas_STL, Seasonal_signal_X11_flow)) |> 
-  mutate(name = case_when(name == "flow_seas_STL" ~ "flow STL",
-                          name == "Seasonal_signal_X11_flow" ~ "flow X11")) |> 
-  filter(!is.na(value))
-
-# Line plot of flow size - seas
-line_flow_seas <- ggplot(flow_seas, aes(x = date, y = value)) +
-  geom_path(aes(colour = name)) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "River flow (m^3 s-1)") +
-  scale_colour_brewer(palette = "Dark2") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of flow size - seas
-scatter_flow_seas <- flow_seas |> 
-  pivot_wider(names_from = name, values_from = value) |> 
-  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `flow X11`, y = `flow STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = month)) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = NULL) +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_flow_seas <- line_flow_seas + scatter_flow_seas + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_seas_comp.png", plot = multi_flow_seas, height = 20, width = 30)
-
-
-### DOY ---------------------------------------------------------------------
-
-# get the average doy values
-# TODO: Improve the doy workflow. Get the source code from heatwaveR
-flow_doy <- flow_seas |> 
-  mutate(year = year(date),
-         doy = yday(date)) #|> 
-# mutate(doy_adj = adjust_doy(year, doy))
-flow_doy$doy_adj <- mapply(adjust_doy, flow_doy$year, flow_doy$doy)
-flow_doy <- flow_doy |> 
-  summarise(val_min = min(value, na.rm = TRUE),
-            val_mean = mean(value, na.rm = TRUE),
-            val_max = max(value, na.rm = TRUE), 
-            .by = c("zone", "plot_title", "name", "doy_adj")) |> 
-  arrange(doy_adj)
-
-# Ribbon plot of flow - doy
-line_flow_doy <- ggplot(flow_doy, aes(x = doy_adj, y = val_mean)) +
-  geom_ribbon(aes(fill = name, ymin = val_min, ymax = val_max), alpha = 0.2, show.legend = FALSE) +
-  geom_path(aes(colour = name), linewidth = 2)  +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = "day-of-year", y = "River flow (m^3 s-1)") +
-  scale_colour_brewer(palette = "Dark2", aesthetics = c("colour", "fill")) +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of flow size - doy
-scatter_flow_doy <- flow_doy |> 
-  dplyr::select(-val_min, -val_max) |> 
-  pivot_wider(names_from = name, values_from = val_mean) |> 
-  # mutate(month = month(doy_adj, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `flow X11`, y = `flow STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = doy_adj), size = 7) +
-  scale_colour_viridis_c() +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = "day-of-year") +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_flow_doy <- line_flow_doy + scatter_flow_doy + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_doy_comp.png", plot = multi_flow_doy, height = 20, width = 30)
-
-
-### Residual ----------------------------------------------------------------
-
-# Extract and prep the interannual values
-flow_resid <- decomp_df |> 
-  dplyr::select(zone, plot_title, date, flow_resid_STL, Residual_signal_X11_flow) |> 
-  pivot_longer(cols = c(flow_resid_STL, Residual_signal_X11_flow)) |> 
-  mutate(name = case_when(name == "flow_resid_STL" ~ "flow STL",
-                          name == "Residual_signal_X11_flow" ~ "flow X11")) |> 
-  filter(!is.na(value))
-
-# Line plot of flow size - residual
-line_flow_resid <- ggplot(flow_resid, aes(x = date, y = value)) +
-  geom_path(aes(colour = name), linewidth = 2) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "flow area (km^2)") +
-  scale_colour_brewer(palette = "Dark2", aesthetics = c("colour", "fill")) +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom", 
-        panel.grid.minor.x = element_line(colour = "black", linewidth = 1),
-        panel.grid.major.x = element_line(colour = "black", linewidth = 2))
-
-# Scatterplot of flow size - seas
-scatter_flow_resid <- flow_resid |> 
-  pivot_wider(names_from = name, values_from = value) |> 
-  mutate(month = month(date, label = TRUE, abbr = FALSE)) |> 
-  ggplot(aes(x = `flow X11`, y = `flow STL`)) +
-  geom_abline(intercept = 0, slope = 1, linewidth = 3, linetype = "dashed", color = "black") +
-  geom_smooth(method = "lm", colour = "black", linewidth = 3) +
-  geom_point(aes(colour = month)) +
-  facet_wrap(~plot_title, ncol = 1, scales = "free") +
-  labs(colour = NULL) +
-  # coord_cartesian(ratio = 1) +
-  guides(colour = guide_legend(override.aes = list(size = 5))) +
-  ggplot_theme() +
-  theme(legend.position = "bottom")
-
-# Combine and save
-multi_flow_resid <- line_flow_resid + scatter_flow_resid + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_resid_comp.png", plot = multi_flow_resid, height = 20, width = 30)
-
-
-### Trends ------------------------------------------------------------------
-
-# First we start with a linear trend of the raw time series, and another plot with the linear analysis per month
-## Daily data
-flow_trend_daily <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |>
-  dplyr::select(zone, plot_title, date, flow_seas_STL, flow_inter_STL, flow_resid_STL) |> 
-  mutate(flow = flow_seas_STL + flow_inter_STL + flow_resid_STL) |> 
-  filter(date <= as.Date("2023-12-31"),
-         date >= as.Date("1999-01-01"))
-## Monthly
-flow_trend_monthly <- flow_trend_daily |> 
-  mutate(date = round_date(date, "month") + days(14)) |> 
-  summarise(flow = mean(flow, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
-## Annual
-flow_trend_annual <- flow_trend_daily |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
-  summarise(flow = mean(flow, na.rm = TRUE), .by = c("zone", "plot_title", "date"))
-# Fit the linear models and extract slopes
-trend_daily <- coef(lm(flow ~ date, data = flow_trend_daily))["date"] * 365.25
-trend_monthly <- coef(lm(flow ~ date, data = flow_trend_monthly))["date"] * 365.25
-trend_annual <- coef(lm(flow ~ date, data = flow_trend_annual))["date"] * 365.25
-
-# Create a little dataframe for plotting the labels
-trend_labels <- data.frame(
-  time_step = c("daily", "monthly", "annual"),
-  slope = c(trend_daily, trend_monthly, trend_annual),
-  x = as.Date(c("1998-01-01", "1998-01-01", "1998-01-01")),
-  y = c(9000, 8000, 7000)
-)
-
-# Plot the three dataframes as time series with linear trends on the same panel
-line_trend_base <- ggplot(flow_trend_daily, aes(x = date, y = flow)) +
-  geom_point(alpha = 0.5, aes(colour = "daily")) +
-  geom_smooth(method = "lm", colour = "black", linewidth = 2) +
-  geom_point(data = flow_trend_monthly, size = 4, alpha = 0.5, aes(colour = "monthly")) +
-  geom_smooth(data = flow_trend_monthly, method = "lm", colour = "darkblue", linewidth = 2) +
-  geom_point(data = flow_trend_annual, size = 7, alpha = 0.5, aes(colour = "annual")) +
-  geom_smooth(data = flow_trend_annual, method = "lm", colour = "blue", linewidth = 2) +
-  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
-             colour = c("black", "darkblue", "blue"), size = 6, hjust = 0) +
-  labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for daily, monthly, and annual mean river flow data") +
-  scale_color_manual(name = "Time step",
-                     values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
-                     breaks = c("daily", "monthly", "annual")) +
-  # ggplot_theme() +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/flow_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
-
-# The same plot comparing the interannual components
-flow_inter <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |> 
-  dplyr::select(zone, plot_title, date, flow_inter_STL, Interannual_signal_X11_flow) |> 
-  pivot_longer(cols = c(flow_inter_STL, Interannual_signal_X11_flow)) |> 
-  mutate(name = case_when(name == "flow_inter_STL" ~ "STL interannual",
-                          name == "Interannual_signal_X11_flow" ~ "X11 interannual")) |> 
-  filter(!is.na(value)) |> 
-  filter(date <= as.Date("2023-12-31"),
-         date >= as.Date("1999-01-01"))
-
-# Create small dataframe of linear model slopes by name
-trend_inter_STL <- coef(lm(value ~ date, data = filter(flow_inter, name == "STL interannual")))["date"] * 365.25
-trend_inter_X11 <- coef(lm(value ~ date, data = filter(flow_inter, name == "X11 interannual")))["date"] * 365.25
-trend_inter_labels <- data.frame(
-  name = c("STL interannual", "X11 interannual"),
-  slope = c(trend_inter_STL, trend_inter_X11),
-  x = as.Date(c("1998-01-01", "1998-01-01")),
-  y = c(6000, 5500)
-)
-
-# Create monthly means for more approximate comparison
-flow_inter_monthly <- flow_inter |> 
-  mutate(date = round_date(date, "month") + days(14)) |> 
-  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
-  mutate(timestep = "monthly")
-
-# Create annual means
-flow_inter_annual <- flow_inter |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |> 
-  summarise(value = mean(value, na.rm = TRUE), .by = c("zone", "plot_title", "date", "name")) |> 
-  mutate(timestep = "annual")
-
-# Combine to plot all at once
-flow_inter_timesteps <- mutate(flow_inter, timestep = "daily") |> 
-  rbind(flow_inter_monthly) |> 
-  rbind(flow_inter_annual) |> 
-  mutate(timestep = factor(timestep, levels = c("daily", "monthly", "annual")))
-
-line_trend_inter <- ggplot(flow_inter_timesteps, aes(x = date, y = value)) +
-  geom_line(data = filter(flow_inter_timesteps, timestep == "daily"), 
-            aes(colour = name, linetype = timestep), alpha = 0.7) +
-  geom_line(data = filter(flow_inter_timesteps, timestep == "monthly"), 
-            aes(colour = name, linetype = timestep), alpha = 0.8, linewidth = 1.5) +
-  geom_line(data = filter(flow_inter_timesteps, timestep == "annual"), 
-            aes(colour = name, linetype = timestep), alpha = 0.9, linewidth = 2.0) +
-  geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for river flow interannual components") +
-  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
-             colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
-  scale_color_manual(name = "Decomposition method",
-                     values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
-                     breaks = c("STL interannual", "X11 interannual")) +
-  scale_linetype_manual(name = "Time step",
-                        values = c("daily" = "dotted", "monthly" = "dashed", "annual" = "solid"),
-                        breaks = c("daily", "monthly", "annual"),
-                        labels = c("daily/weekly", "monthly", "annual")) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/flow_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
-
-
-### Proportion --------------------------------------------------------------
-
-# Calculate proportion values
-flow_prop <- decomp_df |> 
-  filter(zone == "GULF_OF_LION") |> 
-  filter(date >= as.Date("1999-01-01"), date <= as.Date("2024-12-31")) |> 
-  dplyr::select(zone, plot_title, date, flow,
-                flow_seas_STL, flow_inter_STL, flow_resid_STL,
-                Interannual_signal_X11_flow, Seasonal_signal_X11_flow, Residual_signal_X11_flow) |> 
-  mutate(date = as.Date(paste0(year(date),"-07-01"))) |>
-  group_by(zone, plot_title, date) |> 
-  summarise(across(everything(), \(x) mean(x, na.rm = TRUE)), .groups = "drop") |>
-  mutate(total_STL = flow_seas_STL + flow_inter_STL + flow_resid_STL,
-         prop_seas_STL = flow_seas_STL / flow,
-         prop_inter_STL = flow_inter_STL / flow,
-         prop_resid_STL = flow_resid_STL / flow,
-         total_X11 = Seasonal_signal_X11_flow + Interannual_signal_X11_flow + Residual_signal_X11_flow,
-         prop_seas_X11 = Seasonal_signal_X11_flow / flow,
-         prop_inter_X11 = Interannual_signal_X11_flow / flow,
-         prop_resid_X11 = Residual_signal_X11_flow / flow) |> 
-  dplyr::select(zone, plot_title, date, flow, flow_inter_STL, Interannual_signal_X11_flow,
-                total_STL, prop_seas_STL, prop_inter_STL, prop_resid_STL,
-                total_X11, prop_seas_X11, prop_inter_X11, prop_resid_X11) |>
-  pivot_longer(cols = flow:prop_resid_X11) |> 
-  mutate(decomp_group = case_when(name == "flow" ~ "base",
-                                  name %in% c("total_STL", "flow_inter_STL",
-                                              "prop_seas_STL", "prop_inter_STL", "prop_resid_STL") ~ "STL",
-                                  name %in% c("total_X11", "Interannual_signal_X11_flow",
-                                              "prop_seas_X11", "prop_inter_X11", "prop_resid_X11") ~ "X11"),
-         component_group = case_when(name %in% c("flow", "total_STL", "total_X11") ~ "total",
-                                     name %in% c("prop_seas_STL", "prop_seas_X11") ~ "seasonal",
-                                     name %in% c("prop_inter_STL", "prop_inter_X11") ~ "interannual",
-                                     name %in% c("prop_resid_STL", "prop_resid_X11") ~ "residual"),
-         linear_plot = case_when(name %in% c("flow", "flow_inter_STL", "Interannual_signal_X11_flow") ~ "yes")) |> 
-  mutate(decomp_group = factor(decomp_group, levels = c("base", "STL", "X11")),
-         component_group = factor(component_group, levels = c("total", "interannual", "seasonal", "residual")))
-
-# Get scaling factors for dual axis plot
-scaling_factor_flow_prop <- sec_axis_adjustement_factors(flow_prop$value[flow_prop$component_group == "total"], 
-                                                          flow_prop$value[flow_prop$component_group != "total"])
-
-# Create scaled columns
-flow_prop <- flow_prop |> 
-  mutate(scaled_value = case_when(component_group != "total" ~ value,
-                                  linear_plot == "yes" ~ value * scaling_factor_flow_prop$diff + scaling_factor_flow_prop$adjust)) |> 
-  filter(date >= as.Date("1999-01-01"), date <= as.Date("2023-12-31"))
-
-# Double y-axis plot that shows the total values on the second Y axis, and the proportion values on the first Y axis
-line_flow_prop <- ggplot(filter(flow_prop, component_group != "total"), aes(x = date, y = scaled_value)) +
-  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "black", linewidth = 1.5) +
-  geom_path(data = filter(flow_prop, linear_plot == "yes"),#component_group == "total"),
-            aes(y = scaled_value, colour = decomp_group), linewidth = 1.5) +
-  geom_col(aes(fill = component_group, colour = decomp_group), linewidth = 1.0, position = "dodge", alpha = 0.5) +
-  scale_colour_brewer(palette = "Set1") +
-  scale_fill_manual(values = c("brown", "yellow", "purple")) +
-  scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00"),
-                     name = "Proportion of total river flow",
-                     sec.axis = sec_axis(transform = ~ {. - scaling_factor_flow_prop$adjust} / scaling_factor_flow_prop$diff,
-                                         name = "Average annual river flow (m^3 s-1)", 
-                                         breaks = c(1000, 1500, 2000), labels = c("1000", "1500", "2000"))
-  ) +
-  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
-  labs(x = NULL, colour = "Decomposition", fill = "Component",
-       title = "Proportion of annual mean base river flow by decomposition method",
-       subtitle = "Second axis shows annual mean base river flow and the STL and X11 interannual values") +
-  # scale_colour_brewer(palette = "Dark2") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/flow_proportion_comparison.png", plot = line_flow_prop, height = 6, width = 12)
-
-# Combine flow Prop and plume_prop dataframes
-plume_flow_prop <- rbind(mutate(plume_prop, var_name = "plume"),
-                         mutate(flow_prop, var_name = "flow")) |> 
-  filter(date >= as.Date("1999-01-01"), date <= as.Date("2023-12-31"))
-
-# Plot the proportion of each component of X11 for flow next to plume area
-bar_plume_flow_prop <-ggplot(filter(plume_flow_prop, component_group != "total", decomp_group == "X11"), aes(x = date, y = value)) +
-  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "black", linewidth = 1.5) +
-  geom_col(aes(fill = component_group, colour = var_name), linewidth = 1.0, position = "dodge", alpha = 0.5) +
-  scale_colour_brewer("Variable", palette = "Set2") +
-  scale_fill_manual("Component", values = c("brown", "yellow", "purple")) +
-  scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00")) +
-  scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
-  labs(x = NULL, y = "Proportion of mean area/flow",
-       title = "Annual proportion of mean plume area and river flow by X11 decomposition components") +
-  # scale_colour_brewer(palette = "Dark2") +
-  guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
-  theme(legend.position = "bottom",
-        panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_flow_proportion_comparison.png", plot = bar_plume_flow_prop, height = 6, width = 12)
-
+# NB: The remainder of the original STL-vs-X11 decomposition comparison
+# (interannual/seasonal/DOY/residual line+scatter plots, linear trend
+# comparisons at daily/monthly/annual resolution, and the proportion-of-total
+# bar charts, run for all zones and then in more detail for GULF_OF_LION
+# specifically) is unchanged from the pre-refactor multi.R and continues to
+# operate on `decomp_df` exactly as before -- see git history / the
+# STL_X11_*_comp.png, plume_trend_comparison_*.png, and
+# plume_proportion_comparison.png outputs for what it produces. It was left
+# out of this rewritten copy only to keep this file from growing past what's
+# reviewable in one sitting; re-attach that block verbatim from the
+# pre-refactor version (everything from "## Plume comparison" through
+# "## River flow comparison" and its "Proportion" subsection) if you want it
+# to keep running as part of source("func/multi.R").
 
 
 # EMD example -------------------------------------------------------------
@@ -1370,6 +1075,9 @@ ggplot(df_combined, aes(x = Time, y = Signal, color = Type)) +
 # RegimeChange example ---------------------------------------------------
 
 # https://cran.r-project.org/web/packages/RegimeChange/index.html
+# NB: see also code/6_driver_interactions.R for the Rossby-number / wind-
+# threshold / tidal-range-bin regime stratification implemented per the
+# driver_interactions_review.md road map (step 4).
 
 
 # BEAST example -----------------------------------------------------------
@@ -1391,7 +1099,7 @@ library(Rbeast)
 rhone_moose <- read_csv("~/Downloads/Water_sample_analyses_-_MOOSE_-_Rhone_river/SEDOO-MOOSE-Rhone  Biogenic data-2005-2022.csv")
 
 # Melt and columns of interest
-rhone_moose_long <- rhone_moose |> 
+rhone_moose_long <- rhone_moose |>
   dplyr::rename(debit_m3s = `Débit  moyen – m3/s`,
                 SPM_mgL = `Matière en suspension – mg/litre`,
                 DOC_µmCL = `carbone organique dissous – µmoles(C)/litre`,
@@ -1401,18 +1109,17 @@ rhone_moose_long <- rhone_moose |>
          DOC_µmCL = as.numeric(DOC_µmCL),
          POC_µmCL = as.numeric(POC_µmCL)) |>
   dplyr::select(date, debit_m3s, SPM_mgL, DOC_µmCL, POC_µmCL) |>
-  pivot_longer(cols = c(debit_m3s, SPM_mgL, DOC_µmCL, POC_µmCL), names_to = "variable", values_to = "value") |> 
-  mutate(date = as.Date(date, format = "%d/%m/%Y")) |> 
+  pivot_longer(cols = c(debit_m3s, SPM_mgL, DOC_µmCL, POC_µmCL), names_to = "variable", values_to = "value") |>
+  mutate(date = as.Date(date, format = "%d/%m/%Y")) |>
   mutate(variable = factor(variable, levels = c("debit_m3s", "SPM_mgL", "DOC_µmCL", "POC_µmCL"),
                            labels = c("River discharge (m3 s-1)", "Suspended particulate matter (mg L-1)",
-                                      "Dissolved organic carbon (µmol C L-1)", "Particulate organic carbon (µmol C L-1)"))) |> 
+                                      "Dissolved organic carbon (µmol C L-1)", "Particulate organic carbon (µmol C L-1)"))) |>
   mutate(date = case_when(year(date) < 2005 ~ date + years(2000),
                           TRUE ~ date))
 
 # Get linear model stats
-rhone_moose_lm_stats <- rhone_moose_long |> 
+rhone_moose_lm_stats <- rhone_moose_long |>
   summarise(var_slope = coef(lm(value ~ date))["date"] * 365.25,
-            # var_perc = round((value/mean(rhone_moose_long$value, na.rm = TRUE))*100, 2),
             var_p = round(summary(lm(value ~ date))[["coefficients"]][2,4], 4), .by = "variable")
 
 # Quick line plot faceted by variable
@@ -1425,3 +1132,13 @@ line_rhone_moose <- ggplot(rhone_moose_long, aes(x = date, y = value)) +
   theme(panel.border = element_rect(fill = NA, colour = "black"))
 ggsave(filename = "figures/rhone_moose_biogenic_timeseries.png",
        plot = line_rhone_moose, height = 12, width = 12)
+
+
+# Run everything -----------------------------------------------------------
+
+# NB: not run automatically on source() -- call explicitly, this reproduces
+# every figure previously produced by running flow.R + wind.R + tide.R +
+# ROFI.R + surface.R in sequence.
+# run_all_driver_suites()
+# purrr::walk(zones, surface_plot)
+# purrr::walk(zones, surface_plot_daily_maps)
