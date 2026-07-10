@@ -428,7 +428,7 @@ load_plume_ts <- function(zone){
 # Get the date of the plume data from the file name while loading
 load_plume_surface <- function(zone){
   # Detect all plume surface csv files
-  plume_files <- dir(paste0("output/REGIONAL_PLUME_DETECTION/",zone,"/SEXTANT/SPM/merged/Standard/PLUME_DETECTION/DAILY"), 
+  plume_files <- dir(paste0("output/panache/", zone),
                      pattern = ".csv", recursive = TRUE, full.names = TRUE)
   
   # The function to be ply'd across all files
@@ -454,55 +454,24 @@ load_plume_surface <- function(zone){
 # Load river flow data
 # dir_name <- "data/RIVER_FLOW/BAY_OF_SEINE"
 load_river_flow <- function(dir_name){
-  
-  # Get file list
-  files_to_load <- list.files(path = dir_name, pattern = "\\.(txt|dat|csv|ascii)$", full.names = TRUE)
-  
-  # Load each file into a list of dataframes
-  data_list <- lapply(files_to_load, 
-                      function(file) {
-                        ext <- tolower(tools::file_ext(file))
-                        if (ext == "csv") {
-                          df <- read.csv(file, header = FALSE)
-                        } else if (ext == "ascii") {
-                          df <- as.data.frame(read.table(file, header = FALSE))
-                        } else {
-                          df <- read.delim(file, sep = "", header = FALSE)  # Auto-detect separator
-                        }
-                        return(df)
-                      })
-  
-  # Name the list elements with file names
+
+  # Get file list (non-recursive: only files directly in dir_name, not old/ or HydroPortail/)
+  files_to_load <- list.files(path = dir_name, pattern = "\\.(csv)$", full.names = TRUE)
+
+  # All current files have a two-column header: date,debit
+  data_list <- lapply(files_to_load, function(file){
+    df <- read.csv(file, header = TRUE)
+    df$date <- as.Date(df$date)
+    df[, c("flow", "date")] <- list(df$debit, df$date)
+    df[, c("flow", "date")]
+  })
+
   names(data_list) <- basename(files_to_load)
-  
-  # Process each dataframe based on the zone
-  for(key in names(data_list)){
-    df_river <- data_list[[key]]
-    
-    if(grepl("GULF_OF_LION", dir_name)){
-      colnames(df_river) <- c("flow", "year", "month", "day")
-      df_river$date <- as.Date(
-        paste0(
-          df_river$year, "-",
-          str_pad(df_river$month, 2, pad = "0"), "-",
-          str_pad(df_river$day, 2, pad = "0")
-        )
-      )
-    }
-    
-    if (grepl("BAY_OF_BISCAY|SOUTHERN_BRITTANY|BAY_OF_SEINE", dir_name)) {
-      colnames(df_river) <- c("date", "time", "flow")
-      df_river$date <- as.Date(df_river$date, format = "%d/%m/%Y")
-    }
-    
-    # Select only 'Flow' and 'Date' columns
-    data_list[[key]] <- df_river[, c("flow", "date")]
-  }
-  
+
   # Combine all dataframes and aggregate by date
-  final_df <- bind_rows(data_list) |> 
+  bind_rows(data_list) |>
     summarise(flow = sum(flow, na.rm = TRUE),
-              n_rivers = n(), .by = "date") |> 
+              n_rivers = n(), .by = "date") |>
     filter(n_rivers == length(data_list))
 }
 

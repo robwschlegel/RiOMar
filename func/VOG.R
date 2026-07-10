@@ -95,7 +95,7 @@ plot(VOG_zones)
 # Extract data -----------------------------------------------------------
 
 # List of the Bay of Biscay panache output files
-panache_files <- dir("output/REGIONAL_PLUME_DETECTION/BAY_OF_BISCAY/SEXTANT/SPM/merged/Standard/PLUME_DETECTION/DAILY", 
+panache_files <- dir("output/panache/BAY_OF_BISCAY",
                       recursive = TRUE, pattern = ".csv", full.names = TRUE)
 
 # Prep multicore environment

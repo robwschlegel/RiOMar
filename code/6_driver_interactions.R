@@ -65,20 +65,14 @@ library(tidyverse)
 library(mgcv)       # GAM with tensor-product smooths (step 3)
 library(broom)       # tidy() model summaries (steps 1,2,4,5)
 library(patchwork)
-
-# Ensure required packages for optional steps 6 (random forest + H-statistic)
-suppressMessages({
-  gratia_available <- requireNamespace("gratia", quietly = TRUE)
-  ranger_available <- requireNamespace("ranger", quietly = TRUE)
-  iml_available <- requireNamespace("iml", quietly = TRUE)
-})
-
-# Load additional common functions
-source("func/util.R")
+library(gratia)
+library(ranger)
+library(iml)
 
 # Run multi-driver analyses
+# source("func/util.R")    # zones, zone_meta, get_zone_meta, load_driver, load_plume_ts
 source("func/multi.R")   # zone_meta, get_zone_meta, load_driver, combine_plume_driver, zones
-  
+
 if (!dir.exists("output/STATS")) dir.create("output/STATS", recursive = TRUE)
 
 # Step 0: build the daily multi-driver data frame per zone ------------------
@@ -192,22 +186,9 @@ readr::write_csv(gam_summary, "output/STATS/driver_gam_summary.csv")
 # This replaces the make_figures_tables.R::generate_figure_10_gam() TODO
 # stub; see the note added there.
 plot_gam_figure <- function(){
-  if(gratia_available){
-    plots <- purrr::imap(gam_models, function(m, zone_name){
-      gratia::draw(m) + patchwork::plot_annotation(title = zone_name)
-    })
-  } else {
-    # Fallback if gratia isn't installed: mgcv's own base-graphics plot(),
-    # captured per zone and stitched together with patchwork via a grob.
-    warning("gratia not installed -- falling back to mgcv::plot.gam() (uglier, but works). ",
-            "Run install.packages('gratia') for the nicer version used above.")
-    plots <- purrr::imap(gam_models, function(m, zone_name){
-      grDevices::pdf(NULL)  # suppress base plotting device pop-up
-      p <- patchwork::wrap_elements(full = grid::grid.grabExpr(mgcv::plot.gam(m, pages = 1, main = zone_name)))
-      grDevices::dev.off()
-      p
-    })
-  }
+  plots <- purrr::imap(gam_models, function(m, zone_name){
+    gratia::draw(m) + patchwork::plot_annotation(title = zone_name)
+  })
   combined <- patchwork::wrap_plots(plots, ncol = 2)
   ggplot2::ggsave("figures/Figure_10.png", combined, width = 16, height = 12, dpi = 300)
   invisible(combined)
@@ -263,12 +244,12 @@ readr::write_csv(regime_stats, "output/STATS/driver_regime_glm.csv")
 # respond to different driver combinations, so model each response separately
 # rather than collapsing everything into one "plume area" GLM/GAM. Centroid
 # lon/lat is the position metric available without a coastline-following
-# coordinate transform (see gap note at top of file); SPM mass is not
-# currently in the pipeline's daily output and is therefore not modelled here.
+# coordinate transform (see gap note at top of file). mean_SPM_in_the_plume_area
+# and mass_SPM_in_the_plume_area_in_g_m come directly from the Results.csv time
+# series loaded in build_driver_matrix() and are therefore already in driver_matrices.
 
 compute_daily_centroid <- function(zone_name){
-  plume_dir <- paste0("output/REGIONAL_PLUME_DETECTION/", zone_name,
-                      "/SEXTANT/SPM/merged/Standard/PLUME_DETECTION/DAILY")
+  plume_dir <- paste0("output/panache/", zone_name)
   plume_files <- dir(plume_dir, pattern = ".csv", recursive = TRUE, full.names = TRUE)
   if(length(plume_files) == 0){
     warning("No pixel-level plume files found for ", zone_name, " -- skipping centroid metrics.")
@@ -300,9 +281,12 @@ fit_metric_models <- function(df, response){
   )
 }
 
-metric_responses <- c("plume_area", "centroid_lon", "centroid_lat")
+metric_responses <- c("plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_the_plume_area_in_g_m",
+                      "centroid_lon", "centroid_lat")
+# plume_area and SPM metrics come from driver_matrices; centroid metrics need centroid_matrices.
+ts_responses <- c("plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_the_plume_area_in_g_m")
 metric_model_stats <- purrr::map(metric_responses, function(resp){
-  mats <- if(resp == "plume_area") driver_matrices else centroid_matrices
+  mats <- if(resp %in% ts_responses) driver_matrices else centroid_matrices
   purrr::imap_dfr(mats, function(df, zone_name){
     if(!(resp %in% names(df))) return(NULL)
     df_resp <- tidyr::drop_na(df, dplyr::all_of(c(resp, available_drivers(df))))
@@ -320,8 +304,8 @@ purrr::iwalk(metric_model_stats, function(stats_df, resp){
   readr::write_csv(stats_df, paste0("output/STATS/driver_metric_models_", resp, ".csv"))
 })
 # -> Sec 3.3.5 "Multi-driver": compare aic_additive/aic_interaction/gam fit
-#    quality across plume_area vs. centroid_lon vs. centroid_lat to see
-#    whether, e.g., wind explains position better than it explains area.
+#    quality across plume_area, mean_SPM_in_the_plume_area,
+#    mass_SPM_in_the_plume_area_in_g_m, centroid_lon, and centroid_lat.
 
 
 # Step 6: exploratory random forest + H-statistic ----------------------------
@@ -331,10 +315,6 @@ purrr::iwalk(metric_model_stats, function(stats_df, resp){
 # sanity check that Step 3 didn't miss an interaction.
 
 fit_rf_diagnostic <- function(zone_name, response = "plume_area"){
-  if(!ranger_available){
-    warning("ranger not installed -- skipping Step 6 for ", zone_name, ". Run install.packages('ranger').")
-    return(NULL)
-  }
   df <- driver_matrices[[zone_name]]
   drivers <- available_drivers(df)
   df_complete <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
@@ -343,13 +323,8 @@ fit_rf_diagnostic <- function(zone_name, response = "plume_area"){
                        data = df_complete[, c(response, drivers)],
                        importance = "permutation", num.trees = 500)
 
-  interaction_hstat <- NULL
-  if(iml_available){
-    predictor <- iml::Predictor$new(rf, data = df_complete[, drivers], y = df_complete[[response]])
-    interaction_hstat <- iml::Interaction$new(predictor)$results
-  } else {
-    warning("iml not installed -- skipping H-statistic for ", zone_name, ". Run install.packages('iml').")
-  }
+  predictor <- iml::Predictor$new(rf, data = df_complete[, drivers], y = df_complete[[response]])
+  interaction_hstat <- iml::Interaction$new(predictor)$results
 
   list(model = rf, importance = rf$variable.importance, interaction = interaction_hstat)
 }
@@ -362,7 +337,6 @@ rf_importance <- purrr::imap_dfr(rf_results, function(res, zone_name){
 readr::write_csv(rf_importance, "output/STATS/driver_rf_importance.csv")
 
 rf_interaction <- purrr::imap_dfr(rf_results, function(res, zone_name){
-  if(is.null(res$interaction)) return(NULL)
   dplyr::mutate(res$interaction, zone = zone_name, .before = 1)
 })
 if(nrow(rf_interaction) > 0) readr::write_csv(rf_interaction, "output/STATS/driver_rf_interaction_hstat.csv")
@@ -373,4 +347,4 @@ if(nrow(rf_interaction) > 0) readr::write_csv(rf_interaction, "output/STATS/driv
 
 
 message("code/6_driver_interactions.R complete. Outputs written to output/STATS/driver_*.csv and figures/Figure_10.png.")
-message("NB: not executed in the environment this was written in (no R interpreter available) -- please run end to end and spot check before citing these numbers in the manuscript.")
+

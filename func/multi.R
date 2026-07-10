@@ -334,6 +334,9 @@ driver_display <- tibble::tribble(
   "flow",       "River flow (m^3 s-1)",    "blue",
   "tide",       "Tidal range (m)",         "darkgreen",
   "wind",       "Wind speed (m s-1)",      "purple",
+  # TODO: Current should be the U and V vectors for the surface currents from the GLORYS model
+  # ROFI is a different variable. This comes from a model output of the region of freshwater influence
+  # Once GLORYS data, this should be corrected and ROFI should be it's own driver_name
   "current",    "ROFI / current extent (km^2)", "orchid"
 )
 
@@ -630,7 +633,7 @@ surface_plot <- function(zone_name){
   lat_range_wide <- c(lat_round + bbox_wide$lat_S, lat_round + bbox_wide$lat_N)
 
   # Load all daily plume maps for the zone
-  plume_dir <- paste0("output/REGIONAL_PLUME_DETECTION/", zone_name, "/SEXTANT/SPM/merged/Standard/PLUME_DETECTION/DAILY")
+  plume_dir <- paste0("output/panache/", zone_name)
   plume_files <- dir(plume_dir, pattern = ".csv", recursive = TRUE, full.names = TRUE)
   df_plume <- plyr::ldply(plume_files, load_plume_surface, .parallel = TRUE)  # util.R
 
@@ -764,14 +767,11 @@ multi_stl <- function(zone){
 }
 
 # Compute all STL stats and save
-stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
-save(stl_all, file = "output/STATS/stl_all.RData")
-
-
-# heatwaveR ---------------------------------------------------------------
-
-# Load data
-plume_clim <- map_dfr(zones, plume_clim_calc)
+if(!file.exists("output/STATS/stl_all.RData")){
+  message("Computing STL stats for all zones...")
+  stl_all <- plyr::ldply(zones, multi_stl, .parallel = TRUE)
+  save(stl_all, file = "output/STATS/stl_all.RData")
+}
 
 
 # Multi-driver comparison -------------------------------------------------
@@ -921,224 +921,55 @@ multi_plot(stl_all)
 # Missing data ------------------------------------------------------------
 
 # Get missing dates of
-SPM_files_NA <- data.frame(file_name = dir("data/SEXTANT/SPM/", pattern = ".nc", recursive = TRUE)) |>
-  mutate(base_name = basename(file_name)) |>
-  separate(base_name, "-", extra = "drop") |>
-  dplyr::rename(date = `-`) |>
-  mutate(date = as.Date(date, format = "%Y%m%d")) |>
-  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
-  filter(is.na(file_name))
-write_csv(SPM_files_NA, "output/STATS/missing_SPM.csv")
-chla_files_NA <- data.frame(file_name = dir("data/SEXTANT/CHLA/", pattern = ".nc", recursive = TRUE)) |>
-  mutate(base_name = basename(file_name)) |>
-  separate(base_name, "-", extra = "drop") |>
-  dplyr::rename(date = `-`) |>
-  mutate(date = as.Date(date, format = "%Y%m%d")) |>
-  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
-  filter(is.na(file_name))
+if(!file.exists("output/STATS/missing_SPM.csv") | !file.exists("output/STATS/missing_chla.csv")){
+  message("Computing missing SEXTANT files...")
+  SPM_files_NA <- data.frame(file_name = dir("~/pCloudDrive/data/SEXTANT/SPM/", pattern = ".nc", recursive = TRUE)) |>
+    mutate(base_name = basename(file_name)) |>
+    separate(base_name, "-", extra = "drop") |>
+    dplyr::rename(date = `-`) |>
+    mutate(date = as.Date(date, format = "%Y%m%d")) |>
+    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
+    filter(is.na(file_name))
+  write_csv(SPM_files_NA, "output/STATS/missing_SPM.csv")
+  chla_files_NA <- data.frame(file_name = dir("~/pCloudDrive/data/SEXTANT/CHLA/", pattern = ".nc", recursive = TRUE)) |>
+    mutate(base_name = basename(file_name)) |>
+    separate(base_name, "-", extra = "drop") |>
+    dplyr::rename(date = `-`) |>
+    mutate(date = as.Date(date, format = "%Y%m%d")) |>
+    complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
+    filter(is.na(file_name))
 write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
+  
+  # Filter down to missing days
+  SPM_files_NA_count <- SPM_files_NA |>
+    mutate(year = year(date),
+          month = month(date, label = TRUE, abbr = TRUE)) |>
+    summarise(miss_count_month_year = n(), .by = c("year", "month"))
+  chla_files_NA_count <- chla_files_NA |>
+    mutate(year = year(date),
+          month = month(date, label = TRUE, abbr = TRUE)) |>
+    summarise(miss_count_month_year = n(), .by = c("year", "month"))
 
-# Filter down to missing days
-SPM_files_NA_count <- SPM_files_NA |>
-  mutate(year = year(date),
-         month = month(date, label = TRUE, abbr = TRUE)) |>
-  summarise(miss_count_month_year = n(), .by = c("year", "month"))
-chla_files_NA_count <- chla_files_NA |>
-  mutate(year = year(date),
-         month = month(date, label = TRUE, abbr = TRUE)) |>
-  summarise(miss_count_month_year = n(), .by = c("year", "month"))
-
-# Plot
-ggplot(SPM_files_NA_count, aes(x = month, y = miss_count_month_year)) +
-  geom_col() +
-  facet_wrap(~year) +
-  labs(x = NULL, y = "count", title = "Monthly count of missing SPM SEXTANT files") +
-  theme(panel.border = element_rect(fill = NA, colour = "black"))
-ggsave("figures/missng_SPM.png", width = 9, height = 9, dpi = 600)
-ggplot(chla_files_NA_count, aes(x = month, y = miss_count_month_year)) +
-  geom_col() +
-  facet_wrap(~year) +
-  labs(x = NULL, y = "count", title = "Monthly count of missing chl a SEXTANT files") +
-  theme(panel.border = element_rect(fill = NA, colour = "black"))
-ggsave("figures/missng_chla.png", width = 9, height = 9, dpi = 600)
-
-
-# Decomposition comparison ------------------------------------------------
-
-# X11
-load_X11 <- function(zone, type = "plume"){
-  if(type == "plume"){
-    file_stub = "/X11_ANALYSIS/area_of_the_plume_mask_in_km2/SEXTANT_merged_Standard_WEEKLY.csv"
-  } else {
-    file_stub = "/X11_ANALYSIS/river_flow/River_flow___WEEKLY.csv"
-  }
-  suppressMessages(
-  df <- read_csv(paste0("output/FIXED_THRESHOLD/",zone,file_stub)) |>
-    mutate(zone = zone, .before = "dates") |>
-    dplyr::rename(date = dates) |>
-    dplyr::select(zone:Residual_signal) |>
-    rename_with(~ paste0(.x, "_X11_",type), everything())
-  )
-  colnames(df)[1:2] <- c("zone", "date")
-  return(df)
+  # Plot
+  ggplot(SPM_files_NA_count, aes(x = month, y = miss_count_month_year)) +
+    geom_col() +
+    facet_wrap(~year) +
+    labs(x = NULL, y = "count", title = "Monthly count of missing SPM SEXTANT files") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+  ggsave("figures/missng_SPM.png", width = 9, height = 9, dpi = 600)
+  ggplot(chla_files_NA_count, aes(x = month, y = miss_count_month_year)) +
+    geom_col() +
+    facet_wrap(~year) +
+    labs(x = NULL, y = "count", title = "Monthly count of missing chl a SEXTANT files") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+  ggsave("figures/missng_chla.png", width = 9, height = 9, dpi = 600)
 }
-X11_plume <- map_dfr(zones, load_X11)
-X11_flow <- map_dfr(zones, load_X11, type = "flow")
-X_11_plume_flow <- left_join(X11_plume, X11_flow, by = join_by(zone, date)) |>
-  dplyr::rename(plume_inter = Interannual_signal_X11_plume, flow_inter = Interannual_signal_X11_flow) |>
-  left_join(zones_bbox, by = "zone") |>
-  mutate(plot_title = zone_pretty)
-
-# Get correlation stats
-X_11_plume_flow_stats_all <- X_11_plume_flow |>
-  summarise(r = round(cor(plume_inter, flow_inter, use = "pairwise.complete.obs"), 2), .by = "zone")
-
-# Interannual comparison plots
-comparison_plot_save(X_11_plume_flow, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter_X11")
-
-# STL
-load("output/STATS/stl_all.RData")
-stl_sub <- dplyr::select(stl_all, zone, date, flow, tide_range, direction:wind_resid) |>
-  rename_with(~ paste0(.x, "_STL"), everything())
-colnames(stl_sub)[1:7] <- c("zone", "date", "flow", "tide_range", "direction", "wind_spd", "wind_dir")
-
-# heatwaveR
-plume_clim <- map_dfr(zones, plume_clim_calc) |>
-  group_by(zone) |>
-  mutate(plume_seas = plume_seas - mean(plume_seas)) |>
-  ungroup() |>
-  mutate(plume_inter = plume_area - plume_seas)
-
-# Combine into one big df
-decomp_df <- left_join(stl_sub, X11_plume, by = c("zone", "date")) |>
-  left_join(X11_flow, by = c("zone", "date")) |>
-  make_pretty_title() |>
-  mutate(year = year(date),
-         doy = yday(date))
-decomp_df$doy <- mapply(adjust_doy, decomp_df$year, decomp_df$doy)
-decomp_df <- left_join(decomp_df, plume_clim, by = c("zone", "date", "doy"))
-
-# NB: The remainder of the original STL-vs-X11 decomposition comparison
-# (interannual/seasonal/DOY/residual line+scatter plots, linear trend
-# comparisons at daily/monthly/annual resolution, and the proportion-of-total
-# bar charts, run for all zones and then in more detail for GULF_OF_LION
-# specifically) is unchanged from the pre-refactor multi.R and continues to
-# operate on `decomp_df` exactly as before -- see git history / the
-# STL_X11_*_comp.png, plume_trend_comparison_*.png, and
-# plume_proportion_comparison.png outputs for what it produces. It was left
-# out of this rewritten copy only to keep this file from growing past what's
-# reviewable in one sitting; re-attach that block verbatim from the
-# pre-refactor version (everything from "## Plume comparison" through
-# "## River flow comparison" and its "Proportion" subsection) if you want it
-# to keep running as part of source("func/multi.R").
-
-
-# EMD example -------------------------------------------------------------
-
-# The needed package
-library(EMD)
-library(ggplot2)
-
-# Generate some dummy data
-set.seed(13)
-t <- seq(0, 10, by = 0.1)
-signal <- sin(2 * pi * t) + 0.5 * sin(2 * pi * 5 * t) + 0.2 * rnorm(length(t))
-
-# Perform EMD
-emd_result <- emd(signal, t)
-
-# Extract IMFs
-imfs <- emd_result$imf
-
-# Create a data frame for the original signal
-df_signal <- data.frame(Time = t, Signal = signal, Type = "Original")
-
-# Create a data frame for the IMFs
-df_imfs <- data.frame(Time = rep(t, times = ncol(imfs)),
-                      Signal = as.vector(t(imfs)),
-                      Type = rep(paste0("IMF ", 1:ncol(imfs)), each = length(t)))
-
-# Combine the data frames
-df_combined <- rbind(df_signal, df_imfs)
-
-# Plot the original signal and IMFs
-ggplot(df_combined, aes(x = Time, y = Signal, color = Type)) +
-  geom_line() +
-  facet_wrap(~ Type, ncol = 1, scales = "free_y") +
-  labs(title = "Empirical Mode Decomposition (EMD)",
-       x = "Time",
-       y = "Amplitude") +
-  theme_minimal() +
-  theme(legend.position = "none")
-
-
-# RegimeChange example ---------------------------------------------------
-
-# https://cran.r-project.org/web/packages/RegimeChange/index.html
-# NB: see also code/6_driver_interactions.R for the Rossby-number / wind-
-# threshold / tidal-range-bin regime stratification implemented per the
-# driver_interactions_review.md road map (step 4).
-
-
-# BEAST example -----------------------------------------------------------
-
-library(Rbeast)
-
-# TODO: Create example
-
-
-# makicoint example -------------------------------------------------------
-
-# TODO: Work through this approach to see if it would be useful
-# https://cran.r-project.org/web/packages/makicoint/vignettes/introduction.html
-
-
-# POC/DOC -----------------------------------------------------------------
-
-# Load MOOSE data
-rhone_moose <- read_csv("~/Downloads/Water_sample_analyses_-_MOOSE_-_Rhone_river/SEDOO-MOOSE-Rhone  Biogenic data-2005-2022.csv")
-
-# Melt and columns of interest
-rhone_moose_long <- rhone_moose |>
-  dplyr::rename(debit_m3s = `Débit  moyen – m3/s`,
-                SPM_mgL = `Matière en suspension – mg/litre`,
-                DOC_µmCL = `carbone organique dissous – µmoles(C)/litre`,
-                POC_µmCL = `Carbone organique particulaire – µmoles(C)/litre`) |>
-  mutate(debit_m3s = as.numeric(debit_m3s),
-         SPM_mgL = as.numeric(SPM_mgL),
-         DOC_µmCL = as.numeric(DOC_µmCL),
-         POC_µmCL = as.numeric(POC_µmCL)) |>
-  dplyr::select(date, debit_m3s, SPM_mgL, DOC_µmCL, POC_µmCL) |>
-  pivot_longer(cols = c(debit_m3s, SPM_mgL, DOC_µmCL, POC_µmCL), names_to = "variable", values_to = "value") |>
-  mutate(date = as.Date(date, format = "%d/%m/%Y")) |>
-  mutate(variable = factor(variable, levels = c("debit_m3s", "SPM_mgL", "DOC_µmCL", "POC_µmCL"),
-                           labels = c("River discharge (m3 s-1)", "Suspended particulate matter (mg L-1)",
-                                      "Dissolved organic carbon (µmol C L-1)", "Particulate organic carbon (µmol C L-1)"))) |>
-  mutate(date = case_when(year(date) < 2005 ~ date + years(2000),
-                          TRUE ~ date))
-
-# Get linear model stats
-rhone_moose_lm_stats <- rhone_moose_long |>
-  summarise(var_slope = coef(lm(value ~ date))["date"] * 365.25,
-            var_p = round(summary(lm(value ~ date))[["coefficients"]][2,4], 4), .by = "variable")
-
-# Quick line plot faceted by variable
-line_rhone_moose <- ggplot(rhone_moose_long, aes(x = date, y = value)) +
-  geom_line() +
-  geom_smooth(method = "lm") +
-  facet_wrap(~variable, scales = "free_y", ncol = 1) +
-  labs(x = NULL, y = NULL, title = "Rhône river (MOOSE)") +
-  ggplot_theme() +
-  theme(panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/rhone_moose_biogenic_timeseries.png",
-       plot = line_rhone_moose, height = 12, width = 12)
 
 
 # Run everything -----------------------------------------------------------
 
-# NB: not run automatically on source() -- call explicitly, this reproduces
-# every figure previously produced by running flow.R + wind.R + tide.R +
-# ROFI.R + surface.R in sequence.
+# NB: not run automatically on source() -- call explicitly
 # run_all_driver_suites()
 # purrr::walk(zones, surface_plot)
 # purrr::walk(zones, surface_plot_daily_maps)
+  
