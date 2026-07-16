@@ -1,0 +1,15 @@
+{
+  "zone": "BAY_OF_SEINE",
+  "input_path": "/home/calanus/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/",
+  "output_dir": "/home/calanus/RiOMar/output/panache/static/BAY_OF_SEINE",
+  "bathymetry_path": "/home/calanus/RiOMar/output/panache/static/BAY_OF_SEINE/Bathy_data.pkl",
+  "coast_shapefile": "/home/calanus/RiOMar/data/FRANCE_shapefile/gadm41_FRA_0.shp",
+  "dynamic_threshold": false,
+  "near_mouth_lower_quantile": 0.25,
+  "near_mouth_upper_quantile": 0.75,
+  "global_threshold_quantile": 0.95,
+  "overwrite": false,
+  "gif": false,
+  "nb_cores": 12,
+  "variable_name": "analysed_spim"
+}
