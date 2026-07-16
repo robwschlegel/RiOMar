@@ -411,8 +411,8 @@ extract_pixels_all <- function(sat_name, zone_name = NULL){#, overwrite = FALSE)
 # Loading -----------------------------------------------------------------
 
 # Load time series of plume values
-load_plume_ts <- function(zone){
-  file_name <- paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")
+load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic"){
+  file_name <- paste0(plume_dir, "/", zone, "/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")
   suppressMessages(
     df_plume <- read_csv(file_name) |> 
       dplyr::select(date:confidence_index_in_perc) |>

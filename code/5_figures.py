@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# The code needed to create the figures used in the publication of this workflow. 
-# It can be designed to be called by the Makefile.
+# The code needed to create the figures used in the publication of this workflow.
 
 
 # =============================================================================
@@ -24,7 +23,7 @@ mpl.use('agg')
 
 
 # =============================================================================
-# ### Create figures
+# ### Main figures (dynamic threshold)
 # =============================================================================
 
 Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
@@ -39,10 +38,20 @@ Figure_4(where_are_saved_regional_maps = "output",
 Figure_5(where_are_saved_regional_maps = "output",
          where_to_save_the_figure = "figures")
 
-Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold = "output/DYNAMIC_THRESHOLD",
-           where_are_saved_plume_results_with_fixed_threshold = "output/FIXED_THRESHOLD",
+# Figure 6-7: compare dynamic vs static threshold plume detection
+Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
+           where_are_saved_plume_results_with_fixed_threshold = "output/panache/static",
            where_to_save_the_figure = "figures")
 
-Figure_8_9_10(where_are_saved_X11_results = "output/FIXED_THRESHOLD",
+# Figures 8-10: X11 decomposition results — dynamic threshold (main)
+Figure_8_9_10(where_are_saved_X11_results = "output/panache/dynamic",
               where_to_save_the_figure = "figures")
 
+
+# =============================================================================
+# ### Supplementary figures (static threshold)
+# =============================================================================
+
+# Figures 8-10 equivalent using static threshold results
+Figure_8_9_10(where_are_saved_X11_results = "output/panache/static",
+              where_to_save_the_figure = "figures/supplementary")

@@ -16,8 +16,6 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-# import util
-# import X11
 from X11 import Apply_X11_method_on_time_series
 
 # Set matplotlib backend to prevent plots from displaying
@@ -37,18 +35,28 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 
 
 # =============================================================================
-# ### X11 analyses
+# ### X11 analyses — dynamic threshold (main results)
 # =============================================================================
 
 # NB: X11 can only be used on weekly or monthly data, not daily
 
-# Full analysis in one go
 Apply_X11_method_on_time_series(sextant_spm_all,
-                                # Zones = ["SOUTHERN_BRITTANY"],
                                 Zones = zones_list,
                                 plume_time_step = "WEEKLY",
-                                plume_dir_in = "output/panache",
-                                X11_dir_out = "output/panache",
+                                plume_dir_in = "output/panache/dynamic",
+                                X11_dir_out = "output/panache/dynamic",
+                                include_river_flow = True)
+
+
+# =============================================================================
+# ### X11 analyses — static threshold (supplementary)
+# =============================================================================
+
+Apply_X11_method_on_time_series(sextant_spm_all,
+                                Zones = zones_list,
+                                plume_time_step = "WEEKLY",
+                                plume_dir_in = "output/panache/static",
+                                X11_dir_out = "output/panache/static",
                                 include_river_flow = True)
 
 
@@ -74,4 +82,3 @@ Apply_X11_method_on_time_series(sextant_spm_all,
 # The idea here is to use a GAM to understand what factors are driving plume surface
 # variations. This will include river flow, wind speed and direction, precipitation,
 # and perhaps others.
-

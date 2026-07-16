@@ -116,7 +116,7 @@
 ## also account for the lon/lat of the centroid and how that relates to the other drivers
 # be able to say if the plume is increasing or decreasing in size so that the drivers on that day can be categorised under what the plume is doing
 
-# Ideas for driver decomposition
+## Ideas for driver decomposition
 # A SOM analysis of the spatial footprint during given drivers may work.
 ## Average the primary drivers over the timespan of the given large plume
 ## Then see if the SOM organises them by surface signature. I.e. size, centroid, shape, direction, duration
@@ -124,11 +124,17 @@
 # Use rle() to determine contiguous events temporarily
 # Look at articles in pCloud folder for other analysis ideas and in situ data sources
 
-# NB: For the *interaction* between drivers specifically (not just each
+## NB: For the *interaction* between drivers specifically (not just each
 # driver individually vs. plume, which is what this file covers), see
 # manuscript/driver_interactions_review.md and code/6_driver_interactions.R,
 # which implement the GLM-with-interactions / GAM / regime-stratification
 # road map agreed from that literature review.
+
+## Temperature analysis
+# Panache should be colder than coastal water
+# It should be possible to a priori define the colder surface temperatures based on the panache pixels
+# Use the ODATIS-MR SST for this
+# Look at validation results to see if one product is better than other, also by zone
 
 
 # Libraries ---------------------------------------------------------------
