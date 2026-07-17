@@ -69,6 +69,10 @@ library(gratia)
 library(ranger)
 library(iml)
 
+# iml::Interaction uses future.apply internally; the R6 predictor object can
+# exceed the default 500 MiB per-worker globals limit.
+options(future.globals.maxSize = 2 * 1024^3)   # 2 GiB
+
 # Run multi-driver analyses and load project common functions
 source("func/multi.R")
 
@@ -136,8 +140,14 @@ fit_interaction_glm <- function(df, response = "plume_area"){
 
 compare_glms <- function(zone_name, driver_matrices, response = "plume_area"){
   df <- driver_matrices[[zone_name]]
-  m0 <- fit_baseline_glm(df, response)
-  m1 <- fit_interaction_glm(df, response)
+  drivers <- available_drivers(df)
+  df_valid <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
+  if(nrow(df_valid) < 30 || stats::var(df_valid[[response]]) < 1e-6){
+    message("compare_glms: skipping ", zone_name, " (insufficient variation in ", response, ")")
+    return(NULL)
+  }
+  m0 <- fit_baseline_glm(df_valid, response)
+  m1 <- fit_interaction_glm(df_valid, response)
   lrt <- stats::anova(m0, m1, test = "Chisq")
   tibble::tibble(zone = zone_name, response = response,
                  aic_additive = stats::AIC(m0), aic_interaction = stats::AIC(m1),
@@ -150,10 +160,12 @@ compare_glms <- function(zone_name, driver_matrices, response = "plume_area"){
 
 fit_gam <- function(df, response = "plume_area"){
   drivers <- available_drivers(df)
+  df_valid <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
+  if(nrow(df_valid) < 30 || stats::var(df_valid[[response]]) < 1e-6) return(NULL)
   pair_terms <- utils::combn(drivers, 2, simplify = FALSE)
   te_terms <- purrr::map_chr(pair_terms, ~ paste0("te(", .x[1], ", ", .x[2], ")"))
   form <- stats::as.formula(paste(response, "~", paste(te_terms, collapse = " + ")))
-  mgcv::gam(form, data = df, method = "REML")
+  mgcv::gam(form, data = df_valid, method = "REML")
 }
 
 plot_gam_figure <- function(gam_models, fig_path){
@@ -182,6 +194,9 @@ add_regime_labels <- function(df){
 refit_by_regime <- function(zone_name, regime_col, driver_matrices, response = "plume_area", min_n = 30){
   df <- add_regime_labels(driver_matrices[[zone_name]])
   drivers <- available_drivers(df)
+  df_valid <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
+  if(nrow(df_valid) < min_n || stats::var(df_valid[[response]]) < 1e-6) return(NULL)
+  df <- df_valid
   form <- stats::as.formula(paste(response, "~", paste(drivers, collapse = " + ")))
 
   purrr::map_dfr(split(df, df[[regime_col]]), function(sub){
@@ -213,6 +228,10 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
   df <- driver_matrices[[zone_name]]
   drivers <- available_drivers(df)
   df_complete <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
+  if(nrow(df_complete) < 30 || stats::var(df_complete[[response]]) < 1e-6){
+    message("fit_rf_diagnostic: skipping ", zone_name, " (insufficient variation in ", response, ")")
+    return(NULL)
+  }
 
   rf <- ranger::ranger(stats::as.formula(paste(response, "~", paste(drivers, collapse = " + "))),
                        data = df_complete[, c(response, drivers)],
@@ -241,11 +260,13 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path){
   })
 
   # Step 2: GLM comparison
-  glm_comparison_stats <- purrr::map_dfr(zones, compare_glms, driver_matrices = driver_matrices)
+  glm_comparison_stats <- purrr::map(zones, compare_glms, driver_matrices = driver_matrices) |>
+    purrr::compact() |> dplyr::bind_rows()
   readr::write_csv(glm_comparison_stats, file.path(stats_dir, "driver_glm_comparison.csv"))
 
   # Step 3: GAM
-  gam_models <- purrr::map(zones, ~ fit_gam(driver_matrices[[.x]])) |> purrr::set_names(zones)
+  gam_models <- purrr::map(zones, ~ fit_gam(driver_matrices[[.x]])) |>
+    purrr::set_names(zones) |> purrr::compact()
 
   gam_summary <- purrr::imap_dfr(gam_models, function(m, zone_name){
     s <- summary(m)
@@ -255,7 +276,7 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path){
                    r_sq_adj = s$r.sq, deviance_explained = s$dev.expl)
   })
   readr::write_csv(gam_summary, file.path(stats_dir, "driver_gam_summary.csv"))
-  plot_gam_figure(gam_models, fig_path)
+  if(length(gam_models) > 0) plot_gam_figure(gam_models, fig_path)
 
   # Step 4: regime stratification
   regime_stats <- purrr::map_dfr(zones, function(z){

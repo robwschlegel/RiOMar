@@ -396,28 +396,26 @@ def Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold,
     where_to_save_the_figures_6_7 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURES_6_7")
     os.makedirs(where_to_save_the_figures_6_7 + '/DATA', exist_ok=True)
 
-    ts_files_with_dynamic_threshold = glob.glob(os.path.join(where_are_saved_plume_results_with_dynamic_threshold,
-                                                             '*', 'SEXTANT', 'SPM', '*', 'Standard', 'PLUME_DETECTION',
-                                                             'WEEKLY',
-                                                             'Time_series_of_plume_area_and_SPM_threshold.csv'))
+    ts_files_with_dynamic_threshold = glob.glob(os.path.join(
+        where_are_saved_plume_results_with_dynamic_threshold, '*', 'Results.csv'))
 
-    ts_data_with_dynamic_threshold = []
-    for ts_file in ts_files_with_dynamic_threshold:
-        ts_data_with_dynamic_threshold.append(pd.read_csv(ts_file))
+    def _load_results(ts_file):
+        df = pd.read_csv(ts_file)
+        df['Zone'] = os.path.basename(os.path.dirname(ts_file))
+        df['date'] = pd.to_datetime(df['date']).dt.date
+        df['Years'] = pd.to_datetime(df['date']).dt.year
+        df['Satellite_sensor'] = 'merged'
+        return df
 
-    ts_data_with_dynamic_threshold = pd.concat(ts_data_with_dynamic_threshold)
+    ts_data_with_dynamic_threshold = pd.concat(
+        [_load_results(f) for f in ts_files_with_dynamic_threshold])
     ts_data_with_dynamic_threshold['Dynamic_threshold'] = True
 
-    ts_files_with_fixed_threshold = glob.glob(os.path.join(where_are_saved_plume_results_with_fixed_threshold,
-                                                           '*', 'SEXTANT', 'SPM', 'merged', 'Standard',
-                                                           'PLUME_DETECTION',
-                                                           'WEEKLY', 'Time_series_of_plume_area_and_SPM_threshold.csv'))
+    ts_files_with_fixed_threshold = glob.glob(os.path.join(
+        where_are_saved_plume_results_with_fixed_threshold, '*', 'Results.csv'))
 
-    ts_data_with_fixed_threshold = []
-    for ts_file in ts_files_with_fixed_threshold:
-        ts_data_with_fixed_threshold.append(pd.read_csv(ts_file))
-
-    ts_data_with_fixed_threshold = pd.concat(ts_data_with_fixed_threshold)
+    ts_data_with_fixed_threshold = pd.concat(
+        [_load_results(f) for f in ts_files_with_fixed_threshold])
     ts_data_with_fixed_threshold['Dynamic_threshold'] = False
 
     pd.concat([ts_data_with_dynamic_threshold, ts_data_with_fixed_threshold]).to_csv(
@@ -471,6 +469,8 @@ def Figure_8_9_10(where_are_saved_X11_results, where_to_save_the_figure):
 
     r_function = robjects.r['Figures_8_9_10']
 
-    # Call the R function
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figures_8_9_10]))
+    try:
+        r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figures_8_9_10]))
+    except Exception as e:
+        print(f"Warning: Figure_8_9_10 R plot failed for {where_are_saved_X11_results}: {e}. Skipping.")
 

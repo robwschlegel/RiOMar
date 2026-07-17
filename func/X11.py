@@ -64,6 +64,8 @@ def apply_X11_method_and_save_results(values, variable_name, dates, info, X11_di
 
     plt.close(fig)
 
+    _ks = results['18_Kendall_Sen_analyses_on_Interannual_signal']
+    _ks_is_dict = isinstance(_ks, dict)
     pd.DataFrame({'dates': results['7_dates'],
                   'Raw_signal': results['8_values_ini'],
                   'Interannual_signal': results['10_Interannual_signal'],
@@ -73,10 +75,8 @@ def apply_X11_method_and_save_results(values, variable_name, dates, info, X11_di
                   'Variance_due_to_Interannual_signal': results['1_variance_due_to_Interannual_signal'],
                   'Variance_due_to_Seasonal_signal': results['0_variance_due_to_Seasonal_signal'],
                   'Variance_due_to_Residual_signal': results['2_variance_due_to_Residual_signal'],
-                  'Monotonic_change': results['18_Kendall_Sen_analyses_on_Interannual_signal'][
-                      'Is_the_change_of_annual_values_monotonic'],
-                  'Rate_of_Change': results['18_Kendall_Sen_analyses_on_Interannual_signal'][
-                      'Rate_of_change_of_annual_values_in_percentage_per_time']
+                  'Monotonic_change': _ks['Is_the_change_of_annual_values_monotonic'] if _ks_is_dict else np.nan,
+                  'Rate_of_Change': _ks['Rate_of_change_of_annual_values_in_percentage_per_time'] if _ks_is_dict else np.nan,
                   }).to_csv(folder_where_to_store_the_plot + "/" + file_name + '.csv', index=False)
 
 
@@ -1545,10 +1545,6 @@ def Apply_X11_method_on_time_series(core_arguments, Zones,
         
         file_names_pattern = f"{plume_dir_in}/{info.Zone}/Results.csv"
 
-        if not os.path.exists(file_names_pattern):
-            print(f'File does not exists : {file_names_pattern}')
-            continue
-
         ts_data = pd.read_csv(file_names_pattern)
         ts_data['date'] = pd.to_datetime(ts_data['date'])
 
@@ -1588,11 +1584,9 @@ def Apply_X11_method_on_time_series(core_arguments, Zones,
             # Source the R script
             X11_R_path = os.path.join(func_dir, 'X11.R')
             robjects.r['source'](X11_R_path)
-            # robjects.r['source']("myRIOMAR_dev/_4_X11_analysis/utils.R")
 
             r_function = robjects.r['plot_time_series_of_plume_area_and_river_flow']
 
-            # Call the R function
             r_function(
                 where_are_saved_X11_results=robjects.StrVector([X11_dir_out]),
                 Zone=robjects.StrVector([info.Zone]),

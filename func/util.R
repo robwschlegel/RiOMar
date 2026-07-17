@@ -412,14 +412,15 @@ extract_pixels_all <- function(sat_name, zone_name = NULL){#, overwrite = FALSE)
 
 # Load time series of plume values
 load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic"){
-  file_name <- paste0(plume_dir, "/", zone, "/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")
+  file_name <- paste0(plume_dir, "/", zone, "/Results.csv")
   suppressMessages(
-    df_plume <- read_csv(file_name) |> 
+    df_plume <- read_csv(file_name) |>
+      dplyr::mutate(date = as.Date(date)) |>
       dplyr::select(date:confidence_index_in_perc) |>
-      complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
-      dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
-      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area),) |> 
-      zoo::na.trim() |> 
+      complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
+      dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |>
+      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area)) |>
+      zoo::na.trim() |>
       mutate(zone = zone, .before = "date")
   )
   return(df_plume)
@@ -469,10 +470,10 @@ load_river_flow <- function(dir_name){
   names(data_list) <- basename(files_to_load)
 
   # Combine all dataframes and aggregate by date
-  bind_rows(data_list) |>
-    summarise(flow = sum(flow, na.rm = TRUE),
-              n_rivers = n(), .by = "date") |>
-    filter(n_rivers == length(data_list))
+  dplyr::bind_rows(data_list) |>
+    dplyr::summarise(flow = sum(flow, na.rm = TRUE),
+                     n_rivers = dplyr::n(), .by = "date") |>
+    dplyr::filter(n_rivers == length(data_list))
 }
 
 # Load tide gauge data
@@ -488,8 +489,8 @@ load_tide_gauge <- function(dir_name){
   df_tide_daily <- df_tide |> 
     mutate(t = as.POSIXct(t, format = "%d/%m/%Y %H:%M:%S"),
            date = as.Date(t)) |> 
-    summarise(tide_mean = round(mean(tide, na.rm = TRUE), 2),
-              tide_range = max(tide, na.rm = TRUE)-min(tide, na.rm = TRUE), .by = "date")
+    dplyr::summarise(tide_mean = round(mean(tide, na.rm = TRUE), 2),
+                     tide_range = max(tide, na.rm = TRUE)-min(tide, na.rm = TRUE), .by = "date")
   return(df_tide_daily)
 }
 
@@ -502,7 +503,7 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
     dplyr::rename(u = eastward_wind, v = northward_wind, lon = longitude, lat = latitude) |> 
     mutate(date = as.Date(time)) |> 
     dplyr::select(date, lon, lat, u, v) |> 
-    summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
+    dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
   
   # Remove final day of data
   ## it is an artefact from creating daily integrals from hourly data
@@ -530,7 +531,7 @@ load_ROFI <- function(file_name){
     mutate(zone = zone,
            date = as.Date(parse_date_time(time_counter, "Ymd HMS"))) |> 
     dplyr::select(zone, date, ROFI_surface) |> 
-    summarise(ROFI_surface = mean(ROFI_surface, na.rm = TRUE), .by = c("zone", "date"))
+    dplyr::summarise(ROFI_surface = mean(ROFI_surface, na.rm = TRUE), .by = c("zone", "date"))
   return(df_ROFI)
 }
 
