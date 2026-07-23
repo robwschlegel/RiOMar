@@ -8,7 +8,7 @@
   "near_mouth_lower_quantile": 0.25,
   "near_mouth_upper_quantile": 0.75,
   "global_threshold_quantile": 0.95,
-  "overwrite": true,
+  "overwrite": false,
   "gif": false,
   "nb_cores": 12,
   "variable_name": "analysed_spim"
