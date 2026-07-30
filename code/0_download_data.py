@@ -9,7 +9,8 @@
 #### Modules
 # =============================================================================
 
-import os, sys
+import os
+import sys
 import matplotlib as mpl
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
@@ -103,6 +104,44 @@ for zone in zones_list:
 
 
 # =============================================================================
+#### Download wave height data
+# =============================================================================
+
+# The Atlantic WAVE data at 0.027° resolution
+for zone in zones_list[1:4]:
+    download_cmems_subset(
+        zone,
+        'cmems_mod_ibi_wav_my_0.027deg_PT1H-i',
+        ['VHM0', 'VMDR'],
+        '1998-01-01T00:00:00', '2026-01-01T00:00:00', # Remember to get one extra hour to cover the integral up to 2025-12-31 23:00
+        f'../pCloudDrive/data/WAVE/{zone}'
+    )
+
+# The Mediterranean WAVE data at 0.042° resolution
+for zone in zones_list[0:1]:
+    download_cmems_subset(
+        zone,
+        'cmems_mod_med_wav_my_4.2km_PT1H-i',
+        ['VHM0', 'VMDR'],
+        '1998-01-01T00:00:00', '2026-01-01T00:00:00', # Remember to get one extra hour to cover the integral up to 2025-12-31 23:00
+        f'../pCloudDrive/data/WAVE/{zone}'
+    )
+
+
+# =============================================================================
+#### Create daily integrals of hourly wind and wave data
+# =============================================================================
+
+for zone in zones_list:
+    daily_integral(f'/home/calanus/pCloudDrive/data/WIND/{zone}',
+                   overwrite = False) # Change to True if running for the first time
+
+for zone in zones_list:
+    daily_integral(f'/home/calanus/pCloudDrive/data/WAVE/{zone}',
+                   overwrite = False) # Change to True if running for the first time
+
+
+# =============================================================================
 #### Download other surface variables
 # =============================================================================
 
@@ -152,15 +191,6 @@ for zone in zones_list:
         f'../pCloudDrive/data/GLORYS/{zone}'
     )
 
-
-# =============================================================================
-#### Create daily integrals of hourly wind data
-# =============================================================================
-
-for zone in zones_list:
-    daily_integral(f'/home/calanus/pCloudDrive/data/WIND/{zone}',
-                   overwrite = False) # Change to True if running for the first time
-    
 
 # =============================================================================
 #### Create maps of the Chla and SPM data

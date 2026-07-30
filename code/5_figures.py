@@ -16,7 +16,7 @@ func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 import util, figure
-from figure import Figure_1, Figure_2, Figure_4, Figure_5, Figure_6_7, Figure_8_9_10
+from figure import Figure_1, Figure_4, Figure_5, Figure_6_7, Figure_8_9_10
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg')
@@ -27,9 +27,7 @@ mpl.use('agg')
 # =============================================================================
 
 Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
-         where_to_save_the_figure = "figures")
-
-Figure_2(where_are_saved_regional_maps = "output",
+         where_are_saved_regional_maps = "output",
          where_to_save_the_figure = "figures")
 
 Figure_4(where_are_saved_regional_maps = "output",
