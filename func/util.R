@@ -31,6 +31,189 @@ france_bbox <- data.frame(zone = "FRANCE",
                          lat_max = c(51.5)) 
 
 
+# Tide gauge sub-daily QC ---------------------------------------------------
+# Flags calendar days whose sub-daily curve does not look tidal, so that
+# load_tide_gauge() (below) can null out tide_mean/tide_range for those days
+# before they reach func/multi.R's driver comparisons. See func/tide.R for
+# the diagnostics (example good/bad days, per-station counts) behind this and
+# for the reasoning behind the threshold choices below.
+#
+# Harmonic model: M2 + S2 + K1 + O1 (dominant semi-diurnal + diurnal tidal
+# constituents). Confirmed empirically for all six gauges via the tidal form
+# number F = (K1+O1)/(M2+S2) (func/tide.R): all six are semidiurnal or
+# mixed-mainly-semidiurnal, so the same 4-constituent model is used
+# everywhere -- only the pass/fail thresholds differ by gauge.
+tide_periods_hr <- c(M2 = 12.4206012, S2 = 12.0, K1 = 23.93447213, O1 = 25.81933871)
+
+# R^2 floor for the local harmonic fit (see .tide_day_qc()), below which a
+# day's tide_range/tide_mean is considered unreliable. Two tiers, not one:
+# the Atlantic/Channel gauges (Le Havre, Port-Bloc, Saint-Nazaire) have a
+# strong, clean semidiurnal signal (M2 amplitude 1.4-2.5 m) -- even their
+# worst 1st-percentile day still fits the harmonic model with R^2 > 0.92, so
+# 0.85 only catches genuine failures. The Mediterranean gauges (Fos-sur-Mer,
+# Marseille, Port-de-Bouc) have a tiny tidal signal (M2 amplitude ~0.06 m)
+# that is easily swamped by non-tidal sea-level noise (storm surge, seiches,
+# and at Fos-sur-Mer, harbour-scale wind chop) -- plenty of genuinely good
+# days sit at R^2 0.7-0.9, so 0.30 is used instead: below that, the day's
+# water level is no longer tide-dominated, whatever the physical cause, so
+# it is not a reliable tidal-range value regardless.
+tide_r2_threshold <- c("LE_HAVRE" = 0.85, "PORT-BLOC" = 0.85, "SAINT-NAZAIRE" = 0.85,
+                       "FOS-SUR-MER" = 0.30, "MARSEILLE" = 0.30, "PORT_DE_BOUC" = 0.30)
+
+# Count local extrema in a sub-daily curve, merging turning points whose
+# prominence (jump to the neighbouring turning point) is below `prom` --
+# removes sensor-noise-driven wiggles that are not real tidal extrema.
+.count_extrema <- function(vals, prom){
+  n <- length(vals)
+  if(n < 3) return(0)
+  signs <- sign(diff(vals))
+  signs[signs == 0] <- NA
+  signs <- zoo::na.locf(signs, na.rm = FALSE)
+  keep <- unique(c(1, which(diff(signs) != 0) + 1, n))
+  while(length(keep) > 2){
+    vdiffs <- abs(diff(vals[keep]))
+    if(all(vdiffs >= prom, na.rm = TRUE)) break
+    rm_i <- which.min(vdiffs) + 1
+    if(rm_i <= 1 || rm_i >= length(keep)) break
+    keep <- keep[-rm_i]
+  }
+  max(length(keep) - 2, 0)
+}
+
+# QC for one calendar day. t_all/y_all are the full (t, tide) vectors for one
+# station (hourly, already cleaned -- see .load_tide_raw()); spike_thresh is
+# that station's own historical 99.9th-percentile |rate of change| (m/hr).
+# Checks, in order (first failure wins):
+#   1. sparse/gappy sampling: < 20 of ~24 hourly obs, or a single gap > 4h --
+#      the day's max/min cannot be trusted
+#   2. spike/step: an hour-to-hour jump beyond this gauge's own historical
+#      rate of change (calibrated per-station: what counts as an impossible
+#      jump scales directly with each gauge's tidal range)
+#   3. extrema mismatch: the number of local extrema in the raw day differs
+#      by >= 3 from the number predicted by the local harmonic fit (wrong
+#      shape -- e.g. a day that is essentially flat when the tide should
+#      have turned twice, or wildly over-oscillating)
+#   4. low R^2: the local harmonic fit explains too little of the day's own
+#      variance (residuals too large relative to the local tidal signal --
+#      see tide_r2_threshold for the per-station floor)
+.tide_day_qc <- function(day, t_all, y_all, station, spike_thresh){
+  # NB: no explicit tz -- t_all (from .load_tide_raw()) is parsed with
+  # as.POSIXct()'s system-default tz too, so day boundaries here must match
+  # it or every check below silently slices the wrong hours into "today"
+  day_start <- as.POSIXct(paste(day, "00:00:00"))
+  day_end   <- day_start + 24*3600
+
+  idx_day <- which(t_all >= day_start & t_all < day_end)
+  n_day <- length(idx_day)
+  if(n_day < 5) return(data.frame(date = day, tide_bad = TRUE, reason = "sparse"))
+
+  t_day <- t_all[idx_day]; y_day <- y_all[idx_day]
+  dt_day <- as.numeric(diff(t_day), units = "hours")
+  max_gap_hr <- if(length(dt_day) > 0) max(dt_day) else Inf
+  if(n_day < 20 || max_gap_hr > 4) return(data.frame(date = day, tide_bad = TRUE, reason = "sparse"))
+
+  # Spike/step: a single-point reversal (jumps beyond this gauge's own
+  # historical rate, then springs most of the way back within the next
+  # step) inconsistent with tidal physics. Deliberately NOT just "a fast
+  # rate of change" -- a genuine spring-tide flood/ebb can be just as fast,
+  # but moves monotonically in one direction; only requiring the rate
+  # threshold flagged several textbook-clean spring tides at the
+  # high-amplitude Atlantic/Channel gauges (see func/tide.R diagnostics),
+  # whereas a real glitch shows up as a jump immediately undone.
+  ok <- dt_day >= 0.5 & dt_day <= 1.5
+  rate_signed <- ifelse(ok, diff(y_day)/dt_day, NA)
+  n_r <- length(rate_signed)
+  if(n_r >= 2){
+    is_reversal <- abs(rate_signed[-n_r]) > spike_thresh & abs(rate_signed[-1]) > spike_thresh &
+      sign(rate_signed[-n_r]) != sign(rate_signed[-1])
+    if(any(is_reversal, na.rm = TRUE)) return(data.frame(date = day, tide_bad = TRUE, reason = "spike"))
+  }
+
+  # Local harmonic fit on a +-24h buffer window (2-3 full tidal cycles either
+  # side for a stable fit), evaluated against just this day's own points
+  win_start <- day_start - 24*3600; win_end <- day_end + 24*3600
+  idx_win <- which(t_all >= win_start & t_all < win_end)
+  if(length(idx_win) < 12) return(data.frame(date = day, tide_bad = TRUE, reason = "sparse"))
+  tw <- t_all[idx_win]; yw <- y_all[idx_win]
+  hrs <- as.numeric(difftime(tw, day_start, units = "hours"))
+  X <- cbind(1, cos(2*pi*hrs/tide_periods_hr[1]), sin(2*pi*hrs/tide_periods_hr[1]),
+                cos(2*pi*hrs/tide_periods_hr[2]), sin(2*pi*hrs/tide_periods_hr[2]),
+                cos(2*pi*hrs/tide_periods_hr[3]), sin(2*pi*hrs/tide_periods_hr[3]),
+                cos(2*pi*hrs/tide_periods_hr[4]), sin(2*pi*hrs/tide_periods_hr[4]))
+  coefs <- .lm.fit(X, yw)$coefficients
+  yhat_w <- as.vector(X %*% coefs)
+  idx_d_in_w <- which(tw >= day_start & tw < day_end)
+  y_d <- yw[idx_d_in_w]; yhat_d <- yhat_w[idx_d_in_w]
+  ss_tot <- sum((y_d - mean(y_d))^2)
+  r2 <- if(ss_tot > 0) 1 - sum((y_d - yhat_d)^2)/ss_tot else 1
+
+  # Expected extrema from the fitted curve at 6-min resolution vs. observed
+  # extrema in the raw data (0.03 m prominence filter, ~3x the gauges'
+  # 0.01 m reading resolution, to ignore sensor jitter)
+  hrs_fine <- seq(0, 24, by = 1/10)
+  Xf <- cbind(1, cos(2*pi*hrs_fine/tide_periods_hr[1]), sin(2*pi*hrs_fine/tide_periods_hr[1]),
+                 cos(2*pi*hrs_fine/tide_periods_hr[2]), sin(2*pi*hrs_fine/tide_periods_hr[2]),
+                 cos(2*pi*hrs_fine/tide_periods_hr[3]), sin(2*pi*hrs_fine/tide_periods_hr[3]),
+                 cos(2*pi*hrs_fine/tide_periods_hr[4]), sin(2*pi*hrs_fine/tide_periods_hr[4]))
+  extrema_exp <- sum(diff(sign(diff(as.vector(Xf %*% coefs)))) != 0)
+  extrema_obs <- .count_extrema(y_day, prom = 0.03)
+  if(abs(extrema_obs - extrema_exp) >= 3) return(data.frame(date = day, tide_bad = TRUE, reason = "extrema_mismatch"))
+
+  if(r2 < tide_r2_threshold[[station]]) return(data.frame(date = day, tide_bad = TRUE, reason = "low_r2"))
+
+  return(data.frame(date = day, tide_bad = FALSE, reason = NA_character_))
+}
+
+# Per-day tidal QC flags for one station's cleaned sub-daily (t, tide)
+# series (see .load_tide_raw()). Returns one row per calendar date with
+# tide_bad (logical) and reason (NA when good).
+# qc_tide_days(.load_tide_raw("data/TIDES/MARSEILLE"), "MARSEILLE")
+qc_tide_days <- function(df_tide, station){
+  if(!station %in% names(tide_r2_threshold)){
+    stop("Unrecognised tide gauge '", station, "' -- add an R^2 threshold to tide_r2_threshold in func/util.R.")
+  }
+
+  # This gauge's own 99.9th-percentile *daily* extreme rate of change --
+  # i.e. the 99.9th percentile of each day's own worst hour-to-hour jump
+  # (transitions within the same calendar day only, matching the within-day
+  # slicing .tide_day_qc() uses for its own spike check).
+  daily_max_rate <- df_tide |>
+    mutate(date = as.Date(t)) |>
+    dplyr::group_by(date) |>
+    dplyr::summarise(max_rate = {
+      dt <- as.numeric(diff(t), units = "hours")
+      ok <- dt >= 0.5 & dt <= 1.5
+      rate <- ifelse(ok, abs(diff(tide)/dt), NA)
+      if(all(is.na(rate))) NA_real_ else max(rate, na.rm = TRUE)
+    }, .groups = "drop")
+  spike_thresh <- quantile(daily_max_rate$max_rate, 0.999, na.rm = TRUE)
+
+  days <- unique(as.Date(df_tide$t))
+  plyr::ldply(days, .tide_day_qc, t_all = df_tide$t, y_all = df_tide$tide,
+              station = station, spike_thresh = spike_thresh, .parallel = TRUE)
+}
+
+# Read + clean one tide gauge's raw sub-daily record (all years available,
+# source == 4 "hourly validated" readings only). Shared by load_tide_gauge()
+# below and the QC diagnostics in func/tide.R.
+# NB: Saint-Nazaire also carries source == 6 ("Pleines et basses mers")
+# rows -- sparse high/low-water-only readings interleaved a few minutes off
+# the hourly grid. These are dropped so the sub-daily curve QC'd above sits
+# on a clean, evenly-sampled hourly grid.
+.load_tide_raw <- function(dir_name){
+  tide_files <- dir(dir_name, pattern = ".txt", full.names = TRUE)
+  suppressMessages(
+    df_tide <- map_dfr(tide_files, read_delim, col_names = c("t", "tide", "source"), skip = 14, delim = ";", col_select = c("t", "tide", "source"))
+  )
+  df_tide |>
+    dplyr::filter(source == 4) |>
+    mutate(t = as.POSIXct(t, format = "%d/%m/%Y %H:%M:%S")) |>
+    dplyr::distinct(t, .keep_all = TRUE) |>
+    dplyr::arrange(t) |>
+    dplyr::select(t, tide)
+}
+
+
 # Pixels ------------------------------------------------------------------
 
 # Simple wrapper to extract start and end times of an ODATIS-MR file
@@ -410,44 +593,72 @@ extract_pixels_all <- function(sat_name, zone_name = NULL){#, overwrite = FALSE)
 
 # Loading -----------------------------------------------------------------
 
-# Load time series of plume values
-load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic"){
+# Zone-specific hard ceiling on classified plume area (km^2), applied
+# unconditionally in load_plume_ts() below regardless of which metric_col is
+# requested. Replaces a single flat 20000 km^2 guard with one ceiling per
+# zone, chosen by hand (2026-07) from func/surface.R's suspicious-plume-day
+# scan against the daily plume-shape grids -- each zone's plausible maximum
+# extent differs by an order of magnitude (e.g. the Gulf of Lion's shelf vs.
+# the Seine's), so a single global cutoff was either too loose for the Seine
+# or too tight for the Gulf of Lion. BAY_OF_SEINE's ceiling in particular is
+# deliberately tight (2500 km^2): this zone is the most turbid, so its
+# dynamic threshold is the most prone to spilling into open-ocean pixels,
+# and it's better to lose several real high-area days than keep the
+# spillover ones.
+plume_area_ceiling <- c(BAY_OF_BISCAY = 12000, BAY_OF_SEINE = 2500,
+                        GULF_OF_LION = 10000, SOUTHERN_BRITTANY = 6000)
+
+# Load time series of plume values. `metric_col` selects which Results.csv
+# column becomes `plume_area` downstream (every driver_plume_* function in
+# multi.R is written against that column name regardless of what it holds,
+# so this is the one place a different plume metric -- e.g. mass_SPM_in_the_
+# plume_area_in_g_m -- needs to be wired in). `outlier_max` is only a
+# sensible guard for the area column (20000 km^2 is physically implausible
+# for these zones); pass NULL to skip it for other metrics. The
+# plume_area_ceiling cap above is applied to area_of_the_plume_mask_in_km2
+# first and unconditionally, before metric_col is even selected -- so it
+# takes effect no matter which metric is ultimately requested, while every
+# other Results.csv column (mean_SPM, mass, centroids, confidence, n_pixel)
+# is left exactly as read, even on a day whose area gets nulled here.
+load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic",
+                          metric_col = "area_of_the_plume_mask_in_km2", outlier_max = 20000){
   file_name <- paste0(plume_dir, "/", zone, "/Results.csv")
-  suppressMessages(
+  suppressMessages({
     df_plume <- read_csv(file_name) |>
       dplyr::mutate(date = as.Date(date)) |>
       dplyr::select(date:confidence_index_in_perc) |>
       complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
-      dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |>
-      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area)) |>
+      dplyr::mutate(area_of_the_plume_mask_in_km2 = ifelse(area_of_the_plume_mask_in_km2 > plume_area_ceiling[[zone]],
+                                                            NA, area_of_the_plume_mask_in_km2)) |>
+      dplyr::rename(plume_area = !!rlang::sym(metric_col))
+    if(!is.null(outlier_max)) df_plume <- dplyr::mutate(df_plume, plume_area = ifelse(plume_area > outlier_max, NA, plume_area))
+    df_plume <- df_plume |>
       zoo::na.trim() |>
       mutate(zone = zone, .before = "date")
-  )
+  })
   return(df_plume)
 }
 
-# Get the date of the plume data from the file name while loading
-load_plume_surface <- function(zone){
-  # Detect all plume surface csv files
-  plume_files <- dir(paste0("output/panache/", zone),
-                     pattern = ".csv", recursive = TRUE, full.names = TRUE)
-  
-  # The function to be ply'd across all files
-  load_plume_1 <- function(file_name, zone){
-    # Get date
-    file_date <- as.Date(gsub(".csv", "", basename(file_name)))
-    # Load data and switch columns
-    df <- read_csv(file_name) |> 
-      mutate(zone = zone,
-             date = file_date) |> 
-      dplyr::select(zone, date, lon, lat) |> 
-      filter(!is.na(lon) & !is.na(lat))
-    return(df)
-  }
-  
-  # Load all daily maps into one data.frame
-  ## NB: There are a lot of files to load, need some heavy lifting to get it done
-  df_plume_surface <- plyr::ldply(plume_files, load_plume_1, .parallel = TRUE, zone = zone)
+# Get the (lon, lat) footprint of the daily plume mask for a zone. Panache's
+# 2026-07-17 rewrite replaced the old per-day CSV output (one file per date,
+# lon/lat columns) with a single PlumeMasks.nc cube per zone/threshold
+# (plume_mask(time, lat, lon), 0/1) -- read that instead, keeping only pixels
+# flagged as plume. plume_dir mirrors load_plume_ts()'s static/dynamic switch.
+load_plume_surface <- function(zone, plume_dir = "output/panache/dynamic"){
+  file_name <- paste0(plume_dir, "/", zone, "/PlumeMasks.nc")
+  nc_dat <- nc_open(file_name)
+  lon  <- ncvar_get(nc_dat, "lon")
+  lat  <- ncvar_get(nc_dat, "lat")
+  time_origin <- sub("^days since ", "", ncatt_get(nc_dat, "time", "units")$value)
+  time <- as.Date(ncvar_get(nc_dat, "time"), origin = time_origin)
+  mask <- ncvar_get(nc_dat, "plume_mask")  # [lon, lat, time]
+  nc_close(nc_dat)
+
+  hit <- which(mask == 1, arr.ind = TRUE)
+  df_plume_surface <- tibble::tibble(zone = zone,
+                                     date = time[hit[, 3]],
+                                     lon  = lon[hit[, 1]],
+                                     lat  = lat[hit[, 2]])
   message(paste0("Loaded ", nrow(df_plume_surface), " plume surface points for zone ", zone))
   return(df_plume_surface)
 }
@@ -478,38 +689,123 @@ load_river_flow <- function(dir_name){
 
 # Load tide gauge data
 load_tide_gauge <- function(dir_name){
-  
-  # Tide gauge files
-  tide_files <- dir(dir_name, pattern = ".txt", full.names = TRUE)
-  
-  # Load all files
-  suppressMessages(
-    df_tide <- map_dfr(tide_files, read_delim, col_names = c("t", "tide", "source"), skip = 14, delim = ";", col_select = c("t", "tide"))
-  )
-  df_tide_daily <- df_tide |> 
-    mutate(t = as.POSIXct(t, format = "%d/%m/%Y %H:%M:%S"),
-           date = as.Date(t)) |> 
+
+  station <- basename(dir_name)
+  df_tide <- .load_tide_raw(dir_name)
+
+  # Flag calendar days whose sub-daily curve does not look tidal (see
+  # qc_tide_days() / func/tide.R) before tide_mean/tide_range are computed
+  df_flags <- qc_tide_days(df_tide, station)
+
+  df_tide_daily <- df_tide |>
+    mutate(date = as.Date(t)) |>
     dplyr::summarise(tide_mean = round(mean(tide, na.rm = TRUE), 2),
-                     tide_range = max(tide, na.rm = TRUE)-min(tide, na.rm = TRUE), .by = "date")
+                     tide_range = max(tide, na.rm = TRUE)-min(tide, na.rm = TRUE), .by = "date") |>
+    dplyr::left_join(df_flags, by = "date") |>
+    dplyr::mutate(tide_bad = dplyr::coalesce(tide_bad, TRUE),
+                  tide_mean = ifelse(tide_bad, NA, tide_mean),
+                  tide_range = ifelse(tide_bad, NA, tide_range)) |>
+    dplyr::select(date, tide_mean, tide_range, tide_qc_reason = reason)
   return(df_tide_daily)
+}
+
+# Compute speed and compass bearing from eastward (u) and northward (v) vector
+# components. convention = "from" reports the direction the vector originates
+# from (meteorological convention, e.g. wind); convention = "to" reports the
+# direction the vector is heading towards (oceanographic convention, e.g.
+# currents). Used by load_wind_sub() and load_surface_current().
+.speed_direction <- function(u, v, convention = c("from", "to")){
+  convention <- match.arg(convention)
+  speed <- sqrt(u^2 + v^2)
+  bearing_to <- (90 - atan2(v, u) * (180 / pi)) %% 360
+  direction <- if(convention == "from") (bearing_to + 180) %% 360 else bearing_to
+  list(speed = speed, direction = direction)
 }
 
 # Load wind data
 load_wind_sub <- function(file_name, lon_range, lat_range){
-  wind_df <- tidync(file_name) |> 
+  wind_df <- tidync(file_name) |>
     hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
-                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |> 
-    hyper_tibble() |> 
-    dplyr::rename(u = eastward_wind, v = northward_wind, lon = longitude, lat = latitude) |> 
-    mutate(date = as.Date(time)) |> 
-    dplyr::select(date, lon, lat, u, v) |> 
+                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |>
+    hyper_tibble() |>
+    dplyr::rename(u = eastward_wind, v = northward_wind, lon = longitude, lat = latitude) |>
+    mutate(date = as.Date(time)) |>
+    dplyr::select(date, lon, lat, u, v) |>
     dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
-  
+
   # Remove final day of data
   ## it is an artefact from creating daily integrals from hourly data
   final_date <- max(wind_df$date)
   wind_df <- filter(wind_df, date != final_date)
+
+  # Zone-average wind speed and direction (direction = where the wind is coming FROM)
+  wind_vec <- .speed_direction(wind_df$u, wind_df$v, convention = "from")
+  wind_df$wind_spd <- round(wind_vec$speed, 2)
+  wind_df$wind_dir <- round(wind_vec$direction)
   return(wind_df)
+}
+
+# Load wave data (significant wave height + mean direction).
+# NB: unlike wind/current, VMDR (mean wave direction) is a raw angle, not
+# derived from vector components -- the pixel-box mean below is a plain
+# circular (unit-vector) mean over the lon/lat box, which avoids the 0/360
+# wrap-around problem a naive arithmetic mean would have *within this
+# function*. The same problem still exists one step upstream: the "_daily_"
+# source files are produced by cdo daymean directly on hourly VMDR, which
+# is an arithmetic (not circular) mean, so any day where wave direction
+# crosses the 0/360 wrap can already carry a biased wave_dir before it
+# reaches this function.
+load_wave <- function(file_name, lon_range, lat_range){
+  wave_df <- tidync(file_name) |>
+    hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
+                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |>
+    hyper_tibble() |>
+    dplyr::rename(wave_height = VHM0, wave_dir = VMDR, lon = longitude, lat = latitude) |>
+    mutate(date = as.Date(time)) |>
+    dplyr::select(date, lon, lat, wave_height, wave_dir) |>
+    dplyr::summarise(wave_height = mean(wave_height, na.rm = TRUE),
+                     wave_dir_x = mean(sin(wave_dir * pi / 180), na.rm = TRUE),
+                     wave_dir_y = mean(cos(wave_dir * pi / 180), na.rm = TRUE), .by = "date") |>
+    dplyr::mutate(wave_height = round(wave_height, 2),
+                  wave_dir = round(atan2(wave_dir_x, wave_dir_y) * (180 / pi)) %% 360) |>
+    dplyr::select(date, wave_height, wave_dir)
+
+  # Remove final day of data
+  ## it is an artefact from creating daily integrals from hourly data
+  final_date <- max(wave_df$date)
+  wave_df <- filter(wave_df, date != final_date)
+  return(wave_df)
+}
+
+# Load one GLORYS file's surface currents (uo/vo), reduced to the zone/box daily mean.
+.load_current_sub <- function(file_name, lon_range, lat_range){
+  tidync(file_name) |>
+    hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
+                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |>
+    hyper_tibble(select_var = c("uo", "vo")) |>
+    dplyr::rename(u = uo, v = vo, lon = longitude, lat = latitude) |>
+    mutate(date = as.Date(time)) |>
+    dplyr::select(date, lon, lat, u, v) |>
+    dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
+}
+
+# Load GLORYS surface current (eastward/northward velocity) data for a zone.
+# NB: current data through 2024-12-31 lives in the combined historical file
+# ("glorys_199301_202412.nc"); 2025 onward is a separate uo/vo-only file
+# ("glorys_uo_vo_202501_202512.nc") -- both live under
+# ~/pCloudDrive/data/GLORYS/<zone_name>/ and are combined here.
+load_surface_current <- function(zone_name, lon_range, lat_range){
+  dir_name <- path.expand(paste0("~/pCloudDrive/data/GLORYS/", zone_name))
+  current_df <- dplyr::bind_rows(
+    .load_current_sub(file.path(dir_name, "glorys_199301_202412.nc"), lon_range, lat_range),
+    .load_current_sub(file.path(dir_name, "glorys_uo_vo_202501_202512.nc"), lon_range, lat_range)
+  )
+
+  # Zone-average current speed and direction (direction = where the current is flowing TO)
+  current_vec <- .speed_direction(current_df$u, current_df$v, convention = "to")
+  current_df$current_spd <- round(current_vec$speed, 2)
+  current_df$current_dir <- round(current_vec$direction)
+  return(current_df)
 }
 
 # Load ROFI surface NetcDF

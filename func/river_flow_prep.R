@@ -20,38 +20,40 @@ zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITT
 # Load HydroPortail meta-data
 sites_HP <- read_csv("metadata/HydroPortail_station_list.csv")
 
-# Log-log linear model prediction function
+# Log-log record-extension prediction function.
+# pred_x is the short/ideal series (the gauge closest to the river mouth);
+# pred_y is the long/complete series to be transformed into predicted
+# values of pred_x, covering every date pred_y has (not just the overlap).
 # pred_x <- rhone_g_4$grand; pred_y <- rhone_g_4$all
 # pred_x <- lay_5$debit.y; pred_y <- lay_5$debit.x
-# rm(pred_x, pred_y, df, df_res, lm_fit)
+# rm(pred_x, pred_y, df, df_res, slope, intercept)
 predict_loglog <- function(pred_x, pred_y){
-  
-  # Prep dataframe of matching values
-  df <- data.frame(pred_x = pred_x, pred_y = pred_y) |> 
+
+  # Prep dataframe of matching (overlap) values used to fit the transfer relationship
+  df <- data.frame(pred_x = pred_x, pred_y = pred_y) |>
     filter(pred_x > 1, pred_y > 1) |> # Log transform fall over under 1
     mutate(log_x = log(pred_x), log_y = log(pred_y),
            time_step = 1:n())
-  
+
   # Test plots
-  ggplot(df, aes(x = time_step, y = pred_x)) + geom_line() + geom_smooth(method = "lm", colour = "black") +  
+  ggplot(df, aes(x = time_step, y = pred_x)) + geom_line() + geom_smooth(method = "lm", colour = "black") +
     geom_line(aes(y = pred_y), colour = "red") + geom_smooth(method = "lm", aes(y = pred_y), colour = "red")
   ggplot(df, aes(x = pred_x, y = pred_y)) + geom_point() + geom_smooth(method = "lm") + geom_abline(slope = 1, intercept = 0, linetype = "dashed")
   ggplot(df, aes(x = log_x, y = log_y)) + geom_point() + geom_smooth(method = "lm") + geom_abline(slope = 1, intercept = 0, linetype = "dashed")
-  
-  # Get slope and intercept
-  lm_fit <- lm(log_y ~ log_x, data = df)
-  # summary(lm_fit)
-  
-  # Test out the matchup
-  # df$pred_pred <- exp((log(df$pred_y)/coef(lm_fit)[2])-coef(lm_fit)[1])
-  # ggplot(df, aes(x = time_step, y = pred_x)) + geom_line() + geom_smooth(method = "lm", colour = "black") +
-  #   geom_line(aes(y = pred_y), colour = "blue") + geom_smooth(method = "lm", aes(y = pred_y), colour = "blue") +
-  #   geom_line(aes(y = pred_pred), colour = "red") + geom_smooth(method = "lm", aes(y = pred_pred), colour = "red")
-  # ggplot(df, aes(x = pred_x, y = pred_pred)) + geom_point() + geom_smooth(method = "lm") + geom_abline(slope = 1, intercept = 0, linetype = "dashed")
-  
+
+  # Get slope and intercept via MOVE.1 (Hirsch 1982): a reduced-major-axis
+  # (RMA) fit through the log-transformed overlap, not OLS. OLS minimises
+  # vertical residuals only, which attenuates the slope and shrinks the
+  # extended series' variance toward its mean (flood peaks under-predicted,
+  # low flows over-predicted); RMA instead preserves the variance ratio
+  # between the two gauges, which is what a record-extension transfer needs.
+  slope <- sign(cor(df$log_x, df$log_y)) * sd(df$log_y) / sd(df$log_x)
+  intercept <- mean(df$log_y) - slope * mean(df$log_x)
+
   # Correct the longest series based on the ideal series
-  df_res <- data.frame(pred_long = exp((log(pred_y)/coef(lm_fit)[2])-coef(lm_fit)[1]))
-  
+  # (inverting log_y = intercept + slope*log_x for log_x)
+  df_res <- data.frame(pred_long = exp((log(pred_y) - intercept) / slope))
+
   # Exit
   return(df_res$pred_long)
 }

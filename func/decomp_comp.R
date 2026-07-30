@@ -33,7 +33,7 @@ X_11_plume_flow_stats_all <- X_11_plume_flow |>
   summarise(r = round(cor(plume_inter, flow_inter, use = "pairwise.complete.obs"), 2), .by = "zone")
 
 # Interannual comparison plots
-comparison_plot_save(X_11_plume_flow, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter_X11")
+comparison_plot_save(X_11_plume_flow, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "trend_diagnostics_stale/comparison_plume_flow_inter_X11")
 
 # STL
 load("output/STATS/stl_all.RData")
@@ -99,7 +99,7 @@ scatter_plume_inter <- plume_inter |>
 
 # Combine and save
 multi_plume_inter <- line_plume_inter + scatter_plume_inter + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_inter_comp.png", plot = multi_plume_inter, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_plume_inter_comp.png", plot = multi_plume_inter, height = 20, width = 30)
 
 
 ### Seasonal ----------------------------------------------------------------
@@ -142,7 +142,7 @@ scatter_plume_seas <- plume_seas |>
 
 # Combine and save
 multi_plume_seas <- line_plume_seas + scatter_plume_seas + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_seas_comp.png", plot = multi_plume_seas, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_plume_seas_comp.png", plot = multi_plume_seas, height = 20, width = 30)
 
 
 ### DOY ---------------------------------------------------------------------
@@ -186,7 +186,7 @@ scatter_plume_doy <- plume_doy |>
 
 # Combine and save
 multi_plume_doy <- line_plume_doy + scatter_plume_doy + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_doy_comp.png", plot = multi_plume_doy, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_plume_doy_comp.png", plot = multi_plume_doy, height = 20, width = 30)
 
 
 ### Residual ----------------------------------------------------------------
@@ -228,7 +228,7 @@ scatter_plume_resid <- plume_resid |>
 
 # Combine and save
 multi_plume_resid <- line_plume_resid + scatter_plume_resid + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_plume_resid_comp.png", plot = multi_plume_resid, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_plume_resid_comp.png", plot = multi_plume_resid, height = 20, width = 30)
 
 
 ### Trends ------------------------------------------------------------------
@@ -279,7 +279,7 @@ line_trend_base_all <- ggplot(plume_trend_daily_all, aes(x = date, y = plume_are
   facet_wrap(~plot_title, ncol = 2, scales = "free_y") +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_base_all.png", plot = line_trend_base_all, height = 9, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_trend_comparison_base_all.png", plot = line_trend_base_all, height = 9, width = 12)
 
 
 # Here we look at only Gulf of Lion to keep the output simpler
@@ -327,7 +327,7 @@ line_trend_base <- ggplot(plume_trend_daily, aes(x = date, y = plume_area)) +
   # ggplot_theme() +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
 
 # The same plot comparing the seasonal components
 plume_seas <- decomp_df |>
@@ -363,7 +363,7 @@ line_trend_seas <- ggplot(plume_seas, aes(x = date, y = value)) +
                      breaks = c("STL seasonal", "X11 seasonal", "smoothed seasonal")) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_seas.png", plot = line_trend_seas, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_trend_comparison_seas.png", plot = line_trend_seas, height = 6, width = 12)
 
 # The same plot comparing the residual components
 plume_resid <- decomp_df |>
@@ -397,7 +397,7 @@ line_trend_resid <- ggplot(plume_resid, aes(x = date, y = value)) +
                      breaks = c("STL residual", "X11 residual")) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_resid.png", plot = line_trend_resid, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_trend_comparison_resid.png", plot = line_trend_resid, height = 6, width = 12)
 
 # The same plot comparing the interannual components
 plume_inter <- decomp_df |>
@@ -459,7 +459,7 @@ line_trend_inter <- ggplot(plume_inter_timesteps, aes(x = date, y = value)) +
                      labels = c("daily/weekly", "monthly", "annual")) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
 
 
 ### Proportion --------------------------------------------------------------
@@ -498,7 +498,7 @@ line_plume_comp_vs_raw <-ggplot(plume_ts, aes(x = date, y = value, colour = comp
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_components_vs_raw.png", plot = line_plume_comp_vs_raw, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_components_vs_raw.png", plot = line_plume_comp_vs_raw, height = 6, width = 12)
 
 # Calculate proportion values
 plume_prop <- decomp_df |>
@@ -564,7 +564,7 @@ line_plume_prop <- ggplot(filter(plume_prop, component_group != "total"), aes(x 
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_proportion_comparison.png", plot = line_plume_prop, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_proportion_comparison.png", plot = line_plume_prop, height = 6, width = 12)
 
 
 ## River flow comparison ---------------------------------------------------
@@ -607,7 +607,7 @@ scatter_flow_inter <- flow_inter |>
 
 # Combine and save
 multi_flow_inter <- line_flow_inter + scatter_flow_inter + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_inter_comp.png", plot = multi_flow_inter, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_flow_inter_comp.png", plot = multi_flow_inter, height = 20, width = 30)
 
 
 ### Seasonal ----------------------------------------------------------------
@@ -648,7 +648,7 @@ scatter_flow_seas <- flow_seas |>
 
 # Combine and save
 multi_flow_seas <- line_flow_seas + scatter_flow_seas + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_seas_comp.png", plot = multi_flow_seas, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_flow_seas_comp.png", plot = multi_flow_seas, height = 20, width = 30)
 
 
 ### DOY ---------------------------------------------------------------------
@@ -696,7 +696,7 @@ scatter_flow_doy <- flow_doy |>
 
 # Combine and save
 multi_flow_doy <- line_flow_doy + scatter_flow_doy + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_doy_comp.png", plot = multi_flow_doy, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_flow_doy_comp.png", plot = multi_flow_doy, height = 20, width = 30)
 
 
 ### Residual ----------------------------------------------------------------
@@ -738,7 +738,7 @@ scatter_flow_resid <- flow_resid |>
 
 # Combine and save
 multi_flow_resid <- line_flow_resid + scatter_flow_resid + patchwork::plot_layout(ncol = 2, widths = c(1, 0.5))
-ggsave(filename = "figures/STL_X11_flow_resid_comp.png", plot = multi_flow_resid, height = 20, width = 30)
+ggsave(filename = "figures/trend_diagnostics_stale/STL_X11_flow_resid_comp.png", plot = multi_flow_resid, height = 20, width = 30)
 
 
 ### Trends ------------------------------------------------------------------
@@ -789,7 +789,7 @@ line_trend_base <- ggplot(flow_trend_daily, aes(x = date, y = flow)) +
   # ggplot_theme() +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/flow_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/flow_trend_comparison_base.png", plot = line_trend_base, height = 6, width = 12)
 
 # The same plot comparing the interannual components
 flow_inter <- decomp_df |>
@@ -850,7 +850,7 @@ line_trend_inter <- ggplot(flow_inter_timesteps, aes(x = date, y = value)) +
                         labels = c("daily/weekly", "monthly", "annual")) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/flow_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/flow_trend_comparison_inter.png", plot = line_trend_inter, height = 6, width = 12)
 
 
 ### Proportion --------------------------------------------------------------
@@ -921,7 +921,7 @@ line_flow_prop <- ggplot(filter(flow_prop, component_group != "total"), aes(x = 
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/flow_proportion_comparison.png", plot = line_flow_prop, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/flow_proportion_comparison.png", plot = line_flow_prop, height = 6, width = 12)
 
 # Combine flow Prop and plume_prop dataframes
 plume_flow_prop <- rbind(mutate(plume_prop, var_name = "plume"),
@@ -941,7 +941,7 @@ bar_plume_flow_prop <-ggplot(filter(plume_flow_prop, component_group != "total",
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   theme(legend.position = "bottom",
         panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/plume_flow_proportion_comparison.png", plot = bar_plume_flow_prop, height = 6, width = 12)
+ggsave(filename = "figures/trend_diagnostics_stale/plume_flow_proportion_comparison.png", plot = bar_plume_flow_prop, height = 6, width = 12)
 
 
 # EMD example -------------------------------------------------------------
@@ -1041,6 +1041,6 @@ line_rhone_moose <- ggplot(rhone_moose_long, aes(x = date, y = value)) +
   labs(x = NULL, y = NULL, title = "Rhône river (MOOSE)") +
   ggplot_theme() +
   theme(panel.border = element_rect(fill = NA, colour = "black"))
-ggsave(filename = "figures/rhone_moose_biogenic_timeseries.png",
+ggsave(filename = "figures/rhone_side_analyses/rhone_moose_biogenic_timeseries.png",
        plot = line_rhone_moose, height = 12, width = 12)
 

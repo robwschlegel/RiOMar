@@ -107,7 +107,7 @@ time_plot <- ggplot(data = times_ALL, aes(x = date, y = start_hms)) +
        title = "SEXTANT and ODATIS-MR sensor availability and overhead times") +
   theme_bw()
 # time_plot
-ggsave("figures/all_sensors_time.png", time_plot, width = 8, height = 4)
+ggsave("figures/validation/all_sensors_time.png", time_plot, width = 8, height = 4)
 
 
 # Load in situ ------------------------------------------------------------
@@ -255,7 +255,7 @@ in_situ_station_map <- ggplot() +
         legend.box.margin = margin(5, 5, 5, 5),
         axis.text = element_text(size = 20))
 # in_situ_station_map
-ggsave("figures/map_in_situ_stations.png", height = 14, width = 15.5, bg = "white")
+ggsave("figures/validation/map_in_situ_stations.png", height = 14, width = 15.5, bg = "white")
 
 
 # Prep satellite pixels ---------------------------------------------------
@@ -434,5 +434,5 @@ plot_temp_compare <- zone_all_TEMP |>
         legend.position = "bottom",
         panel.border = element_rect(colour = "black", fill = NA))
 plot_temp_compare
-ggsave("figures/comparison_TEMP_SST.png", height = 10, width = 16)
+ggsave("figures/validation/comparison_TEMP_SST.png", height = 10, width = 16)
 

@@ -41,12 +41,11 @@
 #     (daily/monthly/annual lag correlations) of the four scripts; that
 #     structure is now the shared driver_plume_correlation() /
 #     driver_plume_timesteps(), used for every driver, not just currents.
-#   - surface.R's two pixel-level, multi-driver spatial functions
-#     (surface_plot, surface_plot_daily_maps) are carried over with light
-#     cleanup (now use zone_meta / make_pretty_title instead of their own
-#     inline zone lookups); these are conceptually different from the
+#   - surface.R's surface_plot_daily_maps() is carried over with light
+#     cleanup (now uses zone_meta / make_pretty_title instead of its own
+#     inline zone lookup); this is conceptually different from the
 #     time-series comparisons above (per-pixel maps, not per-day series) so
-#     they keep their own section rather than being folded into the
+#     it keeps its own section rather than being folded into the
 #     driver_plume_* functions.
 #   - func/flow.R, func/wind.R, func/tide.R, func/ROFI.R, func/surface.R now
 #     just source() this file for backwards compatibility -- nothing that
@@ -89,8 +88,6 @@
 ## number of times pixel is flagged related to the size of the total panache when it is flagged
 ### Would need to relate wind with time lag to this as well
 ## could also tally the shape of the panache whenever pixel is flagged
-# NB: surface_plot() below (merged in from func/surface.R) is a first pass at this idea.
-
 # Other analyses
 ## Get mean offshore distance of centroid
 ## when creating GIFs, would be cool to have the centroid visualised as a 21 dot
@@ -141,6 +138,7 @@
 
 library(tidyverse)
 library(tidync)
+library(ncdf4) # For reading PlumeMasks.nc (load_plume_surface, util.R)
 library(heatwaveR) # For seasonal smoothing analysis
 library(seasonal) # For X11 analysis (currently not used)
 library(RcppRoll) # For running means to get STL interannual signals closer to X11
@@ -204,6 +202,8 @@ get_zone_meta <- function(mouth_name = NULL, zone_name = NULL){
 # Shared on-/off-shore wind classification. Previously duplicated verbatim
 # (down to the same TODO comment) in wind.R::spatial_wind_calc(),
 # surface.R::surface_plot(), and multi_stl() further down this file.
+# NB: wind_spd/wind_dir are now computed upstream in util.R::load_wind_sub();
+# this only adds the on-/off-shore label.
 # TODO (carried over from the originals): think of a more sophisticated way
 # to classify on-/off-shore than a hard-coded sign check per zone.
 wind_add_direction <- function(df_wind, zone_name){
@@ -216,10 +216,7 @@ wind_add_direction <- function(df_wind, zone_name){
   } else {
     stop("Zone not recognised for wind direction classification.")
   }
-  df_wind |>
-    dplyr::mutate(wind_spd = round(sqrt(u^2 + v^2), 2),
-                  # NB: wind_dir is where the wind is coming FROM, not going to
-                  wind_dir = round((270 - (atan2(v, u) * (180 / pi))) %% 360))
+  df_wind
 }
 
 # Load one driver's daily time series for a zone, in a common two-column
@@ -228,7 +225,7 @@ wind_add_direction <- function(df_wind, zone_name){
 # previously duplicated across flow.R/wind.R/tide.R/ROFI.R.
 # load_driver("flow", get_zone_meta(zone_name = "GULF_OF_LION"))
 load_driver <- function(driver_name, meta){
-  driver_name <- match.arg(driver_name, c("flow", "tide", "wind", "current"))
+  driver_name <- match.arg(driver_name, c("flow", "tide", "wind", "current", "rofi", "wave"))
 
   if(driver_name == "flow"){
     df <- load_river_flow(paste0("data/RIVER_FLOW/", meta$zone)) |>
@@ -249,15 +246,35 @@ load_driver <- function(driver_name, meta){
     df <- df_wind |> dplyr::select(date, value = wind_spd, wind_dir, direction, u, v)
 
   } else if(driver_name == "current"){
-    # "current" = coastal-current / ROFI extent, i.e. the closest observational
-    # proxy this project has for the "coastal ocean currents" driver discussed
-    # in manuscript/driver_interactions_review.md. NB: no ROFI data for the
-    # Gulf of Lion (see comment on the old ROFI.R::walk(zones[1:3], ...) call).
+    # "current" = GLORYS surface current (eastward/northward velocity) near the
+    # river mouth -- the "coastal ocean currents" driver discussed in
+    # manuscript/driver_interactions_review.md. Unlike ROFI (see "rofi" below),
+    # GLORYS covers all four zones, including the Gulf of Lion.
+    lon_round <- plyr::round_any(meta$mouth_lon, 0.5)
+    lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
+    lon_range <- c(lon_round - 0.5, lon_round + 0.5)
+    lat_range <- c(lat_round - 0.5, lat_round + 0.5)
+    df_current <- load_surface_current(meta$zone, lon_range, lat_range)
+    df <- df_current |> dplyr::select(date, value = current_spd, current_dir, u, v)
+
+  } else if(driver_name == "rofi"){
+    # "rofi" = region-of-freshwater-influence extent, a model output distinct
+    # from the ambient coastal current above. NB: no ROFI data for the Gulf of
+    # Lion (see comment on the old ROFI.R::walk(zones[1:3], ...) call).
     rofi_files <- dir("data/ROFI", full.names = TRUE)
     df_rofi <- purrr::map_dfr(rofi_files, load_ROFI) |>
       dplyr::filter(zone == meta$zone)
-    if(nrow(df_rofi) == 0) stop("No ROFI/current data available for zone ", meta$zone)
+    if(nrow(df_rofi) == 0) stop("No ROFI data available for zone ", meta$zone)
     df <- df_rofi |> dplyr::select(date, value = ROFI_surface)
+
+  } else if(driver_name == "wave"){
+    lon_round <- plyr::round_any(meta$mouth_lon, 0.5)
+    lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
+    lon_range <- c(lon_round - 0.5, lon_round + 0.5)
+    lat_range <- c(lat_round - 0.5, lat_round + 0.5)
+    wave_files <- dir(paste0("~/pCloudDrive/data/WAVE/", meta$zone), pattern = "_daily_", full.names = TRUE)
+    df_wave <- purrr::map_dfr(wave_files, load_wave, lon_range, lat_range)
+    df <- df_wave |> dplyr::select(date, value = wave_height, wave_dir)
   }
 
   return(df)
@@ -270,9 +287,10 @@ load_driver <- function(driver_name, meta){
 # interannual columns for both. This is the core object every comparison
 # function below operates on.
 # combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"))
-combine_plume_driver <- function(driver_name, meta){
+# combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"), metric_col = "mass_SPM_in_the_plume_area_in_g_m", outlier_max = NULL)
+combine_plume_driver <- function(driver_name, meta, metric_col = "area_of_the_plume_mask_in_km2", outlier_max = 20000){
 
-  df_plume  <- load_plume_ts(meta$zone)                    # util.R -- already handles gap-filling + 20000km^2 outlier removal
+  df_plume  <- load_plume_ts(meta$zone, metric_col = metric_col, outlier_max = outlier_max)  # util.R -- already handles gap-filling + outlier removal
   df_driver <- load_driver(driver_name, meta)
 
   df <- dplyr::left_join(df_plume, df_driver, by = "date") |>
@@ -340,10 +358,9 @@ driver_display <- tibble::tribble(
   "flow",       "River flow (m^3 s-1)",    "blue",
   "tide",       "Tidal range (m)",         "darkgreen",
   "wind",       "Wind speed (m s-1)",      "purple",
-  # TODO: Current should be the U and V vectors for the surface currents from the GLORYS model
-  # ROFI is a different variable. This comes from a model output of the region of freshwater influence
-  # Once GLORYS data, this should be corrected and ROFI should be it's own driver_name
-  "current",    "ROFI / current extent (km^2)", "orchid"
+  "current",    "Current speed (m s-1)",   "orchid",
+  "rofi",       "ROFI extent (km^2)",      "goldenrod",
+  "wave",       "Wave height (m)",         "steelblue"
 )
 
 # The 4-panel (a-d) comparison plot previously duplicated in
@@ -388,7 +405,7 @@ plot_driver_plume_comparison <- function(df, driver_name, mouth_name){
   full_plot <- ggpubr::ggarrange(ts_plot, cor_plot, ncol = 2, nrow = 1)
   full_plot_title <- ggpubr::ggarrange(plot_title, full_plot, ncol = 1, nrow = 2, heights = c(0.05, 1)) + ggpubr::bgcolor("white")
 
-  ggsave(filename = paste0("figures/cor_plot_", driver_name, "_plume_", mouth_name, ".png"),
+  ggsave(filename = paste0("figures/driver_comparison/cor_plot_", driver_name, "_plume_", mouth_name, ".png"),
          plot = full_plot_title, width = 12, height = 6, dpi = 600)
   invisible(full_plot_title)
 }
@@ -432,18 +449,56 @@ plot_driver_plume_dual_axis <- function(df, driver_name, zone_name){
           axis.title.y.right = element_text(color = disp$driver_colour, margin = unit(c(0, 0, 0, 7.5), "mm")),
           panel.border = element_rect(linetype = "solid", fill = NA))
 
-  ggsave(filename = paste0("figures/dual_axis_", driver_name, "_plume_", zone_name, ".png"),
+  ggsave(filename = paste0("figures/driver_comparison/dual_axis_", driver_name, "_plume_", zone_name, ".png"),
          plot = pl, width = 12, height = 6, dpi = 300)
   invisible(pl)
 }
 
-# Weighted-least-squares trend estimator with AR(1)/STL-based weights and a
-# Newey-West (HAC) standard error correction, following the monthly time
-# series adjustment methodology of Sutton et al. (2022) referenced in
-# manuscript.tex Sec. 2.6.1. Generalises flow.R::flow_plume_trend_plus(),
-# which implemented this for river flow only; used here for any driver.
+# AR(1)-weighted / STL-weighted / unweighted linear trend + Newey-West (HAC)
+# standard error correction, following the monthly time series adjustment
+# methodology of Sutton et al. (2022) referenced in manuscript.tex Sec. 2.6.1.
+# Extracted from driver_plume_trend() (below) so it can be reused directly on
+# a bare (date, value) series -- e.g. plume shape or centroid drift -- without
+# needing a paired driver series. driver_plume_trend() calls this internally;
+# behaviour there is unchanged.
+# fit_wls_hac_trend("ar", df$compactness, df$date)
+ar_weights_func <- function(val_col, start_year, time_step){
+  ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
+  ar_model <- ar(ts_obj, order.max = 1)
+  phi_est <- ar_model$ar
+  sigma_est <- sqrt(phi_est)
+  error_variance <- sigma_est^2 / (1 - phi_est^2)
+  rep((1 / (error_variance^2)), length(val_col))
+}
+stl_weights_func <- function(val_col, start_year, time_step){
+  ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
+  stl_ts <- stl(ts_obj, s.window = "periodic")
+  stl_var <- as.vector(stl_ts$time.series[, "remainder"])
+  1 / (stl_var^2)
+}
+fit_wls_hac_trend <- function(weight_choice, val_col, date_col){
+  start_year <- year(min(date_col))
+  time_step <- if(length(val_col) < 1000) 12 else 365
+  weights <- switch(weight_choice,
+                    ar = ar_weights_func(val_col, start_year, time_step),
+                    stl = stl_weights_func(val_col, start_year, time_step),
+                    rep(1, length(val_col)))
+  lm_model <- lm(val_col ~ date_col, weights = weights)
+  lm_model_HAC <- coeftest(lm_model, vcov = vcovHAC(lm_model))
+  tibble::tibble(n = length(val_col), time_step = time_step, start_year = start_year,
+                 weight_choice = weight_choice, intercept = lm_model_HAC[1, 1],
+                 slope = lm_model_HAC[2, 1], slope_se = lm_model_HAC[2, 2],
+                 slope_t = lm_model_HAC[2, 3], slope_p = lm_model_HAC[2, 4])
+}
+
+# Generalises flow.R::flow_plume_trend_plus(), which implemented this for
+# river flow only; used here for any driver.
 # driver_plume_trend(combine_plume_driver("flow", get_zone_meta(mouth_name = "Grand Rhone")), "flow", "Grand Rhone")
-driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL){
+# save_plot = FALSE skips the ggsave below -- needed when `df`'s "plume_area" column
+# actually holds a different metric_col (see combine_plume_driver()), since the plot
+# filename is keyed only on driver_name/mouth_name and would otherwise silently
+# overwrite the existing plume-area trend figure for that driver/mouth.
+driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL, save_plot = TRUE){
 
   disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
 
@@ -482,40 +537,10 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL){
                   plume_monthly_adj  = plume_monthly - plume_resid_monthly_clim) |>
     dplyr::mutate(date_int = seq_len(dplyr::n()), .after = "date")
 
-  # AR(1)-weighted / STL-weighted / unweighted linear models + HAC SEs
-  ar_weights_func <- function(val_col, start_year, time_step){
-    ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
-    ar_model <- ar(ts_obj, order.max = 1)
-    phi_est <- ar_model$ar
-    sigma_est <- sqrt(phi_est)
-    error_variance <- sigma_est^2 / (1 - phi_est^2)
-    rep((1 / (error_variance^2)), length(val_col))
-  }
-  stl_weights_func <- function(val_col, start_year, time_step){
-    ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
-    stl_ts <- stl(ts_obj, s.window = "periodic")
-    stl_var <- as.vector(stl_ts$time.series[, "remainder"])
-    1 / (stl_var^2)
-  }
-  lm_HAC_weights_func <- function(weight_choice, val_col, date_col){
-    start_year <- year(min(date_col))
-    time_step <- if(length(val_col) < 1000) 12 else 365
-    weights <- switch(weight_choice,
-                      ar = ar_weights_func(val_col, start_year, time_step),
-                      stl = stl_weights_func(val_col, start_year, time_step),
-                      rep(1, length(val_col)))
-    lm_model <- lm(val_col ~ date_col, weights = weights)
-    lm_model_HAC <- coeftest(lm_model, vcov = vcovHAC(lm_model))
-    tibble::tibble(n = length(val_col), time_step = time_step, start_year = start_year,
-                   weight_choice = weight_choice, intercept = lm_model_HAC[1, 1],
-                   slope = lm_model_HAC[2, 1], slope_se = lm_model_HAC[2, 2],
-                   slope_t = lm_model_HAC[2, 3], slope_p = lm_model_HAC[2, 4])
-  }
-
-  wls_driver_daily   <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_daily$driver_doy_adj, date_col = df_daily$date)
-  wls_driver_monthly <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_monthly$driver_monthly_adj, date_col = df_monthly$date)
-  wls_plume_daily    <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_daily$plume_doy_adj, date_col = df_daily$date)
-  wls_plume_monthly  <- plyr::ldply(c("ar", "stl", "none"), lm_HAC_weights_func, val_col = df_monthly$plume_monthly_adj, date_col = df_monthly$date)
+  wls_driver_daily   <- plyr::ldply(c("ar", "stl", "none"), fit_wls_hac_trend, val_col = df_daily$driver_doy_adj, date_col = df_daily$date)
+  wls_driver_monthly <- plyr::ldply(c("ar", "stl", "none"), fit_wls_hac_trend, val_col = df_monthly$driver_monthly_adj, date_col = df_monthly$date)
+  wls_plume_daily    <- plyr::ldply(c("ar", "stl", "none"), fit_wls_hac_trend, val_col = df_daily$plume_doy_adj, date_col = df_daily$date)
+  wls_plume_monthly  <- plyr::ldply(c("ar", "stl", "none"), fit_wls_hac_trend, val_col = df_monthly$plume_monthly_adj, date_col = df_monthly$date)
 
   stats <- dplyr::bind_rows(
     dplyr::mutate(wls_driver_daily,   variable = "driver", timestep = "daily"),
@@ -528,11 +553,14 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL){
                                                       timestep == "monthly" ~ slope * 365.25,
                                                       TRUE ~ slope), .before = "n")
 
+  if(save_plot){
   # Plot (daily = ar-weighted line; monthly = ar-weighted line), labelled with slope + p-value
   trend_labels_driver <- dplyr::filter(stats, variable == "driver", weight_choice == "ar")
   trend_labels_plume  <- dplyr::filter(stats, variable == "plume",  weight_choice == "ar")
   x_daily <- min(df_daily$date) + days(round(0.05 * as.numeric(diff(range(df_daily$date)))))
   x_monthly <- min(df_daily$date) + days(round(0.45 * as.numeric(diff(range(df_daily$date)))))
+  y_plume  <- round(max(df_daily$plume_area, na.rm = TRUE) - stats::quantile(df_daily$plume_area, 0.2, na.rm = TRUE), -2)
+  y_driver <- round(max(df_daily$value, na.rm = TRUE) - stats::quantile(df_daily$value, 0.05, na.rm = TRUE), -2)
 
   pl_plume <- ggplot(data = df_daily, aes(x = date, y = plume_area)) +
     geom_point(colour = "sienna", alpha = 0.1) +
@@ -543,6 +571,12 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL){
                 aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkblue") +
     geom_abline(data = dplyr::filter(trend_labels_plume, timestep == "monthly"),
                 aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkred") +
+    geom_label(data = dplyr::filter(trend_labels_plume, timestep == "monthly"), size = 5, hjust = 0, colour = "darkred",
+               aes(x = x_daily, y = y_plume, label = paste0("Plume area slope = ", round(slope_annualised, 2), " km^2 yr-1\n",
+                                                            "p-value = ", round(slope_p, 2)))) +
+    geom_label(data = dplyr::filter(trend_labels_plume, timestep == "daily"), size = 5, hjust = 0, colour = "darkblue",
+               aes(x = x_monthly, y = y_plume, label = paste0("Plume area slope = ", round(slope_annualised, 2), " km^2 yr-1\n",
+                                                              "p-value = ", round(slope_p, 2)))) +
     labs(x = NULL, y = "Plume area [km^2]",
          title = paste0(mouth_name, " : plume area after statistical treatment (vs. ", driver_name, ")"),
          subtitle = "Red = adjusted monthly values; blue = adjusted daily values; brown = original data") +
@@ -557,14 +591,21 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL){
                 aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkblue") +
     geom_abline(data = dplyr::filter(trend_labels_driver, timestep == "monthly"),
                 aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkred") +
+    geom_label(data = dplyr::filter(trend_labels_driver, timestep == "monthly"), size = 5, hjust = 0, colour = "darkred",
+               aes(x = x_daily, y = y_driver, label = paste0(disp$driver_label, " slope = ", round(slope_annualised, 2), " yr-1\n",
+                                                             "p-value = ", round(slope_p, 2)))) +
+    geom_label(data = dplyr::filter(trend_labels_driver, timestep == "daily"), size = 5, hjust = 0, colour = "darkblue",
+               aes(x = x_monthly, y = y_driver, label = paste0(disp$driver_label, " slope = ", round(slope_annualised, 2), " yr-1\n",
+                                                               "p-value = ", round(slope_p, 2)))) +
     labs(x = NULL, y = disp$driver_label,
          title = paste0(mouth_name, " : ", driver_name, " after statistical treatment"),
          subtitle = "Red = adjusted monthly values; blue = adjusted daily values; purple = original data") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
 
   pl_combi <- ggpubr::ggarrange(pl_plume, pl_driver, ncol = 1, nrow = 2)
-  ggsave(filename = paste0("figures/trends_plume_", driver_name, "_adj_", mouth_name, ".png"),
+  ggsave(filename = paste0("figures/driver_comparison/trends_plume_", driver_name, "_adj_", mouth_name, ".png"),
          pl_combi, width = 12, height = 10)
+  }
 
   return(stats)
 }
@@ -583,7 +624,7 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL){
 # run_driver_suite("flow")
 run_driver_suite <- function(driver_name){
 
-  mouths <- if(driver_name == "current") dplyr::filter(zone_meta, zone != "GULF_OF_LION") else zone_meta  # no ROFI data for the Gulf of Lion
+  mouths <- if(driver_name == "rofi") dplyr::filter(zone_meta, zone != "GULF_OF_LION") else zone_meta  # no ROFI data for the Gulf of Lion
 
   results <- purrr::pmap(mouths, function(...){
     meta <- tibble::tibble(...)
@@ -603,12 +644,14 @@ run_driver_suite <- function(driver_name){
   )
 }
 
-# Run all four drivers for all zones. NB: this recreates every figure
-# previously produced by running flow.R + wind.R + tide.R + ROFI.R in
-# sequence; it is not run automatically on source() (see bottom of file).
+# Run all drivers for all zones. NB: this recreates every figure previously
+# produced by running flow.R + wind.R + tide.R + ROFI.R in sequence, plus the
+# new GLORYS current driver; it is not run automatically on source() (see
+# bottom of file).
 run_all_driver_suites <- function(){
-  purrr::map(c("flow", "tide", "wind", "current"), run_driver_suite) |>
-    purrr::set_names(c("flow", "tide", "wind", "current"))
+  driver_names <- c("flow", "tide", "wind", "current", "rofi", "wave")
+  purrr::map(driver_names, run_driver_suite) |>
+    purrr::set_names(driver_names)
 }
 
 
@@ -617,107 +660,6 @@ run_all_driver_suites <- function(){
 # make_pretty_title instead of an inline zone lookup); conceptually distinct
 # from the time-series work above since these operate per-pixel rather than
 # per-day, so they keep their own section.
-
-# Load all daily plume pixels for a zone, join on-date driver values, and
-# summarise per pixel (count, driver ranges, on-/off-shore wind proportion).
-# zone_name <- "GULF_OF_LION"
-surface_plot <- function(zone_name){
-
-  meta <- get_zone_meta(zone_name = zone_name)
-
-  # Zone-specific plotting bounding boxes (wider than the driver-search box
-  # used elsewhere, purely for map extent) -- unchanged from surface.R
-  bbox_wide <- switch(zone_name,
-    "BAY_OF_SEINE"      = list(lon_W = -1.0, lon_E = 0.5, lat_N = 0.5, lat_S = -0.2),
-    "BAY_OF_BISCAY"     = list(lon_W = -3.0, lon_E = 0.1, lat_N = 1.0, lat_S = -0.5),
-    "SOUTHERN_BRITTANY" = list(lon_W = -3.0, lon_E = 0.2, lat_N = 0.5, lat_S = -1.0),
-    "GULF_OF_LION"      = list(lon_W = -2.0, lon_E = 3.0, lat_N = 0.0, lat_S = -2.5),
-    stop("Zone not recognised.")
-  )
-  lon_round <- plyr::round_any(meta$mouth_lon, 0.5); lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
-  lon_range_wide <- c(lon_round + bbox_wide$lon_W, lon_round + bbox_wide$lon_E)
-  lat_range_wide <- c(lat_round + bbox_wide$lat_S, lat_round + bbox_wide$lat_N)
-
-  # Load all daily plume maps for the zone
-  plume_dir <- paste0("output/panache/", zone_name)
-  plume_files <- dir(plume_dir, pattern = ".csv", recursive = TRUE, full.names = TRUE)
-  df_plume <- plyr::ldply(plume_files, load_plume_surface, .parallel = TRUE)  # util.R
-
-  # Load drivers via the shared loader
-  df_flow <- load_driver("flow", meta) |> dplyr::rename(flow = value)
-  df_tide <- load_driver("tide", meta) |> dplyr::rename(tide_range = value)
-  df_wind <- load_driver("wind", meta) |> dplyr::rename(wind_spd = value)
-
-  df_full <- df_plume |>
-    dplyr::left_join(df_flow, by = "date") |>
-    dplyr::left_join(df_tide, by = "date") |>
-    dplyr::left_join(df_wind, by = "date")
-
-  suppressWarnings(
-    df_pixel <- dplyr::summarise(df_full,
-                                 count = dplyr::n(),
-                                 flow_min = min(flow, na.rm = TRUE), flow_mean = mean(flow, na.rm = TRUE), flow_max = max(flow, na.rm = TRUE),
-                                 tide_range_min = min(tide_range, na.rm = TRUE), tide_range_mean = mean(tide_range, na.rm = TRUE), tide_range_max = max(tide_range, na.rm = TRUE),
-                                 wind_spd_min = min(wind_spd, na.rm = TRUE), wind_spd_mean = mean(wind_spd, na.rm = TRUE), wind_spd_max = max(wind_spd, na.rm = TRUE),
-                                 count_on = sum(direction == "on", na.rm = TRUE), count_off = sum(direction == "off", na.rm = TRUE),
-                                 .by = c("lon", "lat")) |>
-    dplyr::mutate(prop_n = count / length(unique(df_full$date)),
-                  prop_on = count_on / count, prop_off = count_off / count,
-                  dplyr::across(dplyr::everything(), ~ ifelse(is.finite(.), ., NA)))
-  )
-
-  plot_count <- ggplot(df_pixel, aes(x = lon, y = lat)) +
-    annotation_borders(regions = "France", fill = "grey70") +
-    geom_tile(aes(fill = log10(count))) + scale_fill_viridis_c() +
-    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
-    labs(x = NULL, y = NULL, title = "Plume count (n)") + theme_bw() + theme(legend.position = "bottom")
-
-  plot_count_prop <- ggplot(df_pixel, aes(x = lon, y = lat)) +
-    annotation_borders(regions = "France", fill = "grey70") +
-    geom_tile(aes(fill = prop_n)) + scale_fill_viridis_c() +
-    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
-    labs(x = NULL, y = NULL, title = "Plume count proportion (n/all_days)") + theme_bw() + theme(legend.position = "bottom")
-
-  plot_flow <- df_pixel |>
-    dplyr::select(lon, lat, flow_min, flow_mean, flow_max) |>
-    tidyr::pivot_longer(cols = c(flow_min, flow_mean, flow_max), names_to = "var") |>
-    dplyr::mutate(var = factor(var, levels = c("flow_min", "flow_mean", "flow_max"))) |>
-    ggplot(aes(x = lon, y = lat)) +
-    geom_tile(aes(fill = value)) + scale_fill_viridis_c(option = "A") +
-    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
-    labs(x = NULL, y = NULL, title = "River flow range") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
-
-  plot_wind_spd <- df_pixel |>
-    dplyr::select(lon, lat, wind_spd_min, wind_spd_mean, wind_spd_max) |>
-    tidyr::pivot_longer(cols = c(wind_spd_min, wind_spd_mean, wind_spd_max), names_to = "var") |>
-    dplyr::mutate(var = factor(var, levels = c("wind_spd_min", "wind_spd_mean", "wind_spd_max"))) |>
-    ggplot(aes(x = lon, y = lat)) +
-    geom_tile(aes(fill = value)) + scale_fill_viridis_c(option = "C") +
-    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
-    labs(x = NULL, y = NULL, title = "Wind speed range") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
-
-  plot_wind_dir <- df_pixel |>
-    dplyr::select(lon, lat, prop_on, prop_off) |>
-    tidyr::pivot_longer(cols = c(prop_on, prop_off), names_to = "var") |>
-    dplyr::mutate(var = factor(var, levels = c("prop_on", "prop_off"))) |>
-    ggplot(aes(x = lon, y = lat)) +
-    geom_tile(aes(fill = value)) +
-    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
-    labs(x = NULL, y = NULL, title = "Proportion of on- or off-shore winds") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
-
-  plot_tide_range <- df_pixel |>
-    dplyr::select(lon, lat, tide_range_min, tide_range_mean, tide_range_max) |>
-    tidyr::pivot_longer(cols = c(tide_range_min, tide_range_mean, tide_range_max), names_to = "var") |>
-    dplyr::mutate(var = factor(var, levels = c("tide_range_min", "tide_range_mean", "tide_range_max"))) |>
-    ggplot(aes(x = lon, y = lat)) +
-    geom_tile(aes(fill = value)) + scale_fill_viridis_c(option = "E") +
-    coord_quickmap(xlim = lon_range_wide, ylim = lat_range_wide) +
-    labs(x = NULL, y = NULL, title = "Tidal range range") + facet_wrap(~var) + theme_bw() + theme(legend.position = "bottom")
-
-  plot_multi <- (plot_count | plot_count_prop) / (plot_flow | plot_tide_range) / (plot_wind_spd | plot_wind_dir)
-  ggsave(filename = paste0("figures/surface_stats_", zone_name, ".png"), plot = plot_multi, height = 14, width = 26)
-  invisible(df_pixel)
-}
 
 # Facet daily plume maps by year x month for a zone.
 surface_plot_daily_maps <- function(zone_name){
@@ -730,7 +672,7 @@ surface_plot_daily_maps <- function(zone_name){
     scale_fill_viridis_c(option = "A", na.value = "transparent") +
     labs(x = NULL, y = NULL, fill = "Day of month", title = paste0("Daily plume maps per month and year for ", zone_name)) +
     facet_grid(year ~ month) + theme_bw() + theme(legend.position = "bottom")
-  ggsave(filename = paste0("figures/surface_daily_maps_", zone_name, ".png"), plot = plot_daily, height = 34, width = 36)
+  ggsave(filename = paste0("figures/driver_comparison/surface_daily_maps_", zone_name, ".png"), plot = plot_daily, height = 34, width = 36)
   invisible(plot_daily)
 }
 
@@ -865,29 +807,29 @@ multi_plot <- function(df_stl){
   }
 
   # Daily time series
-  plot_daily(df_pretty, "plume_area", "brown", "Plume area (km^2)", "plume")
+  plot_daily(df_pretty, "plume_area", "brown", "Plume area (km^2)", "driver_comparison/plume")
 
   # Seasonal time series
-  plot_seas(df_seas, "plume_seas", "brown", "Plume area (km^2)", "plume")
-  plot_seas(df_seas, "flow_seas", "blue", "River flow (m^3 s-1)", "flow")
-  plot_seas(df_seas, "tide_seas", "darkgreen", "Tidal range (m)", "tide")
-  plot_seas(df_seas, "wind_seas", "purple", "Wind speed (m s-1)", "wind")
+  plot_seas(df_seas, "plume_seas", "brown", "Plume area (km^2)", "driver_comparison/plume")
+  plot_seas(df_seas, "flow_seas", "blue", "River flow (m^3 s-1)", "driver_comparison/flow")
+  plot_seas(df_seas, "tide_seas", "darkgreen", "Tidal range (m)", "driver_comparison/tide")
+  plot_seas(df_seas, "wind_seas", "purple", "Wind speed (m s-1)", "driver_comparison/wind")
 
   # Interannual time series
-  plot_inter(df_pretty, "plume_inter", "brown", "Plume area (km^2)", "plume")
-  plot_inter(df_pretty, "flow_inter", "blue", "River flow (m^3 s-1)", "flow")
-  plot_inter(df_pretty, "tide_inter", "darkgreen", "Tidal range (m)", "tide")
-  plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s-1)", "wind")
+  plot_inter(df_pretty, "plume_inter", "brown", "Plume area (km^2)", "driver_comparison/plume")
+  plot_inter(df_pretty, "flow_inter", "blue", "River flow (m^3 s-1)", "driver_comparison/flow")
+  plot_inter(df_pretty, "tide_inter", "darkgreen", "Tidal range (m)", "driver_comparison/tide")
+  plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s-1)", "driver_comparison/wind")
 
   # Seasonal comparison plots
-  comparison_plot_save(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_seas")
-  comparison_plot_save(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_seas")
-  comparison_plot_save(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_seas")
+  comparison_plot_save(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "driver_comparison/comparison_plume_flow_seas")
+  comparison_plot_save(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "driver_comparison/comparison_plume_wind_seas")
+  comparison_plot_save(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "driver_comparison/comparison_plume_tide_seas")
 
   # Interannual comparison plots
-  comparison_plot_save(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "comparison_plume_flow_inter")
-  comparison_plot_save(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "comparison_plume_tide_inter")
-  comparison_plot_save(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "comparison_plume_wind_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "driver_comparison/comparison_plume_flow_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "driver_comparison/comparison_plume_tide_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "driver_comparison/comparison_plume_wind_inter")
 
   # Everything on one plot
   df_all_scaled <- df_pretty |>
@@ -914,7 +856,7 @@ multi_plot <- function(df_stl){
     geom_path(aes(colour = name), linewidth = 2) +
     facet_wrap(~plot_title, ncol = 1) +
     ggplot_theme()
-  ggsave(filename = "figures/all_plot.png", plot = all_plot, width = 20, height = 20, dpi = 300)
+  ggsave(filename = "figures/driver_comparison/all_plot.png", plot = all_plot, width = 20, height = 20, dpi = 300)
 }
 
 # Load STL calculated above
@@ -962,13 +904,13 @@ write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
     facet_wrap(~year) +
     labs(x = NULL, y = "count", title = "Monthly count of missing SPM SEXTANT files") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
-  ggsave("figures/missng_SPM.png", width = 9, height = 9, dpi = 600)
+  ggsave("figures/validation/missng_SPM.png", width = 9, height = 9, dpi = 600)
   ggplot(chla_files_NA_count, aes(x = month, y = miss_count_month_year)) +
     geom_col() +
     facet_wrap(~year) +
     labs(x = NULL, y = "count", title = "Monthly count of missing chl a SEXTANT files") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
-  ggsave("figures/missng_chla.png", width = 9, height = 9, dpi = 600)
+  ggsave("figures/validation/missng_chla.png", width = 9, height = 9, dpi = 600)
 }
 
 
@@ -976,6 +918,422 @@ write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
 
 # NB: not run automatically on source() -- call explicitly
 # run_all_driver_suites()
-# purrr::walk(zones, surface_plot)
 # purrr::walk(zones, surface_plot_daily_maps)
-  
+
+
+# Rhone only analyses ------------------------------------------------------
+
+# Response to Claude's e-mail on the Grand Rhone plume-area
+# trend. The e-mail raised four ideas; disposition of each below:
+#   1. Concentration-detrending sensitivity test -- IMPLEMENTED,
+#      rhone_concentration_detrend_test().
+#   2. Has the balance of northern-tributary vs Cevennes ("cevenol")
+#      floods shifted, explaining the concentration rise? -- PARTIALLY
+#      implemented, rhone_flood_seasonality_shift(). RiOMar only has
+#      combined Grand+Petit Rhone discharge at the mouth, not upstream
+#      sub-basin gauges, so this cannot attribute the shift to a specific
+#      tributary -- that needs the Observatoire des Sediments du Rhone
+#      data / Olivier Radakovitch the e-mail points to. What's implemented
+#      is a first-pass check of whether the *calendar timing* of high-flow
+#      days has moved, using data already in the repo.
+#   3. Does wind/wave forcing move the plume beyond what flow explains
+#      (reframing "does the plume have its own seasonality" as "does it
+#      respond to wind/wave directly"), including the specific Mistral vs
+#      onshore/calm hypothesis -- IMPLEMENTED, rhone_wind_wave_beyond_season().
+#   4. Would a more stratified surface layer let the plume slide further
+#      offshore? -- NOT implemented. The e-mail itself frames this as a
+#      question for idealised numerical modelling of academic cases, not
+#      something to test against the RiOMar time series, and RiOMar has no
+#      surface density/stratification product to test it against even if
+#      it were. Left as a discussion point for the reply, not a script.
+#
+# All three functions below are GULF_OF_LION / Grand Rhone only, as
+# requested -- they are not generalised to the other three zones.
+
+## 1. Concentration-detrending sensitivity test -------------------------------
+# The plume-area trend could be, at least partly, an artefact of the SPM
+# concentration near the Rhone mouth having risen over the record (see
+# output/STATS/mass_SPM_trend_summary.csv and the earlier e-mail's claim)
+# rather than the plume physically growing. The e-mail's proposed check:
+# imagine the concentration had NO trend (a "trend-free" counterfactual,
+# built "at least as a first approximation" by flattening the trend line),
+# recompute the plume area under that counterfactual, and see whether the
+# area trend survives.
+#
+# Re-running the full pixel-level panache detection under a hypothetical,
+# de-trended SPM field is out of scope here -- it needs the raw daily SPM
+# maps (not exposed to R) and a re-run of the Python flood-fill algorithm
+# (func/plume.py::find_SPM_threshold()) for every day. An earlier version of
+# this function used panache's own daily SPM_threshold (Results.csv) as a
+# stand-in for concentration, but that is panache's classification cutoff
+# for that day (func/plume.py:1254, `SPM_criterion = ds_reduced >
+# SPM_threshold`) -- a stricter cutoff mechanically shrinks the classified
+# area regardless of any real dilution physics, which confounds exactly the
+# effect this test is trying to isolate. Instead, this uses real, independent
+# in-situ SPM concentration measured at Arles on the Rhone itself
+# (data/INSITU_data/OSR/ARLES_CMES-2.txt, hourly, mg/L, 2005-2023), from the
+# Observatoire des Sediments du Rhone (OSR) -- the exact data source Claude's
+# e-mail pointed to. Only quality flag "v" (validated/measured) rows are
+# kept; flag "e" rows are the OSR's own gap-fill, estimated from a fixed
+# discharge-to-concentration rating curve (see
+# data/INSITU_data/OSR/Report_ARLES_CMES-2.txt), which would reintroduce a
+# collinearity with flow that using real in-situ data is meant to avoid.
+# Because the OSR record only covers 2005-2023, the joined record below is
+# shorter than the full 1998-2025 satellite plume record.
+# rhone_concentration_detrend_test()
+rhone_concentration_detrend_test <- function(){
+
+  meta <- get_zone_meta(mouth_name = "Grand Rhone")
+
+  # Daily-mean in-situ SPM concentration at Arles, validated readings only.
+  df_conc <- read_delim("data/INSITU_data/OSR/ARLES_CMES-2.txt", delim = ";", skip = 3,
+                        col_names = c("datetime", "value", "quality", "min", "max"),
+                        col_types = "cdccc", show_col_types = FALSE) |>
+    dplyr::filter(quality == "v") |>
+    dplyr::mutate(date = as.Date(datetime, format = "%d/%m/%Y %H:%M:%S")) |>
+    dplyr::summarise(conc = mean(value, na.rm = TRUE), .by = "date")
+
+  # Standard plume-area + flow object used by every other driver in this
+  # file. inner_join (not left_join) restricts the record to where the
+  # satellite plume record and the OSR in-situ record overlap.
+  df_flow <- combine_plume_driver("flow", meta)
+  df <- df_flow |>
+    dplyr::inner_join(df_conc, by = "date") |>
+    zoo::na.trim()  # drops leading/trailing NA across plume_area, flow, and conc together
+
+  # Interior gaps (e.g. days with no validated hourly readings) are linearly
+  # interpolated so every remaining day has a value -- the same treatment
+  # STL/trend fitting already gets elsewhere in this file (stl_single(),
+  # ar_weights_func()).
+  df$conc <- as.numeric(zoo::na.approx(df$conc, x = df$date, na.rm = FALSE))
+
+  # a) Linear trend of the concentration proxy, and its "trend-free"
+  #    counterfactual: the same series with the fitted slope subtracted
+  #    back out (mean unchanged, so it stays on the original scale).
+  conc_lm <- lm(conc ~ date, data = df)
+  df$conc_fit <- predict(conc_lm)
+  df$conc_detrended <- df$conc - (df$conc_fit - mean(df$conc_fit))
+
+  # b) Empirical area ~ concentration sensitivity, controlling for flow so
+  #    the concentration coefficient isn't just re-capturing flow's own,
+  #    already-established effect on area (see driver_plume_trend("flow")).
+  #    Caveat worth keeping in mind when reading beta_conc: flow and
+  #    concentration are themselves correlated (bigger floods carry more
+  #    sediment), so this is a partial, not fully independent, effect.
+  area_conc_lm <- lm(plume_area ~ value + conc, data = df)
+  beta_conc <- coef(area_conc_lm)["conc"]
+
+  # c) Counterfactual area: subtract, day by day, the modelled contribution
+  #    of that day's concentration sitting above (or below) its trend-free
+  #    counterfactual.
+  df$plume_area_conc_adj <- df$plume_area - beta_conc * (df$conc - df$conc_detrended)
+
+  # d) Refit the trend on the raw area, the concentration-adjusted area,
+  #    and the concentration proxy itself, all with the same AR-weighted /
+  #    HAC estimator used throughout this file (fit_wls_hac_trend()), so
+  #    the comparison is apples-to-apples with every other trend reported
+  #    for this zone.
+  trend_conc <- fit_wls_hac_trend("ar", df$conc, df$date) |> dplyr::mutate(series = "SPM concentration (Arles, OSR in-situ)")
+  trend_raw  <- fit_wls_hac_trend("ar", df$plume_area, df$date) |> dplyr::mutate(series = "plume area (raw)")
+  trend_adj  <- fit_wls_hac_trend("ar", df$plume_area_conc_adj, df$date) |> dplyr::mutate(series = "plume area (concentration-adjusted)")
+
+  stats <- dplyr::bind_rows(trend_conc, trend_raw, trend_adj) |>
+    dplyr::mutate(slope_yearly = slope * 365.25, beta_conc = beta_conc) |>
+    dplyr::select(series, n, slope, slope_yearly, slope_se, slope_p, beta_conc)
+  write_csv(stats, "output/STATS/rhone_conc_detrend.csv")
+
+  # Plot: a) in-situ concentration with its fitted trend and trend-free
+  # counterfactual; b) raw vs. concentration-adjusted plume area with their
+  # respective AR-weighted trend lines, so the effect of the adjustment
+  # (if any) is visible directly.
+  # NB: conc is a high-variance daily series (floods vs. base flow), so
+  # connecting every day with a line (geom_line) paints a near-solid band
+  # that hides everything underneath it. Points + a clean geom_abline for
+  # the fitted trend stays legible; the trend-free counterfactual is, at
+  # this scale, visually indistinguishable from the raw series (the whole
+  # record's drift is small next to the daily noise), so it is reported in
+  # `stats` rather than over-plotted here.
+  # SPM concentration is strongly right-skewed (flood spikes into the
+  # thousands of mg/L vs. a base-flow median around 14 mg/L), so a linear
+  # y-axis crushes almost every point flat against zero -- log10 is needed
+  # to actually see the day-to-day/seasonal structure. The fitted trend
+  # line itself is still the linear-scale fit used for the detrending math
+  # above (conc_lm); log10() only changes how it is displayed here.
+  # NB: geom_abline() does NOT work here -- it applies intercept/slope in
+  # the already-log10-transformed coordinate space, not the original mg/L
+  # space conc_lm was fit in, so the line would be drawn many orders of
+  # magnitude off the visible panel. Instead, get the two endpoint values
+  # by predicting conc_lm (linear space) at the start/end dates, then plot
+  # those as ordinary data with geom_line() so they go through the same
+  # log10 transform as the points.
+  conc_trend_line <- tibble::tibble(date = range(df$date)) |>
+    dplyr::mutate(conc_fit_line = predict(conc_lm, newdata = tibble::tibble(date = date)))
+
+  pl_conc <- ggplot(df, aes(x = date)) +
+    geom_point(aes(y = conc), colour = "grey50", alpha = 0.15, size = 0.5) +
+    geom_line(data = conc_trend_line, aes(y = conc_fit_line), colour = "firebrick", linewidth = 1.2) +
+    scale_y_log10() +
+    labs(x = NULL, y = "SPM concentration, Arles (OSR in-situ, mg/L, log scale)",
+         title = "Grand Rhone: in-situ SPM concentration at Arles",
+         subtitle = "Red = fitted linear trend (see `stats` for the trend-free counterfactual comparison)") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  fit_area_raw <- coef(lm(plume_area ~ date, data = df))
+  fit_area_adj <- coef(lm(plume_area_conc_adj ~ date, data = df))
+
+  pl_area <- ggplot(df, aes(x = date)) +
+    geom_point(aes(y = plume_area), colour = "sienna", alpha = 0.15) +
+    geom_point(aes(y = plume_area_conc_adj), colour = "darkblue", alpha = 0.15) +
+    geom_abline(intercept = fit_area_raw[1], slope = fit_area_raw[2], colour = "sienna", linewidth = 1.2) +
+    geom_abline(intercept = fit_area_adj[1], slope = fit_area_adj[2], colour = "darkblue", linewidth = 1.2) +
+    labs(x = NULL, y = "Plume area (km^2)",
+         title = "Grand Rhone: plume area, raw vs. concentration-adjusted",
+         subtitle = "Brown = raw area (+ OLS trend); blue = area with the concentration-trend contribution removed (+ OLS trend)") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  pl_combi <- ggpubr::ggarrange(pl_conc, pl_area, ncol = 1, nrow = 2)
+  ggsave(filename = "figures/rhone_side_analyses/rhone_concentration_detrend_test.png", plot = pl_combi, width = 12, height = 10)
+
+  return(list(stats = stats, data = df, plot = pl_combi))
+}
+
+
+## 2. Has the seasonal timing of Rhone floods shifted? ------------------------
+# The e-mail's second idea asks *why* Rhone SPM concentration would be
+# rising: has the balance between northern-tributary floods (winter/spring,
+# snowmelt-and-rain driven) and Cevennes floods ("episodes cevenols",
+# roughly Sep-Nov) shifted? A proper attribution needs the sub-basin gauge
+# data the e-mail points to (Observatoire des Sediments du Rhone / Olivier
+# Radakovitch) -- RiOMar only has the combined Grand+Petit Rhone discharge
+# at the mouth (data/RIVER_FLOW/GULF_OF_LION), so this cannot say which
+# tributary is responsible. What follows is a first-pass check of whether
+# the *calendar timing* of high-flow days at the combined gauge has moved
+# over the record -- worth reporting even though it can't yet attribute a
+# cause.
+# rhone_flood_seasonality_shift()
+rhone_flood_seasonality_shift <- function(high_flow_quantile = 0.90){
+
+  meta <- get_zone_meta(mouth_name = "Grand Rhone")
+  df_flow <- load_driver("flow", meta) |>
+    dplyr::mutate(year = year(date), month = month(date), doy = yday(date))
+
+  # Meteorological seasons (DJF/MAM/JJA/SON), extended from the Cevenol
+  # (SON) focus to all four so winter/spring/summer can be compared on the
+  # same footing. December is relabelled into the *following* year
+  # (season_year = year + 1) so winter isn't split across two different
+  # true winters -- e.g. Dec 2010 + Jan/Feb 2011 are one winter, both
+  # tagged season_year 2011. For the other three seasons season_year is
+  # just the calendar year. This has to happen *before* the high-flow
+  # threshold below, because that threshold is also grouped by season_year
+  # (see next comment) rather than raw calendar year.
+  df_flow <- df_flow |>
+    dplyr::mutate(season = dplyr::case_when(
+                    month %in% 3:5  ~ "spring (MAM)",
+                    month %in% 6:8  ~ "summer (JJA)",
+                    month %in% 9:11 ~ "autumn (SON, Cevenol)",
+                    TRUE            ~ "winter (DJF)"),
+                  season_year = ifelse(month == 12, year + 1, year))
+  season_levels <- c("winter (DJF)", "spring (MAM)", "summer (JJA)", "autumn (SON, Cevenol)")
+  df_flow$season <- factor(df_flow$season, levels = season_levels)
+
+  # "High flow" is defined relative to each season_year's own range (that
+  # season_year's 90th percentile), not a single record-wide threshold -- a
+  # fixed absolute threshold would mechanically flag more/fewer days in
+  # years where mean flow itself has trended, which is exactly the
+  # ambiguity this check is trying to avoid. Grouped by season_year, not
+  # raw calendar year, so a single true winter always gets judged against
+  # one consistent threshold -- grouping by calendar year instead would
+  # let December and the following January/February of the same winter be
+  # compared against two different years' flow distributions.
+  df_flow <- df_flow |>
+    dplyr::mutate(year_thresh = quantile(value, high_flow_quantile, na.rm = TRUE), .by = "season_year") |>
+    dplyr::mutate(is_high_flow = value >= year_thresh)
+
+  # Per (calendar) year: how many high-flow days, and their mean day-of-year
+  # (NB: a circular statistic tied to the calendar year specifically,
+  # because day-of-year itself resets at Jan 1 -- averaging doy within a
+  # Dec-Feb season_year group would run straight across that reset and
+  # produce a meaningless mid-year value, so this stays on raw "year").
+  df_year <- df_flow |>
+    dplyr::filter(is_high_flow) |>
+    dplyr::summarise(n_high_flow = dplyr::n(), mean_doy_high_flow = mean(doy), .by = "year")
+
+  # Per season-year: each season's share of that season-year's high-flow
+  # days -- the four seasons' shares sum to ~1 within a season_year, so
+  # this is the direct four-season generalisation of the single prop_autumn
+  # check from the first pass. tidyr::complete() adds an explicit 0 (not a
+  # missing row) for any season_year x season combination that had no
+  # high-flow days at all that year -- "this season had none of the year's
+  # extreme days" is real information (and changes the trend below
+  # noticeably), not something to silently drop from the regression.
+  df_season_year <- df_flow |>
+    dplyr::filter(is_high_flow) |>
+    dplyr::summarise(n_season = dplyr::n(), .by = c("season_year", "season")) |>
+    tidyr::complete(season_year, season, fill = list(n_season = 0)) |>
+    dplyr::mutate(n_total = sum(n_season), .by = "season_year") |>
+    dplyr::mutate(prop_season = n_season / n_total)
+
+  # Trend of each season's share over the years, and of the mean
+  # day-of-year. One value per year/season-year here (not the
+  # daily/monthly autocorrelated case fit_wls_hac_trend() is built for), so
+  # a plain OLS trend is enough.
+  season_trend <- function(season_name){
+    d <- dplyr::filter(df_season_year, season == season_name)
+    fit <- summary(lm(prop_season ~ season_year, data = d))$coefficients
+    tibble::tibble(metric = paste0("proportion_of_high_flow_days_in_", season_name),
+                   slope_per_year = fit["season_year", "Estimate"], p_value = fit["season_year", "Pr(>|t|)"])
+  }
+  stats_season <- purrr::map_dfr(season_levels, season_trend)
+
+  fit_doy <- summary(lm(mean_doy_high_flow ~ year, data = df_year))$coefficients
+  stats_doy <- tibble::tibble(metric = "mean_doy_of_high_flow_days",
+                              slope_per_year = fit_doy["year", "Estimate"], p_value = fit_doy["year", "Pr(>|t|)"])
+
+  stats <- dplyr::bind_rows(stats_doy, stats_season)
+  write_csv(stats, "output/STATS/rhone_flood_seasonality.csv")
+
+  pl <- ggplot(df_season_year, aes(x = season_year, y = prop_season)) +
+    geom_point(size = 2) +
+    geom_smooth(method = "lm", se = TRUE, colour = "firebrick") +
+    facet_wrap(~season, ncol = 2) +
+    labs(x = NULL, y = paste0("Proportion of top ", round((1 - high_flow_quantile) * 100), "% flow days falling in that season"),
+         title = "Grand Rhone: has the seasonal timing of high-flow days shifted?",
+         subtitle = "A rising trend means that season is becoming relatively more prominent for floods (Cevenol = autumn/SON panel)") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+  ggsave(filename = "figures/rhone_side_analyses/rhone_flood_seasonality_shift.png", plot = pl, width = 10, height = 8)
+
+  return(list(stats = stats, data = df_season_year, plot = pl))
+}
+
+
+## 3. Does the plume respond to wind/wave forcing beyond flow? ---------------
+# The e-mail's third idea reframes "does plume size have a seasonal cycle
+# beyond river flow" as "does plume size respond directly to wind/wave
+# forcing" -- the hypothesis being that winter's stronger wind/waves push
+# the plume further offshore (larger detected area) for the same
+# discharge, and that THIS, not a genuine seasonal cycle in the plume's own
+# dynamics, is what a naive flow-vs-season comparison would pick up. It
+# also raises a specific, testable version of that: Mistral (a strong,
+# roughly N/NNW wind for the Gulf of Lion) should push the plume clear of
+# the coast (larger detected area); weak or onshore/easterly wind should
+# leave it hugging the coast, where it may be under-detected because of
+# confounding coastal resuspension.
+# rhone_wind_wave_beyond_season()
+rhone_wind_wave_beyond_season <- function(){
+
+  meta <- get_zone_meta(mouth_name = "Grand Rhone")
+  df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
+  df_wind <- load_driver("wind", meta) |> dplyr::select(date, wind_spd = value, wind_dir)
+  df_wave <- load_driver("wave", meta) |> dplyr::select(date, wave_height = value)
+
+  df <- df_flow |>
+    dplyr::left_join(df_wind, by = "date") |>
+    dplyr::left_join(df_wave, by = "date") |>
+    tidyr::drop_na(plume_area, flow, wind_spd, wave_height)  # complete cases only, so the nested models below are fit to identical rows
+
+  # a) Does wind/wave explain plume-area variance beyond flow alone? Nested
+  #    model comparison (F-test via anova()) -- the same "does adding this
+  #    term help" logic as code/6_driver_interactions.R::fit_interaction_glm(),
+  #    scoped here to a plain additive comparison since the question is
+  #    "does it matter at all", not "how do drivers interact".
+  m_flow      <- lm(plume_area ~ flow, data = df)
+  m_flow_wind <- lm(plume_area ~ flow + wind_spd, data = df)
+  m_flow_wave <- lm(plume_area ~ flow + wave_height, data = df)
+
+  anova_wind <- anova(m_flow, m_flow_wind)
+  anova_wave <- anova(m_flow, m_flow_wave)
+
+  model_comparison <- tibble::tibble(
+    added_term = c("wind_spd", "wave_height"),
+    f_statistic = c(anova_wind$F[2], anova_wave$F[2]),
+    p_value = c(anova_wind$`Pr(>F)`[2], anova_wave$`Pr(>F)`[2]),
+    r2_flow_only = summary(m_flow)$r.squared,
+    r2_with_term = c(summary(m_flow_wind)$r.squared, summary(m_flow_wave)$r.squared)
+  )
+  write_csv(model_comparison, "output/STATS/rhone_wind_wave_models.csv")
+
+  # b) Mistral vs onshore/easterly vs calm, holding flow's effect fixed by
+  #    working with the *residual* plume area after removing the flow
+  #    relationship (m_flow above) -- so what gets compared across wind
+  #    categories is "area given today's flow", not raw area (which would
+  #    just reflect whichever category happened to have wetter days).
+  #    Sector definitions are an approximation, not a precise meteorological
+  #    classification: Mistral ~ NNW-N (e.g. Guenard et al. 2006 use
+  #    ~300-340 deg); the onshore/"Levant" sector ~E-SE is the rough
+  #    opposite. wind_dir follows the meteorological "from" convention (see
+  #    util.R::.speed_direction()), so these are compass bearings the wind
+  #    is blowing FROM.
+  df$area_resid <- residuals(m_flow)
+  df$wind_category <- dplyr::case_when(
+    df$wind_spd < 3                          ~ "calm (<3 m/s)",
+    df$wind_dir >= 300 & df$wind_dir <= 350  ~ "Mistral (NNW-N)",
+    df$wind_dir >= 90  & df$wind_dir <= 150  ~ "onshore/easterly",
+    TRUE                                     ~ "other"
+  )
+  # Ordered calm -> onshore/easterly -> Mistral -> other (weakest/most
+  # coast-hugging to strongest/most offshore-pushing, per the e-mail's
+  # hypothesis), rather than the alphabetical default, so this order is
+  # what every plot legend, boxplot axis, and summarise() output below uses.
+  df$wind_category <- factor(df$wind_category,
+                              levels = c("calm (<3 m/s)", "onshore/easterly", "Mistral (NNW-N)", "other"))
+  wind_category_colours <- c("calm (<3 m/s)" = "grey50", "onshore/easterly" = "steelblue",
+                              "Mistral (NNW-N)" = "firebrick", "other" = "goldenrod")
+
+  category_summary <- df |>
+    dplyr::summarise(n_days = dplyr::n(),
+                      mean_area_resid = mean(area_resid, na.rm = TRUE),
+                      sd_area_resid = sd(area_resid, na.rm = TRUE), .by = "wind_category") |>
+    dplyr::arrange(wind_category)  # .by = doesn't preserve factor level order, arrange() does
+  write_csv(category_summary, "output/STATS/rhone_wind_wave_categories.csv")
+  category_anova <- summary(aov(area_resid ~ wind_category, data = df))
+
+  pl_terms <- ggplot(df, aes(x = wind_spd, y = plume_area)) +
+    geom_point(alpha = 0.2) +
+    geom_smooth(method = "lm", colour = "purple") +
+    labs(x = "Wind speed (m/s)", y = "Plume area (km^2)",
+         title = "Grand Rhone: plume area vs. wind speed",
+         subtitle = "Raw relationship, not controlled for flow (see model_comparison)") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  # c) Same flow-controlled residual as the category summary above, but as a
+  #    scatter against wind speed (not a categorical boxplot) with a
+  #    separate per-category trend line -- shows whether wind speed's
+  #    relationship with (flow-controlled) plume area actually differs by
+  #    wind category, rather than just comparing category means.
+  pl_category <- ggplot(df, aes(x = wind_spd, y = area_resid, colour = wind_category)) +
+    geom_point(alpha = 0.25, size = 0.8) +
+    geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
+    scale_colour_manual(values = wind_category_colours) +
+    labs(x = "Wind speed (m/s)", y = "Plume area residual after removing the flow effect (km^2)",
+         colour = NULL, title = "Grand Rhone: flow-controlled area vs. wind, by category") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"), legend.position = "none")
+
+  # d) The e-mail's "or even wave, which may be simpler?" alternative to
+  #    wind -- this plot did not exist before. Plume area vs. wave height,
+  #    with wind category as colour so the wind effect is visible alongside
+  #    the wave effect on the same panel, per the e-mail's suggestion.
+  pl_wave <- ggplot(df, aes(x = wave_height, y = plume_area, colour = wind_category)) +
+    geom_point(alpha = 0.25, size = 0.8) +
+    geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
+    scale_colour_manual(values = wind_category_colours) +
+    labs(x = "Wave height (m)", y = "Plume area (km^2)", colour = NULL,
+         title = "Grand Rhone: plume area vs. wave height, by wind category",
+         subtitle = "Raw relationship, not controlled for flow") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  # NB: ggpubr's common.legend = TRUE (sharing one legend for pl_category
+  # and pl_wave) renders a malformed black panel with this ggplot2 version
+  # -- avoided here by just dropping pl_category's legend (identical
+  # categories/colours to pl_wave's) and keeping pl_wave's own.
+  pl_combi <- ggpubr::ggarrange(pl_terms, pl_category, pl_wave, ncol = 3, nrow = 1)
+  ggsave(filename = "figures/rhone_side_analyses/rhone_wind_wave_beyond_season.png", plot = pl_combi, width = 18, height = 6)
+
+  return(list(model_comparison = model_comparison, wind_category_summary = category_summary,
+              wind_category_anova = category_anova, data = df, plot = pl_combi))
+}
+
+
+# NB: not run automatically on source() -- call explicitly
+# rhone_concentration_detrend_test()
+# rhone_flood_seasonality_shift()
+# rhone_wind_wave_beyond_season()

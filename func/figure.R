@@ -223,19 +223,19 @@ Figure_1 <- function(where_to_save_the_figure) {
                                       longitude = c(0,0),
                                       latitude = c(0,0))
   
-  Figure_1 <- basic_map + 
-    geom_point(data = insitu_stations %>% filter(SOURCE == 'REPHY'), 
-               aes(x = LONGITUDE, y = LATITUDE), 
+  national_map <- basic_map +
+    geom_point(data = insitu_stations %>% filter(SOURCE == 'REPHY'),
+               aes(x = LONGITUDE, y = LATITUDE),
                fill = "red", color = "black", size = 4, shape = 24, stroke = 1) +
-    geom_point(data = insitu_stations %>% filter(SOURCE == 'SOMLIT'), 
-               aes(x = LONGITUDE, y = LATITUDE), 
-               fill = "red", color = "black", size = 10, shape = 21, stroke = 2) + 
+    geom_point(data = insitu_stations %>% filter(SOURCE == 'SOMLIT'),
+               aes(x = LONGITUDE, y = LATITUDE),
+               fill = "red", color = "black", size = 10, shape = 21, stroke = 2) +
     geom_rect(data = RIOMAR_limits, aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max),
               fill = "transparent", color = "red", linetype = "dashed", size = 2) +
-    
+
     geom_point(data = points_for_the_legend, aes(x = longitude, y = latitude, shape = SOURCE), size = 0.1) +
-    
-    scale_shape_manual(values = c('SOMLIT' = 21, "REPHY" = 24), breaks=c('SOMLIT', 'REPHY'), 
+
+    scale_shape_manual(values = c('SOMLIT' = 21, "REPHY" = 24), breaks=c('SOMLIT', 'REPHY'),
                        labels = c(paste('SOMLIT (n=', length(which(insitu_stations$SOURCE == "SOMLIT")), ")", sep = ""),
                                   paste('REPHY (n=', length(which(insitu_stations$SOURCE == "REPHY")), ")", sep = ""))) +
     guides(
@@ -247,53 +247,62 @@ Figure_1 <- function(where_to_save_the_figure) {
                                                stroke = c(2, 1)),
                            order = 1),
       fill = guide_colorbar(barwidth = 30, barheight = 2)) +
-    labs(shape = "In-situ stations") + 
+    labs(shape = "In-situ stations") +
     theme(legend.position = "bottom",
           legend.title.position = "top",
           legend.title = element_text(angle = 0, hjust = 0.5),
           legend.spacing.x = unit(5, "cm"))
-  
-  save_plot_as_png(Figure_1, "Figure_1", width = 18, height = 16, path = main_folder_of_Figure_1)
-  
+
+  # The four regional zone maps (with SOMLIT/REPHY stations) are combined
+  # into Figure 1 as insets below the national overview -- manuscript Figure
+  # 2 is the satellite-vs-in-situ validation scatterplot instead (produced by
+  # func/validate.R during 1_validate.py).
+  zone_panels <- regional_zone_maps_panels(main_folder_of_Figure_1, include_station_points = TRUE)
+
+  Figure_1 <- ggarrange(national_map, zone_panels, ncol = 1, heights = c(1.3, 1))
+
+  save_plot_as_png(Figure_1, "Figure_1", width = 28, height = 30, path = main_folder_of_Figure_1)
+
 }
 
-# where_to_save_the_figure <- "~/RiOMar/figures"
-Figure_2 <- function(where_to_save_the_figure, include_station_points) {
-  
-  main_folder_of_Figure_2 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_2")
-  
-  SPM_map_data <- file.path(main_folder_of_Figure_2, "DATA") %>% 
-    list.files(pattern = "*.csv", full.names = TRUE) %>% 
-    llply(read_csv) %>% 
+# Builds the 4-zone regional SPM map grid (optionally with SOMLIT/REPHY
+# station overlay), shared by Figure_1() (with stations, embedded as insets)
+# and regional_zone_maps() below (without stations, a standalone reference
+# figure used by Figure_5()).
+regional_zone_maps_panels <- function(data_folder, include_station_points) {
+
+  SPM_map_data <- file.path(data_folder, "DATA") %>%
+    list.files(pattern = "*.csv", full.names = TRUE) %>%
+    llply(read_csv) %>%
     keep(~ 'analysed_spim' %in% names(.))
-  
-  insitu_stations <- file.path( main_folder_of_Figure_2, "DATA", "Stations_position.csv" ) %>% read_csv()
-  
+
+  insitu_stations <- file.path( data_folder, "DATA", "Stations_position.csv" ) %>% read_csv()
+
   points_for_the_legend <- data.frame(SOURCE = c('SOMLIT', 'REPHY'), longitude = c(0,0), latitude = c(0,0))
-  
-  SPM_maps <- SPM_map_data %>% 
+
+  SPM_map_data %>%
     llply(function(x) {
-      insitu_stations_of_the_map <- insitu_stations %>% 
-        filter((LATITUDE %>% between(min(x$lat), max(x$lat))) & 
+      insitu_stations_of_the_map <- insitu_stations %>%
+        filter((LATITUDE %>% between(min(x$lat), max(x$lat))) &
                  (LONGITUDE %>% between(min(x$lon), max(x$lon))))
-      
+
       the_map <- create_the_basic_map(x, 'SPM', legend_limits = c(4,10))
-      
+
       if (include_station_points) {
-        
-        the_map <- the_map + 
-          
-          geom_point(data = insitu_stations_of_the_map %>% filter(SOURCE == 'REPHY'), 
-                     aes(x = LONGITUDE, y = LATITUDE), 
+
+        the_map <- the_map +
+
+          geom_point(data = insitu_stations_of_the_map %>% filter(SOURCE == 'REPHY'),
+                     aes(x = LONGITUDE, y = LATITUDE),
                      fill = "red", color = "black", size = 6, shape = 24, stroke = 1) +
-          geom_point(data = insitu_stations_of_the_map %>% filter(SOURCE == 'SOMLIT'), 
-                     aes(x = LONGITUDE, y = LATITUDE), 
-                     fill = "red", color = "black", size = 14, shape = 21, stroke = 2) + 
-          
+          geom_point(data = insitu_stations_of_the_map %>% filter(SOURCE == 'SOMLIT'),
+                     aes(x = LONGITUDE, y = LATITUDE),
+                     fill = "red", color = "black", size = 14, shape = 21, stroke = 2) +
+
           geom_point(data = points_for_the_legend, aes(x = longitude, y = latitude, shape = SOURCE), size = 0.1) +
-          
-          scale_shape_manual(values = c('SOMLIT' = 21, "REPHY" = 24), 
-                             breaks = c('SOMLIT', 'REPHY'), 
+
+          scale_shape_manual(values = c('SOMLIT' = 21, "REPHY" = 24),
+                             breaks = c('SOMLIT', 'REPHY'),
                              labels = c('SOMLIT', 'REPHY')) +
           guides(
             shape = guide_legend(keyheight = unit(0.3, "cm"), byrow = TRUE,
@@ -304,24 +313,34 @@ Figure_2 <- function(where_to_save_the_figure, include_station_points) {
                                                      stroke = c(2, 1)),
                                  order = 1)) +
           labs(shape = "In-situ stations")
-        
+
       }
-      
-      the_map <- the_map + 
+
+      the_map <- the_map +
         guides(fill = guide_colorbar(barwidth = 45, barheight = 2)) +
         theme(legend.position = "bottom",
               legend.title.position = "top",
               legend.title = element_text(angle = 0, hjust = 0.5),
               legend.spacing.x = unit(5, "cm"),
               axis.text = element_text(size=25, colour = "black"))
-      
+
       return(the_map)
-    }) %>% 
+    }) %>%
     ggarrange(plotlist = ., common.legend = TRUE)
-  
-  save_plot_as_png(SPM_maps, paste("Figure_2", ifelse(include_station_points, "with_stations", "wo_stations"), sep = "_"), 
-                   width = 28, height = 16, path = main_folder_of_Figure_2)
-  
+}
+
+# Standalone regional-zone-maps figure, kept for Figure_5()'s
+# without-stations reference-map byproduct. The with-stations version is no
+# longer produced standalone -- it is embedded directly in Figure_1().
+regional_zone_maps <- function(where_to_save_the_figure, include_station_points) {
+
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_1")
+
+  SPM_maps <- regional_zone_maps_panels(main_folder, include_station_points)
+
+  save_plot_as_png(SPM_maps, paste("regional_zone_maps", ifelse(include_station_points, "with_stations", "wo_stations"), sep = "_"),
+                   width = 28, height = 16, path = main_folder)
+
 }
 
 

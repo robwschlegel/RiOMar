@@ -57,9 +57,13 @@ def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_fi
     
     
 def load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_maps, where_to_save_the_figure, dates_for_each_zone) :
-        
-    folder_where_to_save_Figure_2_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURES', 'FIGURE_2', 'DATA')
-    os.makedirs(folder_where_to_save_Figure_2_data, exist_ok = True)
+
+    # NB: these per-zone regional maps are the insets combined into Figure 1
+    # (with SOMLIT/REPHY stations) -- so they are written into FIGURE_1's own
+    # DATA folder, not a separate FIGURE_2 (manuscript Figure 2 is the
+    # satellite-vs-in-situ validation scatterplot from func/validate.py).
+    folder_where_to_save_regional_zone_maps_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURES', 'FIGURE_1', 'DATA')
+    os.makedirs(folder_where_to_save_regional_zone_maps_data, exist_ok = True)
     
     path_to_regional_maps = {key : (path_to_fill_to_where_to_save_satellite_files( os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', key) )
                                        .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
@@ -82,9 +86,9 @@ def load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_m
                        .to_dataframe()
                        .reset_index())
             
-            SPM_map.to_csv(folder_where_to_save_Figure_2_data + f"/{key}.csv")
+            SPM_map.to_csv(folder_where_to_save_regional_zone_maps_data + f"/{key}.csv")
             
-    extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figure_2_data)
+    extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_regional_zone_maps_data)
 
 
 def extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figure_data) :     
@@ -126,11 +130,20 @@ def dates_for_each_zone() :
 # =============================================================================
 
 
-def Figure_1(where_are_saved_satellite_data, where_to_save_the_figure):
+def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, where_to_save_the_figure):
     save_files_for_Figure_1(where_are_saved_satellite_data,
                             where_to_save_the_figure,
                             date_of_the_map="2011/02/02",
                             coordinates_of_the_map={"lat_min": 42, "lat_max": 51.5, "lon_min": -6, "lon_max": 8})
+
+    # The four regional zone maps with SOMLIT/REPHY station overlays (the
+    # former standalone Figure_2()) are combined into Figure 1 as insets here
+    # -- manuscript Figure 2 is the satellite-vs-in-situ validation
+    # scatterplot, produced separately by func/validate.py during
+    # 1_validate.py.
+    load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_maps,
+                                                      where_to_save_the_figure,
+                                                      dates_for_each_zone())
 
     # Source the R scrip
     figure_R_path = os.path.join(func_dir, 'figure.R')
@@ -143,11 +156,10 @@ def Figure_1(where_are_saved_satellite_data, where_to_save_the_figure):
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_2(where_are_saved_regional_maps, where_to_save_the_figure, include_station_points=True):
-    # dates_for_each_zone = {'GULF_OF_LION' : '2014-01-04',
-    #                        'BAY_OF_BISCAY' : '2009-04-22',
-    #                        'SOUTHERN_BRITTANY' : '2022-01-21',
-    #                        'BAY_OF_SEINE' : '2018-02-25'}
+def regional_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure, include_station_points=True):
+    # Standalone regional-zone-maps figure, kept for Figure_5()'s
+    # without-stations reference-map byproduct. The with-stations version is
+    # no longer produced standalone -- it is embedded directly in Figure_1().
 
     the_dates_for_each_zone = dates_for_each_zone()
 
@@ -160,7 +172,7 @@ def Figure_2(where_are_saved_regional_maps, where_to_save_the_figure, include_st
     robjects.r['source'](figure_R_path)
     # robjects.r['source']("myRIOMAR_dev/_5_Figures_for_article/utils.R")
 
-    r_function = robjects.r['Figure_2']
+    r_function = robjects.r['regional_zone_maps']
 
     # Call the R function
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
@@ -385,9 +397,9 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
     # Call the R function
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure_5]))
 
-    Figure_2(where_are_saved_regional_maps="output",
-             where_to_save_the_figure="figures",
-             include_station_points=False)
+    regional_zone_maps(where_are_saved_regional_maps="output",
+                       where_to_save_the_figure="figures",
+                       include_station_points=False)
 
 
 def Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold,
