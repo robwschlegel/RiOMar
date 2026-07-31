@@ -157,7 +157,13 @@ plot_flow_plume_rofi_succession <- function(){
     patchwork::plot_layout(guides = "collect") &
     theme(legend.position = "bottom")
 
-  ggsave(filename = "figures/driver_comparison/flow_plume_rofi_succession.png", plot = full_plot, width = 12, height = 10, dpi = 300)
+  # manuscript Figure S5a. Fixed 2026-08-01: manuscript.tex's \figplaceholder
+  # expected this at figures/flow_plume_rofi_succession.png (flat), but it
+  # was actually saved to figures/driver_comparison/ -- the figure was never
+  # actually rendering (silent \figplaceholder fallback). Now in its own
+  # FIGURE_S5/ folder, matching every other manuscript figure.
+  if (!dir.exists("figures/ARTICLE/FIGURE_S5")) dir.create("figures/ARTICLE/FIGURE_S5", recursive = TRUE)
+  ggsave(filename = "figures/ARTICLE/FIGURE_S5/flow_plume_rofi_succession.png", plot = full_plot, width = 12, height = 10, dpi = 300)
   invisible(full_plot)
 }
 
@@ -212,7 +218,9 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
          subtitle = "Daily resolution; estuary excluded from plume area; red = lag of maximum r") +
     theme_bw()
 
-  ggsave(filename = "figures/driver_comparison/rofi_plume_lagged_correlation.png", plot = pl, width = 12, height = 9, dpi = 300)
+  # manuscript Figure S5b -- same broken-path fix as Figure S5a above.
+  if (!dir.exists("figures/ARTICLE/FIGURE_S5")) dir.create("figures/ARTICLE/FIGURE_S5", recursive = TRUE)
+  ggsave(filename = "figures/ARTICLE/FIGURE_S5/rofi_plume_lagged_correlation.png", plot = pl, width = 12, height = 9, dpi = 300)
   invisible(pl)
 }
 

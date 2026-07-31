@@ -24,7 +24,7 @@
 # Road map step -> what this script does -> where the output goes:
 #   1. Baseline additive GLM              -> fit_baseline_glm()          -> output/STATS/driver_glm_comparison.csv
 #   2. + pairwise interaction terms, LRT/AIC -> fit_interaction_glm() / compare_glms() -> output/STATS/driver_glm_comparison.csv
-#   3. GAM with te() tensor smooths       -> fit_gam() / plot_gam_figure()  -> output/STATS/driver_gam_summary.csv, figures/driver_interactions_gam/driver_gam_Figure_10.png
+#   3. GAM with te() tensor smooths       -> fit_gam() / plot_gam_figure()  -> output/STATS/driver_gam_summary.csv, figures/ARTICLE/FIGURE_10/Figure_10.png
 #   4. Regime stratification (Rossby proxy, 6 m/s wind threshold, tidal bin) -> refit_by_regime() -> output/STATS/driver_regime_glm.csv
 #   5. Per-metric models (area, centroid lon/lat, not just area)         -> fit_metric_models() over multiple response variables -> output/STATS/driver_metric_models_<response>.csv
 #   6. Exploratory random forest + iml H-statistic                       -> fit_rf_diagnostic() -> output/STATS/driver_rf_importance.csv, output/STATS/driver_rf_interaction_hstat.csv
@@ -121,13 +121,27 @@ build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic")
     dplyr::left_join(df_wind, by = "date") |>
     dplyr::left_join(df_current, by = "date") |>
     dplyr::left_join(df_wave, by = "date") |>
-    dplyr::mutate(zone = zone_name, .before = "date") |>
+    dplyr::mutate(zone = zone_name, .before = "date",
+                  # Categorical (8-octant) form of direction, since direction
+                  # matters as much or more than magnitude for wind/wave --
+                  # see multi.R::compass_octant(). Bay of Seine's wave_dir is
+                  # all-NA (load_wave()'s NB 2), so wave_dir_cat is all-NA
+                  # there too; available_drivers() below drops it for that
+                  # zone automatically.
+                  wind_dir_cat = compass_octant(wind_dir),
+                  wave_dir_cat = compass_octant(wave_dir)) |>
     zoo::na.trim()
 }
 
-# Names of the driver columns available for each zone.
+# Names of the driver columns available for each zone -- any candidate column
+# that is entirely NA for this zone (e.g. wave_dir_cat for the Bay of Seine)
+# is dropped rather than passed into a model formula, generalising the same
+# per-zone gap-handling already done in util.R::load_wave() and
+# multi.R::plot_driver_rose().
 available_drivers <- function(df){
-  intersect(c("flow", "wind_spd", "tide_range", "current", "wave_height"), names(df))
+  candidates <- c("flow", "wind_spd", "tide_range", "current", "wave_height", "wind_dir_cat", "wave_dir_cat")
+  drivers <- intersect(candidates, names(df))
+  Filter(function(d) any(!is.na(df[[d]])), drivers)
 }
 
 
@@ -173,9 +187,17 @@ fit_gam <- function(df, response = "plume_area"){
   drivers <- available_drivers(df)
   df_valid <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
   if(nrow(df_valid) < 30 || stats::var(df_valid[[response]]) < 1e-6) return(NULL)
-  pair_terms <- utils::combn(drivers, 2, simplify = FALSE)
+
+  # te() tensor-product smooths need numeric arguments -- categorical drivers
+  # (wind_dir_cat/wave_dir_cat) enter as flat parametric main-effect terms
+  # instead, alongside the te() smooths over every numeric pair.
+  is_categorical <- purrr::map_lgl(drivers, ~ !is.numeric(df_valid[[.x]]))
+  numeric_drivers <- drivers[!is_categorical]
+  categorical_drivers <- drivers[is_categorical]
+
+  pair_terms <- utils::combn(numeric_drivers, 2, simplify = FALSE)
   te_terms <- purrr::map_chr(pair_terms, ~ paste0("te(", .x[1], ", ", .x[2], ")"))
-  form <- stats::as.formula(paste(response, "~", paste(te_terms, collapse = " + ")))
+  form <- stats::as.formula(paste(response, "~", paste(c(te_terms, categorical_drivers), collapse = " + ")))
   mgcv::gam(form, data = df_valid, method = "REML")
 }
 
@@ -201,8 +223,16 @@ gam_partial_effect <- function(gam_model, driver_name, df, n_points = 50){
   drivers <- available_drivers(df)
   df_valid <- tidyr::drop_na(df, dplyr::all_of(c("plume_area", drivers)))
 
-  newdata <- as.data.frame(lapply(drivers, function(d) stats::median(df_valid[[d]], na.rm = TRUE)))
-  names(newdata) <- drivers
+  # Hold every driver but driver_name at a "typical" value: median for
+  # numeric drivers, most-frequent level for categorical ones (median()
+  # errors on a factor). Levels are preserved explicitly so predict.gam()
+  # sees the same factor structure it was fitted on.
+  newdata <- df_valid[1, drivers, drop = FALSE]
+  for(d in drivers){
+    col <- df_valid[[d]]
+    newdata[[d]] <- if(is.numeric(col)) stats::median(col, na.rm = TRUE) else
+      factor(names(which.max(table(col))), levels = levels(col))
+  }
   newdata <- newdata[rep(1, n_points), , drop = FALSE]
   newdata[[driver_name]] <- seq(min(df_valid[[driver_name]], na.rm = TRUE),
                                 max(df_valid[[driver_name]], na.rm = TRUE), length.out = n_points)
@@ -399,14 +429,14 @@ Apply_driver_interactions_analysis <- function(){
   run_full_analysis(
     plume_dir = "output/panache/dynamic",
     stats_dir = "output/STATS",
-    fig_path  = "figures/driver_interactions_gam/driver_gam_Figure_10.png"
+    fig_path  = "figures/ARTICLE/FIGURE_10/Figure_10.png"
   )
 
   message("== Driver interactions: static threshold (supplementary) ==")
   run_full_analysis(
     plume_dir = "output/panache/static",
     stats_dir = "output/STATS/static",
-    fig_path  = "figures/driver_interactions_gam/driver_gam_Figure_10_static.png"
+    fig_path  = "figures/ARTICLE/FIGURE_10/Figure_10_static.png"
   )
 
   message("func/driver_interactions.R::Apply_driver_interactions_analysis() complete.")

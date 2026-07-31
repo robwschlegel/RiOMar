@@ -649,8 +649,7 @@ load_plume_surface <- function(zone, plume_dir = "output/panache/dynamic"){
   nc_dat <- nc_open(file_name)
   lon  <- ncvar_get(nc_dat, "lon")
   lat  <- ncvar_get(nc_dat, "lat")
-  time_origin <- sub("^days since ", "", ncatt_get(nc_dat, "time", "units")$value)
-  time <- as.Date(ncvar_get(nc_dat, "time"), origin = time_origin)
+  time <- .nc_time_to_date(nc_dat, "time")
   mask <- ncvar_get(nc_dat, "plume_mask")  # [lon, lat, time]
   nc_close(nc_dat)
 
@@ -743,9 +742,15 @@ load_tide_gauge <- function(dir_name){
 # ("RNetCDF.so: undefined symbol: nc_reclaim_data"), even though it loads
 # fine under a plain Rscript session; ncdf4 has no such conflict.
 # ncdf4::ncvar_get() returns arrays ordered (lon, lat, [depth,] time) for
-# every product read here; a middle depth dimension of size 1 (GLORYS
-# current files) is read down to a single level via start/count so it
-# collapses out, leaving the same (lon, lat, time) shape as the 3-D case.
+# every product read here. start/count reads only the lon/lat box directly
+# off disk -- a contiguous hyperslab, since lon_idx/lat_idx come from a
+# monotonic coordinate range -- instead of pulling the full spatial/time
+# extent into memory first and subsetting in R; tidync's hyper_filter() used
+# to push this same filter down to the read. Any dimension between lat and
+# time (e.g. GLORYS current files' single-level depth) is read as a bare
+# size-1 slice, which ncvar_get()'s default collapse_degen = TRUE then drops
+# automatically, leaving the same (lon, lat, time) shape regardless of
+# whether the file has that extra dimension.
 .nc_read_box <- function(file_name, var_names, lon_range, lat_range,
                          lon_var = "longitude", lat_var = "latitude", time_var = "time"){
   nc <- nc_open(file_name)
@@ -761,16 +766,11 @@ load_tide_gauge <- function(dir_name){
 
   for(v in var_names){
     n_dims <- length(nc$var[[v]]$dim)
-    if(n_dims == 3){
-      arr <- ncvar_get(nc, v)[lon_idx, lat_idx, , drop = FALSE]
-    } else if(n_dims == 4){
-      dim_sizes <- nc$var[[v]]$size
-      arr_full <- ncvar_get(nc, v, start = c(1, 1, 1, 1),
-                            count = c(dim_sizes[1], dim_sizes[2], 1, dim_sizes[4]))
-      arr <- arr_full[lon_idx, lat_idx, , drop = FALSE]
-    } else {
-      stop("Unexpected variable dimensionality (", n_dims, "D) for ", v, " in ", file_name)
-    }
+    if(n_dims < 3) stop("Unexpected variable dimensionality (", n_dims, "D) for ", v, " in ", file_name)
+    n_middle <- n_dims - 3  # any dims between lat and time (e.g. GLORYS's single-level depth)
+    start <- c(min(lon_idx), min(lat_idx), rep(1, n_middle), 1)
+    count <- c(length(lon_idx), length(lat_idx), rep(1, n_middle), -1)
+    arr <- ncvar_get(nc, v, start = start, count = count)
     grid[[v]] <- as.vector(arr)
   }
 

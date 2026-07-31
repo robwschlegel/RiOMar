@@ -453,6 +453,19 @@ plot_driver_plume_dual_axis <- function(df, driver_name, zone_name){
   invisible(pl)
 }
 
+# Bin a compass bearing (degrees, "from" convention) into one of 8 ordered
+# compass octants. Used by func/driver_interactions.R::build_driver_matrix()
+# to give wind_dir/wave_dir a categorical form (Robert: direction matters as
+# much or more than magnitude for these two drivers, so they should enter the
+# GLM/GAM/RF as a factor, not a raw degree value) -- kept separate from
+# plot_driver_rose()'s own inline sector binning below since that one uses a
+# finer, plot-resolution-tuned n_sectors (16) for bar drawing, not a fixed
+# categorical driver definition.
+compass_octant <- function(degrees){
+  labels <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+  factor(labels[(round(degrees / 45) %% 8) + 1], levels = labels)
+}
+
 # Direction/magnitude rose for wind or wave, coloured by the flow-controlled
 # plume-area response -- manuscript Figure 7. Replaces plotting wind/wave as
 # a raw magnitude time series (the original Figs 7-9 concept): Robert's
@@ -465,12 +478,26 @@ plot_driver_plume_dual_axis <- function(df, driver_name, zone_name){
 # so the rose shows both the driver's climatology and whether the plume
 # responds differently when it comes from a given direction, in one plot.
 # plot_driver_rose("wind", get_zone_meta(mouth_name = "Grand Rhone"))
-plot_driver_rose <- function(driver_name, meta, n_sectors = 16){
+# Residual of plume_area after removing flow's linear effect (df must have
+# both columns) -- the "what's left once discharge is accounted for" signal
+# shared by plot_driver_rose() and plot_driver_category_scatter() below.
+flow_controlled_residual <- function(df){
+  residuals(lm(plume_area ~ flow, data = df))
+}
+
+# df_flow (columns date/plume_area/flow, as combine_plume_driver("flow", meta)
+# |> select(date, plume_area, flow = value) produces) lets a caller that
+# already has it -- e.g. Figure_7_driver_rose(), calling this twice per zone
+# for wind and wave -- pass it in once rather than recomputing the same
+# join/STL for every call; defaults to computing it here for standalone use.
+plot_driver_rose <- function(driver_name, meta, n_sectors = 16, df_flow = NULL){
   driver_name <- match.arg(driver_name, c("wind", "wave"))
   dir_col <- paste0(driver_name, "_dir")
   disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
 
-  df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
+  if(is.null(df_flow)){
+    df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
+  }
   df_driver <- load_driver(driver_name, meta)
 
   df <- df_flow |>
@@ -494,7 +521,7 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 16){
     return(invisible(pl))
   }
 
-  df$area_resid <- residuals(lm(plume_area ~ flow, data = df))
+  df$area_resid <- flow_controlled_residual(df)
 
   sector_width <- 360 / n_sectors
   df$sector <- (round(df[[dir_col]] / sector_width) %% n_sectors) * sector_width
@@ -540,7 +567,7 @@ plot_driver_category_scatter <- function(meta){
     dplyr::left_join(df_wind, by = "date") |>
     dplyr::left_join(df_wave, by = "date") |>
     tidyr::drop_na(plume_area, flow, wind_spd, direction, wave_height)
-  df$area_resid <- residuals(lm(plume_area ~ flow, data = df))
+  df$area_resid <- flow_controlled_residual(df)
 
   df$wind_category <- dplyr::case_when(
     df$wind_spd < 3       ~ "calm (<3 m/s)",

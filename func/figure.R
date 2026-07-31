@@ -22,6 +22,14 @@ library(magick)
 # separate, wider lat/lon_range_of_the_map_to_plot (map-cropping extent only).
 source("func/util.R")
 
+# For zone_meta/get_zone_meta/combine_plume_driver/plot_driver_rose/etc,
+# used by Figure_5_driver_comparison()/Figure_7_driver_rose()/
+# Figure_8_driver_category() below. (func/driver_interactions.R, needed only
+# by Figure_9_gam_partial(), is sourced lazily inside that one function
+# instead -- it pulls in several heavyweight modelling packages (mgcv,
+# gratia, ranger, iml) not worth loading for every other figure in this file.)
+source("func/multi.R")
+
 
 # Tests -------------------------------------------------------------------
 
@@ -222,7 +230,7 @@ make_the_X11_plot_of_river_and_plume <- function(X11_data, type_of_signal) {
 
 Figure_1 <- function(where_to_save_the_figure) {
 
-  main_folder_of_Figure_1 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_1")
+  main_folder_of_Figure_1 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_1")
 
   SPM_map <- file.path( main_folder_of_Figure_1, "DATA", "SPM_map.csv" ) %>% read_csv()
   insitu_stations <- file.path( main_folder_of_Figure_1, "DATA", "Stations_position.csv" ) %>% read_csv()
@@ -290,17 +298,7 @@ Figure_1 <- function(where_to_save_the_figure) {
       dplyr::filter(lon >= limits$lon_min, lon <= limits$lon_max,
                     lat >= limits$lat_min, lat <= limits$lat_max)
 
-    zone_stations <- insitu_stations %>%
-      dplyr::filter(LONGITUDE >= limits$lon_min, LONGITUDE <= limits$lon_max,
-                    LATITUDE >= limits$lat_min, LATITUDE <= limits$lat_max)
-
     create_the_basic_map(zone_SPM, 'SPM') +
-      geom_point(data = zone_stations %>% dplyr::filter(SOURCE == 'REPHY'),
-                 aes(x = LONGITUDE, y = LATITUDE),
-                 fill = "red", color = "black", size = 2, shape = 24, stroke = 0.6) +
-      geom_point(data = zone_stations %>% dplyr::filter(SOURCE == 'SOMLIT'),
-                 aes(x = LONGITUDE, y = LATITUDE),
-                 fill = "red", color = "black", size = 3.5, shape = 21, stroke = 0.8) +
       ggtitle(zone_river_labels[[zone_name]]) +
       theme_void() +
       theme(legend.position = "none",
@@ -407,7 +405,7 @@ regional_zone_maps_panels <- function(data_folder, include_station_points) {
 # longer produced standalone -- it is embedded directly in Figure_1().
 regional_zone_maps <- function(where_to_save_the_figure, include_station_points) {
 
-  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_1")
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_1")
 
   SPM_maps <- regional_zone_maps_panels(main_folder, include_station_points)
 
@@ -427,7 +425,7 @@ regional_zone_maps <- function(where_to_save_the_figure, include_station_points)
 # automatically next time this runs.
 Figure_2 <- function(spm_scatterplot_path, chla_scatterplot_path, where_to_save_the_figure) {
 
-  main_folder_of_Figure_2 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_2")
+  main_folder_of_Figure_2 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_2")
   if (!dir.exists(main_folder_of_Figure_2)) dir.create(main_folder_of_Figure_2, recursive = TRUE)
 
   label_panel <- function(path, label) {
@@ -449,7 +447,7 @@ Figure_2 <- function(spm_scatterplot_path, chla_scatterplot_path, where_to_save_
 }
 
 
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURES/FIGURE_4'
+# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_3'
 # name_of_the_plot <- "C"
 Figure_4 <- function(where_to_save_the_figure, name_of_the_plot) {
   
@@ -480,7 +478,7 @@ Figure_4 <- function(where_to_save_the_figure, name_of_the_plot) {
 }
 
 
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURES/FIGURE_5'
+# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_5'
 Figure_5 <- function(where_to_save_the_figure) {
   
   SPM_map_data <- where_to_save_the_figure %>% file.path('DATA') %>% 
@@ -497,14 +495,17 @@ Figure_5 <- function(where_to_save_the_figure) {
     
   })
   
-  save_plot_as_png(ggarrange(plotlist = SPM_maps, common.legend = TRUE), 
-                   'Figure_5', width = 28, height = 16, path = where_to_save_the_figure)
-  
+  save_plot_as_png(ggarrange(plotlist = SPM_maps, common.legend = TRUE),
+                   'zone_maps_panel', width = 28, height = 16, path = where_to_save_the_figure)
+
 }
 
 
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURES/FIGURES_6_7'
-Figures_6_7 <- function(where_to_save_the_figure) {
+# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_4'
+# where_to_save_the_figure_s1: separate folder for Figure_7_threshold.png
+# (manuscript Figure S1) -- kept distinct from where_to_save_the_figure so
+# every manuscript figure has its own FIGURE_* folder (2026-08-01).
+Figures_6_7 <- function(where_to_save_the_figure, where_to_save_the_figure_s1) {
 
   SPM_map_data <- where_to_save_the_figure %>% file.path('DATA', 'ts_data.csv') %>% read_csv()
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
@@ -589,8 +590,8 @@ Figures_6_7 <- function(where_to_save_the_figure) {
     
   })
   
-  save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"), 
-                   'Figure_6', width = 20, height = 16, path = where_to_save_the_figure)
+  save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                   'Figure_4', width = 20, height = 16, path = where_to_save_the_figure)
   
   save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"), 
                    'Figure_7_merged_modis', width = 20, height = 16, path = where_to_save_the_figure)
@@ -651,7 +652,7 @@ Figures_6_7 <- function(where_to_save_the_figure) {
   })
   
   save_plot_as_png(ggarrange(plotlist = SPM_map_ts, common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
-                   'Figure_7_threshold', width = 20, height = 16, path = where_to_save_the_figure)
+                   'Figure_S1', width = 20, height = 16, path = where_to_save_the_figure_s1)
 
 }
 
@@ -665,20 +666,31 @@ Figures_6_7 <- function(where_to_save_the_figure) {
 # plot_driver_plume_comparison()) would duplicate manuscript Figure 4 -- and
 # caps the lag search at 14 days (vs. that function's default 30) per
 # Robert's request. Distinct from the Figure_5() function above (regional
-# zone maps feeding the Figure 3 composite): that name was already taken
-# before this figure existed, and manuscript.tex's own "Figure 5" caption
-# had no generator at all until now (see [[project_manuscript_pipeline_gaps]]
-# item 4).
+# zone maps, now folded into the Figure 3 composite rather than a standalone
+# figure): manuscript.tex's own "Figure 5" caption had no generator at all
+# until now (see [[project_manuscript_pipeline_gaps]] item 4).
 Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily = 14){
 
-  # Sourced here rather than at file scope: multi.R pulls in tidync/ncdf4
-  # (for load_plume_surface(), unused by this function) which fails to load
-  # under rpy2's embedded R in this environment, and would otherwise break
-  # every other figure.R function called from Python via source(figure.R).
-  source("func/multi.R")
-
-  main_folder_of_Figure_5_driver <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_5")
+  # FIGURE_5 (not FIGURE_5_DRIVER): Figure_5() above no longer writes here --
+  # its regional-zone-maps panel now feeds the Figure 3 composite directly
+  # (see Figure_3() / figure.py::Figure_5()), freeing this folder for the
+  # actual manuscript Figure 5.
+  main_folder_of_Figure_5_driver <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_5")
   if (!dir.exists(main_folder_of_Figure_5_driver)) dir.create(main_folder_of_Figure_5_driver, recursive = TRUE)
+
+  # ggplot_theme()'s font sizes are tuned for the single-column, 4-row
+  # figures elsewhere (e.g. Figures_6_7); an 8-panel 2x4 grid needs smaller
+  # text and explicit margins so axis titles don't clip against the plot
+  # edge or the panel above. Same theme for every zone, so built once here
+  # rather than inside the per-zone loop below.
+  panel_theme <- theme(plot.title = element_text(hjust = 0.5, size = 20),
+                       axis.title = element_text(size = 15, colour = "black"),
+                       axis.text = element_text(size = 12, colour = "black"),
+                       plot.margin = margin(t = 8, r = 12, b = 5, l = 5),
+                       panel.background = element_blank(),
+                       panel.grid.major = element_blank(),
+                       panel.grid.minor = element_blank(),
+                       panel.border = element_rect(linetype = "solid", fill = NA))
 
   panels <- purrr::pmap(zone_meta, function(...){
     meta <- tibble::tibble(...)
@@ -687,19 +699,6 @@ Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily =
     cor_df <- driver_plume_correlation(df, max_lag_daily = max_lag_daily) %>%
       dplyr::filter(timestep == "daily")
     peak <- cor_df %>% dplyr::slice_max(cor, n = 1)
-
-    # ggplot_theme()'s font sizes are tuned for the single-column, 4-row
-    # figures elsewhere (e.g. Figures_6_7); an 8-panel 2x4 grid needs smaller
-    # text and explicit margins so axis titles don't clip against the plot
-    # edge or the panel above.
-    panel_theme <- theme(plot.title = element_text(hjust = 0.5, size = 20),
-                         axis.title = element_text(size = 15, colour = "black"),
-                         axis.text = element_text(size = 12, colour = "black"),
-                         plot.margin = margin(t = 8, r = 12, b = 5, l = 5),
-                         panel.background = element_blank(),
-                         panel.grid.major = element_blank(),
-                         panel.grid.minor = element_blank(),
-                         panel.border = element_rect(linetype = "solid", fill = NA))
 
     scatter_plot <- ggplot(df, aes(x = value, y = plume_area)) +
       geom_point(alpha = 0.3, colour = "grey30", size = 0.8) +
@@ -735,14 +734,15 @@ Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily =
 # magnitude-only time series can't show.
 Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 16){
 
-  source("func/multi.R")  # see Figure_5_driver_comparison() for why this is lazy, not file-scope
-
-  main_folder_of_Figure_7 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_7")
+  main_folder_of_Figure_7 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_7")
   if (!dir.exists(main_folder_of_Figure_7)) dir.create(main_folder_of_Figure_7, recursive = TRUE)
 
   plotlist <- purrr::pmap(zone_meta, function(...){
     meta <- tibble::tibble(...)
-    list(wind = plot_driver_rose("wind", meta, n_sectors), wave = plot_driver_rose("wave", meta, n_sectors))
+    # One flow join/STL per zone, shared across the wind and wave roses below
+    # (plot_driver_rose() would otherwise recompute the identical df_flow twice).
+    df_flow <- combine_plume_driver("flow", meta) %>% dplyr::select(date, plume_area, flow = value)
+    list(wind = plot_driver_rose("wind", meta, n_sectors, df_flow), wave = plot_driver_rose("wave", meta, n_sectors, df_flow))
   }) %>% purrr::map(function(p) list(p$wind, p$wave)) %>% purrr::flatten()
 
   full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = nrow(zone_meta), align = "v")
@@ -757,9 +757,7 @@ Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 16){
 # concept (X11-decomposed wave-height magnitude time series).
 Figure_8_driver_category <- function(where_to_save_the_figure){
 
-  source("func/multi.R")  # see Figure_5_driver_comparison() for why this is lazy, not file-scope
-
-  main_folder_of_Figure_8 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_8")
+  main_folder_of_Figure_8 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_8")
   if (!dir.exists(main_folder_of_Figure_8)) dir.create(main_folder_of_Figure_8, recursive = TRUE)
 
   plotlist <- purrr::pmap(zone_meta, function(...){
@@ -786,9 +784,13 @@ Figure_8_driver_category <- function(where_to_save_the_figure){
 # full driver-interactions pipeline (GLM/regime/RF steps not needed here).
 Figure_9_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/STATS"){
 
-  source("func/driver_interactions.R")  # see Figure_5_driver_comparison() for why this is lazy, not file-scope
+  # Sourced here rather than at file scope (unlike multi.R above): this pulls
+  # in several heavyweight modelling packages (mgcv, gratia, ranger, iml)
+  # that only this one figure function needs -- not worth loading for every
+  # other figure in this file.
+  source("func/driver_interactions.R")
 
-  main_folder_of_Figure_9 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_9")
+  main_folder_of_Figure_9 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_9")
   if (!dir.exists(main_folder_of_Figure_9)) dir.create(main_folder_of_Figure_9, recursive = TRUE)
 
   driver_labels <- c(flow = "River flow (m³ s⁻¹)", wind_spd = "Wind speed (m s⁻¹)",
@@ -799,15 +801,17 @@ Figure_9_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/S
     gam_model <- fit_gam(df)
     drivers_to_show <- intersect(names(driver_labels), available_drivers(df))
 
-    purrr::imap(drivers_to_show, function(d, i){
+    zone_plots <- purrr::map(drivers_to_show, function(d){
       curve <- gam_partial_effect(gam_model, d, df)
       ggplot(curve, aes(x = x, y = fit)) +
         geom_ribbon(aes(ymin = fit - 2 * se, ymax = fit + 2 * se), fill = "grey80", alpha = 0.5) +
         geom_line(colour = "black", linewidth = 1) +
-        labs(x = driver_labels[[d]], y = "Partial effect on plume area (km²)",
-            title = if(i == 1) stringr::str_replace_all(zone_name, "_", " ") else NULL) +
+        labs(x = driver_labels[[d]], y = "Partial effect on plume area (km²)") +
         theme(panel.border = element_rect(fill = NA, colour = "black"))
     })
+    # Only the row's first panel gets the zone name as a title.
+    zone_plots[[1]] <- zone_plots[[1]] + labs(title = stringr::str_replace_all(zone_name, "_", " "))
+    zone_plots
   }) %>% purrr::flatten()
 
   full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = length(driver_labels), nrow = length(zones), align = "v")
@@ -816,43 +820,156 @@ Figure_9_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/S
 }
 
 
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURES/FIGURES_8_9_10'
-Figures_8_9_10 <- function(where_to_save_the_figure) {
-  
-  plume_data <- where_to_save_the_figure %>% file.path('DATA', 'ts_plume_data.csv') %>% read_csv()
-  river_data <- where_to_save_the_figure %>% file.path('DATA', 'ts_river_data.csv') %>% read_csv()
-  
+# Computes the per-zone X11 Interannual/Seasonal/Residual plots for one
+# threshold (dynamic or static) from the weekly plume/river time series
+# prepped by figure.py's Figure_X11_weekly_results(). Pure computation, no
+# saving -- shared by the four Figure_*_x11_*() functions below so the
+# per-zone join/plot logic isn't duplicated per manuscript figure.
+# Replaces the old Figures_8_9_10() (2026-08-01, deprecated): that function
+# also computed a "Raw" signal plot per zone that was never saved anywhere
+# (dead computation), dropped here.
+compute_x11_zone_plots <- function(data_dir){
+  plume_data <- data_dir %>% file.path('DATA', 'ts_plume_data.csv') %>% read_csv()
+  river_data <- data_dir %>% file.path('DATA', 'ts_river_data.csv') %>% read_csv()
+
   regions <- unique(plume_data$Zone) %>% sort()
-  
-  X11_all_ts <- regions %>% llply(function(region) {
-    
+
+  regions %>% llply(function(region) {
+
     plume_data_region <- plume_data %>% filter(Zone == region)
     river_data_region <- river_data %>% filter(Zone == region)
-    
+
     X11_ts <- plume_data_region %>% inner_join(river_data_region, by = "dates", suffix = c("_plume_area", "_river_flow"))
-    
-    Raw_plot <- make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Raw')
-    
-    Interannual_plot <- make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Interannual')
-    
-    Seasonal_plot <- make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Seasonal')
-    
-    Residual_plot <- make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Residual')
-    
-    return(list("Interannual" = Interannual_plot + labs(title = region %>% str_replace_all("_", " ")),
-                "Seasonal" = Seasonal_plot + labs(title = region %>% str_replace_all("_", " ")),
-                "Residual" = Residual_plot + labs(title = region %>% str_replace_all("_", " "))))
-    
+
+    zone_title <- region %>% str_replace_all("_", " ")
+    list("Interannual" = make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Interannual') + labs(title = zone_title),
+        "Seasonal" = make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Seasonal') + labs(title = zone_title),
+        "Residual" = make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Residual') + labs(title = zone_title))
+
   })
-  
-  save_plot_as_png(ggarrange(plotlist = X11_all_ts %>% llply(function(x) {x$Seasonal}), ncol = 1, nrow = 4, align = "v"), 
-                   'Figure_8', width = 20, height = 16, path = where_to_save_the_figure)
-  
-  save_plot_as_png(ggarrange(plotlist = X11_all_ts %>% llply(function(x) {x$Interannual}), ncol = 1, nrow = 4, align = "v"), 
-                   'Figure_9', width = 20, height = 16, path = where_to_save_the_figure)
-  
-  save_plot_as_png(ggarrange(plotlist = X11_all_ts %>% llply(function(x) {x$Residual}), ncol = 1, nrow = 4, align = "v"), 
-                   'Figure_10', width = 20, height = 16, path = where_to_save_the_figure)
-  
+}
+
+# Stacks one X11 component (Interannual/Seasonal/Residual) across all 4
+# zones into a single column -- the layout shared by every figure below.
+stack_x11_component <- function(zone_plots, component){
+  ggarrange(plotlist = zone_plots %>% llply(function(x) x[[component]]), ncol = 1, nrow = 4, align = "v")
+}
+
+# manuscript Figure 6: X11 interannual (long-term) signal of plume area vs.
+# river flow, dynamic threshold (main results), all four zones.
+Figure_6_x11_interannual <- function(where_to_save_the_figure){
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
+  zone_plots <- compute_x11_zone_plots(main_folder)
+  save_plot_as_png(stack_x11_component(zone_plots, "Interannual"), "Figure_6", width = 20, height = 16, path = main_folder)
+}
+
+# Renders each of two X11-component stacks (e.g. Seasonal + Residual) to its
+# own PNG first, then composites them with magick::image_append(stack=TRUE)
+# -- nesting a second ggarrange() around two already-4-row ggarrange() stacks
+# instead corrupts the rotated secondary-axis text (checked visually: the
+# y-axis labels overlap into an unreadable smear). Compositing at the image
+# level, like the pre-2026-08-01 Figure_8/Figure_10 assembly did, avoids this.
+save_x11_two_component_composite <- function(zone_plots, components, name, path){
+  panel_files <- purrr::map_chr(components, function(component){
+    save_plot_as_png(stack_x11_component(zone_plots, component), paste0(name, "_", tolower(component)),
+                     width = 20, height = 16, path = path)
+    file.path(path, paste0(name, "_", tolower(component), ".png"))
+  })
+  composite <- magick::image_append(magick::image_read(panel_files), stack = TRUE)
+  magick::image_write(composite, file.path(path, paste0(name, ".png")))
+}
+
+# manuscript Figure S3: X11 seasonal + residual components, dynamic
+# threshold, all four zones -- the two components not shown in main Figure 6.
+# Shares Figure 6's DATA/ prep (data_dir points at FIGURE_6/, not FIGURE_S3/).
+Figure_S3_x11_components <- function(where_to_save_the_figure){
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S3")
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+  zone_plots <- compute_x11_zone_plots(data_dir)
+  save_x11_two_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S3", main_folder)
+}
+
+# manuscript Figure S6: X11 interannual signal, static threshold
+# (supplementary robustness check) -- mirrors Figure 6.
+Figure_S6_x11_interannual_static <- function(where_to_save_the_figure){
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S6")
+  zone_plots <- compute_x11_zone_plots(main_folder)
+  save_plot_as_png(stack_x11_component(zone_plots, "Interannual"), "Figure_S6", width = 20, height = 16, path = main_folder)
+}
+
+# manuscript Figure S7: X11 seasonal + residual components, static threshold
+# -- mirrors Figure S3. Shares Figure S6's DATA/ prep.
+Figure_S7_x11_components_static <- function(where_to_save_the_figure){
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S6")
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S7")
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+  zone_plots <- compute_x11_zone_plots(data_dir)
+  save_x11_two_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S7", main_folder)
+}
+
+# manuscript Figure S4: seasonal (JJA vs. NDJ) boxplots of plume metrics,
+# dynamic vs. static threshold, all four zones. Migrated 2026-08-01 from
+# manuscript/make_figures_tables.R::generate_figure_s4_seasonal_thresholds()
+# into the real pipeline (called from code/5_figures.py) so it writes
+# straight to figures/ARTICLE/FIGURE_S4/ instead of via the
+# manuscript/figures/ copy step.
+Figure_S4_seasonal_boxplots <- function(where_to_save_the_figure){
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S4")
+
+  zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
+  zone_labels <- c(
+    BAY_OF_SEINE      = "Bay of Seine",
+    BAY_OF_BISCAY     = "Bay of Biscay",
+    SOUTHERN_BRITTANY = "Southern Brittany",
+    GULF_OF_LION      = "Gulf of Lion"
+  )
+  metrics <- c(
+    area_of_the_plume_mask_in_km2           = "Plume area (km²)",
+    mean_SPM_in_the_plume_area              = "Mean SPM (g m⁻³)",
+    lon_weighted_centroid_of_the_plume_area = "Centroid longitude (°E)",
+    lat_weighted_centroid_of_the_plume_area = "Centroid latitude (°N)"
+  )
+
+  all_data <- bind_rows(lapply(c("dynamic", "static"), function(thresh){
+    bind_rows(lapply(zones, function(zone){
+      csv_path <- file.path("output", "panache", thresh, zone, "Results.csv")
+      if (!file.exists(csv_path)) {
+        message("Figure S4: skipping (not found): ", csv_path)
+        return(NULL)
+      }
+      read_csv(csv_path, show_col_types = FALSE) %>%
+        mutate(date = as.Date(date), month = as.integer(format(date, "%m")), zone = zone, threshold = thresh)
+    }))
+  }))
+
+  if (nrow(all_data) == 0) {
+    message("Figure S4: no Results.csv files found -- skipping.")
+    return(invisible(FALSE))
+  }
+
+  seasonal_data <- all_data %>%
+    filter(month %in% c(6L, 7L, 8L, 11L, 12L, 1L)) %>%
+    mutate(season = case_when(month %in% c(6L, 7L, 8L) ~ "Summer (JJA)",
+                              month %in% c(11L, 12L, 1L) ~ "Winter (NDJ)"),
+           zone = factor(zone, levels = zones, labels = zone_labels[zones]),
+           threshold = factor(threshold, levels = c("dynamic", "static"), labels = c("Dynamic", "Static"))) %>%
+    select(date, zone, threshold, season, all_of(names(metrics))) %>%
+    pivot_longer(cols = names(metrics), names_to = "metric", values_to = "value") %>%
+    mutate(metric = factor(metric, levels = names(metrics), labels = unname(metrics)))
+
+  p <- ggplot(seasonal_data, aes(x = season, y = value, fill = threshold)) +
+    geom_boxplot(outlier.size = 0.5, outlier.alpha = 0.4, position = position_dodge(0.75)) +
+    facet_grid(metric ~ zone, scales = "free_y") +
+    scale_fill_manual(values = c("Dynamic" = "#2166ac", "Static" = "#d6604d"), name = "Threshold") +
+    labs(x = NULL, y = NULL) +
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(size = 8), legend.position = "bottom",
+         axis.text.x = element_text(angle = 20, hjust = 1), panel.grid.minor = element_blank())
+
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+  ggsave(file.path(main_folder, "Figure_S4.png"), p, width = 14, height = 12, dpi = 150)
+  message("Wrote Figure_S4.png (", nrow(seasonal_data), " observations across available zones and thresholds)")
+  invisible(TRUE)
 }
 

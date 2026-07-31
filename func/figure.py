@@ -13,6 +13,7 @@ import xarray as xr
 import pandas as pd
 import rpy2.robjects as robjects
 from functools import reduce
+from PIL import Image
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
@@ -128,7 +129,7 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
 def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_figure,
                             date_of_the_map, coordinates_of_the_map) :
 
-    folder_where_to_save_Figure_1_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURES', 'FIGURE_1', 'DATA')
+    folder_where_to_save_Figure_1_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
     os.makedirs(folder_where_to_save_Figure_1_data, exist_ok = True)
     
     path_to_nc_file = (path_to_fill_to_where_to_save_satellite_files(where_are_saved_satellite_data)
@@ -156,7 +157,7 @@ def load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_m
     # (with SOMLIT/REPHY stations) -- so they are written into FIGURE_1's own
     # DATA folder, not a separate FIGURE_2 (manuscript Figure 2 is the
     # satellite-vs-in-situ validation scatterplot from func/validate.py).
-    folder_where_to_save_regional_zone_maps_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURES', 'FIGURE_1', 'DATA')
+    folder_where_to_save_regional_zone_maps_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
     os.makedirs(folder_where_to_save_regional_zone_maps_data, exist_ok = True)
     
     path_to_regional_maps = {key : (path_to_fill_to_where_to_save_satellite_files( os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', key) )
@@ -330,7 +331,13 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
 
     inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
 
-    where_to_save_the_figure_4 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_4")
+    # Panels A-E feed the Figure 3 composite only (methodology figure); they
+    # are not manuscript Figure 4 (that's Figures_6_7()'s Figure_6.png/time
+    # series, now saved into its own FIGURE_4/ folder). Writing straight into
+    # FIGURE_3/ avoids the folder-name/manuscript-number mismatch this used
+    # to have (2026-08-01) -- same fix already applied to Figure_5()'s
+    # zone-maps panel.
+    where_to_save_the_figure_4 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
 
     the_plume = Create_the_plume_mask(ds_reduced,
                                       bathymetry_data_aligned_to_reduced_map,
@@ -409,8 +416,12 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
     # 'SOUTHERN_BRITTANY' : '2008-01-26',# '2022-01-21',
     # 'BAY_OF_SEINE' : '2018-02-25'}
 
-    where_to_save_the_figure_5 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURE_5")
-    os.makedirs(where_to_save_the_figure_5, exist_ok=True)
+    # Folded into Figure 3 (methodology composite) rather than a standalone
+    # manuscript figure -- this panel is now an input to Figure_3(), not
+    # FIGURE_5 (which is manuscript Figure 5, the plume-vs-flow driver
+    # comparison produced by Figure_5_driver_comparison()).
+    where_to_save_the_figure_5 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
+    os.makedirs(os.path.join(where_to_save_the_figure_5, "DATA"), exist_ok=True)
 
     for Zone, Date in the_dates_for_each_zone.items():
 
@@ -521,6 +532,53 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
                        include_station_points=False)
 
 
+def Figure_3(where_to_save_the_figure):
+    """
+    Assembles manuscript Figure 3 (plume-detection methodology): panels A-D
+    from Figure_4() side by side on top, the per-zone plume maps panel from
+    Figure_5() (zone_maps_panel.png) stacked below. Both Figure_4() and
+    Figure_5() write their intermediates straight into FIGURE_3/ (neither is
+    a standalone manuscript figure), so this just reads them back out and
+    composites -- must be called after both.
+
+    Panels A-D are resized down to the zone-maps panel's native width
+    (preserving aspect ratio) before the horizontal/vertical stack, rather
+    than upscaling the zone-maps panel to match a wider top row -- avoids
+    blurring the source PNGs.
+    """
+    figure_3_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
+    os.makedirs(figure_3_dir, exist_ok=True)
+
+    panel_paths = [os.path.join(figure_3_dir, f"{letter}.png") for letter in "ABCD"]
+    zone_maps_path = os.path.join(figure_3_dir, "zone_maps_panel.png")
+    missing = [p for p in panel_paths + [zone_maps_path] if not os.path.exists(p)]
+    if missing:
+        raise FileNotFoundError(
+            "Figure_3() inputs missing: " + ", ".join(missing) +
+            " -- run Figure_4() and Figure_5() first."
+        )
+
+    zone_maps_panel = Image.open(zone_maps_path)
+    target_width = zone_maps_panel.width
+    tile_width = target_width // 4
+
+    tiles = []
+    for p in panel_paths:
+        panel = Image.open(p)
+        tile_height = round(tile_width * panel.height / panel.width)
+        tiles.append(panel.resize((tile_width, tile_height), Image.LANCZOS))
+
+    top_row = Image.new("RGB", (tile_width * 4, tiles[0].height), "white")
+    for i, tile in enumerate(tiles):
+        top_row.paste(tile, (tile_width * i, 0))
+
+    composite = Image.new("RGB", (target_width, top_row.height + zone_maps_panel.height), "white")
+    composite.paste(top_row, (0, 0))
+    composite.paste(zone_maps_panel, (0, top_row.height))
+
+    composite.save(os.path.join(figure_3_dir, "Figure_3.png"))
+
+
 def Figure_5_driver_comparison(where_to_save_the_figure, max_lag_daily=14):
     """manuscript Figure 5: plume-area-vs-flow scatter + lagged correlation, one row per zone.
     Distinct from Figure_5() above (regional zone maps feeding the Figure 3
@@ -582,7 +640,11 @@ def Figure_9_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
 def Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold,
                where_are_saved_plume_results_with_fixed_threshold,
                where_to_save_the_figure):
-    where_to_save_the_figures_6_7 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURES_6_7")
+    # Its own Figure_6.png (now renamed Figure_4.png -- see figure.R) is
+    # manuscript Figure 4, not 6/7 -- kept in its own FIGURE_4/ folder
+    # instead of the historically-named FIGURES_6_7/ (2026-08-01, matches
+    # every other figure's folder-name-equals-manuscript-number convention).
+    where_to_save_the_figures_6_7 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
     os.makedirs(where_to_save_the_figures_6_7 + '/DATA', exist_ok=True)
 
     # Source util.R (via figure.R) to grab the same zone-specific
@@ -622,15 +684,26 @@ def Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold,
     pd.concat([ts_data_with_dynamic_threshold, ts_data_with_fixed_threshold]).to_csv(
         os.path.join(where_to_save_the_figures_6_7, 'DATA', 'ts_data.csv'))
 
+    # Figure_7_threshold.png (manuscript Figure S1) gets its own FIGURE_S1
+    # folder, distinct from FIGURE_4/ -- every manuscript figure has its own
+    # FIGURE_* folder (2026-08-01).
+    where_to_save_the_figure_s1 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S1")
+
     r_function = robjects.r['Figures_6_7']
 
     # Call the R function
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figures_6_7]))
+    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figures_6_7]),
+               where_to_save_the_figure_s1=robjects.StrVector([where_to_save_the_figure_s1]))
 
 
-def Figure_8_9_10(where_are_saved_X11_results, where_to_save_the_figure):
-    where_to_save_the_figures_8_9_10 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURES", "FIGURES_8_9_10")
-    os.makedirs(where_to_save_the_figures_8_9_10 + '/DATA', exist_ok=True)
+def _prep_x11_weekly_data(where_are_saved_X11_results, data_dir):
+    """
+    Reads the weekly X11-decomposed plume-area/river-flow time series for
+    all 4 zones and writes the combined ts_plume_data.csv/ts_river_data.csv
+    that figure.R's compute_x11_zone_plots() reads. Shared by the dynamic
+    and static calls in Figure_X11_weekly_results() below.
+    """
+    os.makedirs(os.path.join(data_dir, 'DATA'), exist_ok=True)
 
     ts_plume_files = glob.glob(
         os.path.join(where_are_saved_X11_results, '*', 'X11_ANALYSIS', 'area_of_the_plume_mask_in_km2',
@@ -655,18 +728,46 @@ def Figure_8_9_10(where_are_saved_X11_results, where_to_save_the_figure):
         ts_data['Zone'] = region_found
         ts_river_data.append(ts_data)
 
-    pd.concat(ts_plume_data).to_csv(os.path.join(where_to_save_the_figures_8_9_10, 'DATA', 'ts_plume_data.csv'))
-    pd.concat(ts_river_data).to_csv(os.path.join(where_to_save_the_figures_8_9_10, 'DATA', 'ts_river_data.csv'))
+    pd.concat(ts_plume_data).to_csv(os.path.join(data_dir, 'DATA', 'ts_plume_data.csv'))
+    pd.concat(ts_river_data).to_csv(os.path.join(data_dir, 'DATA', 'ts_river_data.csv'))
 
-    # Source the R script
+
+def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static,
+                              where_to_save_the_figure):
+    """
+    Replaces the deprecated Figure_8_9_10()/Figures_8_9_10(), which produced
+    3 plots (Seasonal/Interannual/Residual) per threshold but only wired the
+    dynamic-threshold ones into the manuscript (Figure 6, Figure S3) --
+    its static-threshold counterpart was computed and saved but never cited
+    anywhere (2026-08-01 audit). This version wires all 4 real manuscript
+    figures: Figure 6 + Figure S3 (dynamic), Figure S6 + Figure S7 (static,
+    supplementary robustness check mirroring 6/S3).
+    """
+    figure_6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
+    figure_s6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S6")
+    _prep_x11_weekly_data(where_are_saved_X11_results_dynamic, figure_6_dir)
+    _prep_x11_weekly_data(where_are_saved_X11_results_static, figure_s6_dir)
+
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
-    # robjects.r['source']("myRIOMAR_dev/_5_Figures_for_article/utils.R")
 
-    r_function = robjects.r['Figures_8_9_10']
+    for r_func_name in ['Figure_6_x11_interannual', 'Figure_S3_x11_components',
+                       'Figure_S6_x11_interannual_static', 'Figure_S7_x11_components_static']:
+        try:
+            robjects.r[r_func_name](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+        except Exception as e:
+            print(f"Warning: {r_func_name} R plot failed: {e}. Skipping.")
 
-    try:
-        r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figures_8_9_10]))
-    except Exception as e:
-        print(f"Warning: Figure_8_9_10 R plot failed for {where_are_saved_X11_results}: {e}. Skipping.")
+
+def Figure_S4_seasonal_boxplots(where_to_save_the_figure):
+    """
+    Migrated 2026-08-01 from manuscript/make_figures_tables.R's
+    generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
+    writes straight to figures/ARTICLE/FIGURE_S4/ instead of via the
+    manuscript/figures/ copy step. No Python-side data prep needed -- the R
+    function reads output/panache/{dynamic,static}/{zone}/Results.csv directly.
+    """
+    figure_R_path = os.path.join(func_dir, 'figure.R')
+    robjects.r['source'](figure_R_path)
+    robjects.r['Figure_S4_seasonal_boxplots'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
