@@ -49,7 +49,7 @@ def build_plume_parameters(Zone):
     """
     RiOMar's own figure-display parameters (map-crop extent, resolution
     reduction), overlaid with panache's authoritative algorithm parameters
-    -- so Figure_4()/Figure_5() detect plumes exactly as the real pipeline
+    -- so Figure_3_panels()/Figure_3_zone_maps() detect plumes exactly as the real pipeline
     does, not as RiOMar's older, now-unmaintained local fork of the
     algorithm would.
     """
@@ -117,7 +117,7 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    r_function = robjects.r['Figure_4']
+    r_function = robjects.r['Figure_3_panel']
 
     # Call the R function
     r_function(
@@ -297,7 +297,10 @@ def Figure_2(where_to_save_the_figure):
                where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
+def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
+    # Renamed from Figure_4 (2026-08-01): produces the A-E methodology panels
+    # for manuscript Figure 3, never manuscript Figure 4 (that name was left
+    # over from before the manuscript was renumbered).
 
     # Static date for each zone to illustrate the plume detection steps
     Zone = 'GULF_OF_LION'
@@ -332,11 +335,11 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
     inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
 
     # Panels A-E feed the Figure 3 composite only (methodology figure); they
-    # are not manuscript Figure 4 (that's Figures_6_7()'s Figure_6.png/time
-    # series, now saved into its own FIGURE_4/ folder). Writing straight into
-    # FIGURE_3/ avoids the folder-name/manuscript-number mismatch this used
-    # to have (2026-08-01) -- same fix already applied to Figure_5()'s
-    # zone-maps panel.
+    # are not manuscript Figure 4 (that's Figure_4_timeseries()'s
+    # Figure_4.png, saved into its own FIGURE_4/ folder). Writing straight
+    # into FIGURE_3/ avoids the folder-name/manuscript-number mismatch this
+    # used to have (2026-08-01) -- same fix already applied to
+    # Figure_3_zone_maps()'s zone-maps panel.
     where_to_save_the_figure_4 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
 
     the_plume = Create_the_plume_mask(ds_reduced,
@@ -403,7 +406,10 @@ def Figure_4(where_are_saved_regional_maps, where_to_save_the_figure):
              name_of_the_plot='E')
 
 
-def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
+def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
+    # Renamed from Figure_5 (2026-08-01): produces zone_maps_panel.png, an
+    # input to manuscript Figure 3, never manuscript Figure 5 (that's
+    # Figure_5_driver_comparison()'s Figure_5.png).
     the_dates_for_each_zone = dates_for_each_zone()
 
     plume_fixed_thresholds = {
@@ -522,7 +528,7 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
     robjects.r['source'](figure_R_path)
     # robjects.r['source']("myRIOMAR_dev/_5_Figures_for_article/utils.R")
 
-    r_function = robjects.r['Figure_5']
+    r_function = robjects.r['Figure_3_zone_maps']
 
     # Call the R function
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure_5]))
@@ -535,10 +541,10 @@ def Figure_5(where_are_saved_regional_maps, where_to_save_the_figure):
 def Figure_3(where_to_save_the_figure):
     """
     Assembles manuscript Figure 3 (plume-detection methodology): panels A-D
-    from Figure_4() side by side on top, the per-zone plume maps panel from
-    Figure_5() (zone_maps_panel.png) stacked below. Both Figure_4() and
-    Figure_5() write their intermediates straight into FIGURE_3/ (neither is
-    a standalone manuscript figure), so this just reads them back out and
+    from Figure_3_panels() side by side on top, the per-zone plume maps panel
+    from Figure_3_zone_maps() (zone_maps_panel.png) stacked below. Both write
+    their intermediates straight into FIGURE_3/ (neither is a standalone
+    manuscript figure itself), so this just reads them back out and
     composites -- must be called after both.
 
     Panels A-D are resized down to the zone-maps panel's native width
@@ -555,7 +561,7 @@ def Figure_3(where_to_save_the_figure):
     if missing:
         raise FileNotFoundError(
             "Figure_3() inputs missing: " + ", ".join(missing) +
-            " -- run Figure_4() and Figure_5() first."
+            " -- run Figure_3_panels() and Figure_3_zone_maps() first."
         )
 
     zone_maps_panel = Image.open(zone_maps_path)
@@ -637,15 +643,17 @@ def Figure_9_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
                stats_dir=robjects.StrVector([stats_dir]))
 
 
-def Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold,
-               where_are_saved_plume_results_with_fixed_threshold,
-               where_to_save_the_figure):
-    # Its own Figure_6.png (now renamed Figure_4.png -- see figure.R) is
-    # manuscript Figure 4, not 6/7 -- kept in its own FIGURE_4/ folder
-    # instead of the historically-named FIGURES_6_7/ (2026-08-01, matches
-    # every other figure's folder-name-equals-manuscript-number convention).
-    where_to_save_the_figures_6_7 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
-    os.makedirs(where_to_save_the_figures_6_7 + '/DATA', exist_ok=True)
+def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
+                           where_are_saved_plume_results_with_fixed_threshold,
+                           where_to_save_the_figure):
+    # Renamed from Figure_6_7 (2026-08-01): that name matched neither of the
+    # two manuscript figures it actually produces (4 and S1) -- left over
+    # from before the manuscript was renumbered. Data prep here is shared
+    # (both dynamic- and fixed-threshold Results.csv, all zones); the R side
+    # is now two separate functions, Figure_4_timeseries() and
+    # Figure_S1_thresholds(), each reading the same ts_data.csv this writes.
+    figure_4_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
+    os.makedirs(figure_4_dir + '/DATA', exist_ok=True)
 
     # Source util.R (via figure.R) to grab the same zone-specific
     # plume_area_ceiling used by load_plume_ts() -- this function reads
@@ -682,18 +690,14 @@ def Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold,
     ts_data_with_fixed_threshold['Dynamic_threshold'] = False
 
     pd.concat([ts_data_with_dynamic_threshold, ts_data_with_fixed_threshold]).to_csv(
-        os.path.join(where_to_save_the_figures_6_7, 'DATA', 'ts_data.csv'))
+        os.path.join(figure_4_dir, 'DATA', 'ts_data.csv'))
 
-    # Figure_7_threshold.png (manuscript Figure S1) gets its own FIGURE_S1
-    # folder, distinct from FIGURE_4/ -- every manuscript figure has its own
-    # FIGURE_* folder (2026-08-01).
-    where_to_save_the_figure_s1 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S1")
-
-    r_function = robjects.r['Figures_6_7']
-
-    # Call the R function
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figures_6_7]),
-               where_to_save_the_figure_s1=robjects.StrVector([where_to_save_the_figure_s1]))
+    # Both R functions take the top-level "figures" path and build their own
+    # ARTICLE/FIGURE_* subfolder internally (matching every other figure
+    # function's convention) -- Figure_S1_thresholds() reads the same
+    # ts_data.csv from FIGURE_4/DATA/ that Figure_4_timeseries() just wrote.
+    robjects.r['Figure_4_timeseries'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+    robjects.r['Figure_S1_thresholds'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
 def _prep_x11_weekly_data(where_are_saved_X11_results, data_dir):

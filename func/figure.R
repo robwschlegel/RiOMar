@@ -447,9 +447,12 @@ Figure_2 <- function(spm_scatterplot_path, chla_scatterplot_path, where_to_save_
 }
 
 
+# Renders one methodology panel (A-E) for manuscript Figure 3 -- renamed
+# from Figure_4 (2026-08-01): it has never produced manuscript Figure 4,
+# that name was left over from before the manuscript was renumbered.
 # where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_3'
 # name_of_the_plot <- "C"
-Figure_4 <- function(where_to_save_the_figure, name_of_the_plot) {
+Figure_3_panel <- function(where_to_save_the_figure, name_of_the_plot) {
   
   SPM_map_data <- read_csv(file.path( where_to_save_the_figure, "DATA", paste(name_of_the_plot, ".csv", sep = "") ))
   
@@ -478,8 +481,11 @@ Figure_4 <- function(where_to_save_the_figure, name_of_the_plot) {
 }
 
 
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_5'
-Figure_5 <- function(where_to_save_the_figure) {
+# Renders the per-zone plume-maps panel feeding manuscript Figure 3 --
+# renamed from Figure_5 (2026-08-01): it produces zone_maps_panel.png, not
+# manuscript Figure 5 (that's Figure_5_driver_comparison()'s Figure_5.png).
+# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_3'
+Figure_3_zone_maps <- function(where_to_save_the_figure) {
   
   SPM_map_data <- where_to_save_the_figure %>% file.path('DATA') %>% 
     list.files(pattern = "*.csv", full.names = TRUE) %>% 
@@ -501,17 +507,24 @@ Figure_5 <- function(where_to_save_the_figure) {
 }
 
 
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_4'
-# where_to_save_the_figure_s1: separate folder for Figure_7_threshold.png
-# (manuscript Figure S1) -- kept distinct from where_to_save_the_figure so
-# every manuscript figure has its own FIGURE_* folder (2026-08-01).
-Figures_6_7 <- function(where_to_save_the_figure, where_to_save_the_figure_s1) {
+# manuscript Figure 4: daily plume area + mean SPM concentration time
+# series (dynamic threshold, merged sensor), with an AR(1)/HAC-weighted
+# trend line, one panel per zone. Renamed from Figures_6_7 and split from
+# the threshold-comparison plot below (2026-08-01) -- that single function
+# used to produce two different manuscript figures (4 and S1) under one
+# name matching neither cleanly. Both still read the same
+# FIGURE_4/DATA/ts_data.csv (prepped once by figure.py's
+# Figure_4_S1_timeseries(), shared between this function and
+# Figure_S1_thresholds() below).
+# where_to_save_the_figure <- 'figures'
+Figure_4_timeseries <- function(where_to_save_the_figure){
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
 
-  SPM_map_data <- where_to_save_the_figure %>% file.path('DATA', 'ts_data.csv') %>% read_csv()
+  SPM_map_data <- main_folder %>% file.path('DATA', 'ts_data.csv') %>% read_csv()
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
 
-  # Plume-area trend line (manuscript Figure 4) uses the same AR(1)/HAC-weighted
-  # fit as Table 5's "Surface area" row -- see func/compute_area_trend.R.
+  # Plume-area trend line uses the same AR(1)/HAC-weighted fit as Table 5's
+  # "Surface area" row -- see func/compute_area_trend.R.
   area_trend <- read_csv("output/STATS/area_trend_summary.csv", show_col_types = FALSE)
 
   SPM_map_ts <- SPM_map_data %>% filter(Dynamic_threshold == 'Dynamic threshold') %>% dlply(.(Zone), function(df_zone) {
@@ -591,12 +604,25 @@ Figures_6_7 <- function(where_to_save_the_figure, where_to_save_the_figure_s1) {
   })
   
   save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
-                   'Figure_4', width = 20, height = 16, path = where_to_save_the_figure)
-  
-  save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"), 
-                   'Figure_7_merged_modis', width = 20, height = 16, path = where_to_save_the_figure)
-  
-  
+                   'Figure_4', width = 20, height = 16, path = main_folder)
+
+  save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                   'Figure_7_merged_modis', width = 20, height = 16, path = main_folder)
+}
+
+# manuscript Figure S1: plume-area time series, fixed vs. dynamic threshold
+# comparison, one panel per zone. Reads the same ts_data.csv Figure_4_timeseries()
+# does (both share one Python-side data prep), but writes to its own
+# FIGURE_S1/ folder rather than FIGURE_4/ -- every manuscript figure has its
+# own FIGURE_* folder (2026-08-01).
+# where_to_save_the_figure <- 'figures'
+Figure_S1_thresholds <- function(where_to_save_the_figure){
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S1")
+
+  SPM_map_data <- data_dir %>% file.path('DATA', 'ts_data.csv') %>% read_csv()
+  SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
+
   SPM_map_ts <- SPM_map_data %>% filter(Satellite_sensor == "merged") %>% dlply(.(Zone), function(df_zone) {
     
     unique_years <- df_zone$Years %>% unique()
@@ -652,7 +678,7 @@ Figures_6_7 <- function(where_to_save_the_figure, where_to_save_the_figure_s1) {
   })
   
   save_plot_as_png(ggarrange(plotlist = SPM_map_ts, common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
-                   'Figure_S1', width = 20, height = 16, path = where_to_save_the_figure_s1)
+                   'Figure_S1', width = 20, height = 16, path = main_folder)
 
 }
 

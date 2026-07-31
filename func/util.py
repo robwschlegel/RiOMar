@@ -583,8 +583,12 @@ def load_csv_files(SOMLIT = False, REPHY = False,
             df = pd.read_csv(file)
             data_dict[file.name] = df  # Store in dictionary
                     
-        for key, the_df in data_dict.items() :             
-            the_df.columns = ['date', 'debit']
+        for key, the_df in data_dict.items() :
+            # Select by name rather than blindly overwriting all column
+            # names positionally -- func/river_flow_prep.R's output now has
+            # a third 'flag' column (data provenance: measured/estimated),
+            # so `the_df.columns = ['date', 'debit']` raised a length-mismatch
+            # ValueError the moment a 3-column file was read (fixed 2026-08-02).
             the_df['date'] = pd.to_datetime(the_df['date'], format = "%Y-%m-%d")
             data_dict[key] = the_df.loc[:,['date', 'debit']]
     

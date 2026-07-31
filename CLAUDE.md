@@ -14,11 +14,16 @@ Each numbered script in [code/](code/) corresponds to a pipeline stage. Run them
 python code/0_download_data.py   # Download satellite + driver data (~hours, ~280 GB)
 python code/1_validate.py        # Satellite vs in situ match-up
 python code/2_regional_maps.py   # Create & QC regional maps
-# Step 3: plume detection via the external panache module (must be called from terminal directly):
-panache metadata/zone_config_GULF_OF_LION.json
-panache metadata/zone_config_BAY_OF_BISCAY.json
-panache metadata/zone_config_SOUTHERN_BRITTANY.json
-panache metadata/zone_config_BAY_OF_SEINE.json
+# Step 3: plume detection via the external panache module (must be called from terminal directly).
+# Two config variants per zone -- dynamic (main results) and static (supplementary) -- 8 calls total:
+panache metadata/zone_config_dynamic_GULF_OF_LION.json
+panache metadata/zone_config_dynamic_BAY_OF_BISCAY.json
+panache metadata/zone_config_dynamic_SOUTHERN_BRITTANY.json
+panache metadata/zone_config_dynamic_BAY_OF_SEINE.json
+panache metadata/zone_config_static_GULF_OF_LION.json
+panache metadata/zone_config_static_BAY_OF_BISCAY.json
+panache metadata/zone_config_static_SOUTHERN_BRITTANY.json
+panache metadata/zone_config_static_BAY_OF_SEINE.json
 python code/4_time_series.py     # X11 decomposition + driver comparisons
 python code/5_figures.py         # Publication figures
 ```

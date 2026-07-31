@@ -2481,7 +2481,7 @@ class Create_the_plume_mask :
         robjects.r['source'](figure_R_path)
         # robjects.r['source']("myRIOMAR_dev/_5_Figures_for_article/utils.R")
 
-        r_function = robjects.r['Figure_4']
+        r_function = robjects.r['Figure_3_panel']
 
         # Call the R function
         r_function(

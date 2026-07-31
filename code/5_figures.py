@@ -16,9 +16,9 @@ func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 import util, figure
-from figure import (Figure_1, Figure_2, Figure_3, Figure_4, Figure_5, Figure_5_driver_comparison,
+from figure import (Figure_1, Figure_2, Figure_3, Figure_3_panels, Figure_3_zone_maps, Figure_5_driver_comparison,
                     Figure_7_driver_rose, Figure_8_driver_category, Figure_9_gam_partial,
-                    Figure_6_7, Figure_X11_weekly_results, Figure_S4_seasonal_boxplots)
+                    Figure_4_S1_timeseries, Figure_X11_weekly_results, Figure_S4_seasonal_boxplots)
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg')
@@ -33,26 +33,26 @@ Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
 
 Figure_2(where_to_save_the_figure = "figures")
 
-Figure_4(where_are_saved_regional_maps = "output",
-         where_to_save_the_figure = "figures")
+Figure_3_panels(where_are_saved_regional_maps = "output",
+                where_to_save_the_figure = "figures")
 
-# Figure_5() writes its regional-zone-maps panel into FIGURE_3/ (folded into
-# the Figure 3 composite, not a standalone figure -- see figure.py's docstring)
-Figure_5(where_are_saved_regional_maps = "output",
-         where_to_save_the_figure = "figures")
+# Writes its regional-zone-maps panel into FIGURE_3/ (folded into the
+# Figure 3 composite, not a standalone figure -- see figure.py's docstring)
+Figure_3_zone_maps(where_are_saved_regional_maps = "output",
+                   where_to_save_the_figure = "figures")
 
-# Figure 3: plume-detection methodology composite (FIGURE_4 panels A-D +
-# Figure_5()'s zone-maps panel); must run after both Figure_4() and Figure_5()
+# Figure 3: plume-detection methodology composite (Figure_3_panels()' A-D
+# panels + Figure_3_zone_maps()' zone-maps panel); must run after both
 Figure_3(where_to_save_the_figure = "figures")
 
-# manuscript Figure 5: plume-area-vs-flow scatter + lagged correlation (distinct
-# from the Figure_5() regional-zone-maps call above -- see figure.py's docstring)
+# manuscript Figure 5: plume-area-vs-flow scatter + lagged correlation
 Figure_5_driver_comparison(where_to_save_the_figure = "figures")
 
-# Figure 6-7: compare dynamic vs static threshold plume detection
-Figure_6_7(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
-           where_are_saved_plume_results_with_fixed_threshold = "output/panache/static",
-           where_to_save_the_figure = "figures")
+# Figure 4 (plume area + mean SPM time series) + Figure S1 (dynamic vs.
+# static threshold comparison)
+Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
+                       where_are_saved_plume_results_with_fixed_threshold = "output/panache/static",
+                       where_to_save_the_figure = "figures")
 
 # manuscript Figures 7-9: wind/wave roses, flow-controlled wave/wind-category
 # scatter, and GAM partial-dependence curves -- replace the original X11-
