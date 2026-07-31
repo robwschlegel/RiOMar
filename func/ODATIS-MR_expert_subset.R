@@ -21,7 +21,6 @@ library(purrr)
 library(furrr)
 library(ggplot2)
 library(ncdf4)
-library(tidync)
 library(geosphere)
 library(raster)
 
@@ -60,17 +59,29 @@ extract_lon_lat_subset <- function(nc_file, lon_range, lat_range) {
   # Open the netCDF file
   nc_data <- nc_open(nc_file)
   nc_date_val <- as.Date(ncatt_get(nc_data, varid = 0)[["period_start_day"]], format = "%Y%m%d")
+
+  lon <- ncvar_get(nc_data, "lon")
+  lat <- ncvar_get(nc_data, "lat")
+  lon_idx <- which(lon >= lon_range[1] & lon <= lon_range[2])
+  lat_idx <- which(lat >= lat_range[1] & lat <= lat_range[2])
+
+  # Every data variable in the file (i.e. every non-dimension variable)
+  # gridded onto the same (lon, lat) subset -- generalises
+  # tidync::hyper_tibble()'s "grab every data var" default, which this
+  # function relied on rather than naming variables explicitly.
+  data_vars <- setdiff(names(nc_data$var), names(nc_data$dim))
+  df_sub <- expand.grid(lon = lon[lon_idx], lat = lat[lat_idx])
+  for(v in data_vars){
+    arr <- ncvar_get(nc_data, v)[lon_idx, lat_idx, drop = FALSE]
+    df_sub[[v]] <- as.vector(arr)
+  }
   nc_close(nc_data)
 
-  # Get the data within the lon/lat range
-  df_sub <- tidync(nc_file) |> 
-    hyper_filter(lon = between(lon, lon_range[1], lon_range[2]),
-                  lat = between(lat, lat_range[1], lat_range[2])) |> 
-    hyper_tibble() |> 
+  df_sub <- df_sub |>
     mutate(lon = as.numeric(lon),
           lat = as.numeric(lat),
           date = as.Date(nc_date_val))
-  
+
   # Exit
   return(df_sub)
 }

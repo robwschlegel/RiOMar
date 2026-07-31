@@ -13,7 +13,6 @@ library(tidyverse)
 library(furrr)
 library(raster) # Used here to select specific pixels in a .nc file
 library(ncdf4)
-library(tidync)
 library(sf) # Used for complex shape files
 library(scales) # For better plot labels
 library(ggExtra) # For histogram border plots

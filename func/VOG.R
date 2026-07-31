@@ -38,13 +38,19 @@ extract_csv <- function(file_name, polygon_sf){
   # Then get the data from the corresponding day of SEXTANT data
   if(file.exists(sextant_file)){
 
-    # Load daa roughly to shape of .csv file
-    sextant_data <- tidync::tidync(sextant_file) |> 
-      tidync::hyper_filter(lon = between(lon, range(df_csv$lon)[1]-0.05, range(df_csv$lon)[2]+0.05),
-                           lat = between(lat, range(df_csv$lat)[1]-0.05, range(df_csv$lat)[2]+0.05)) |>
-      tidync::hyper_tibble() |> 
-      dplyr::select(lon, lat, spm = analysed_spim) |> 
-      mutate(lon = round(as.numeric(lon) / 0.005) * 0.005, 
+    # Load data roughly to shape of .csv file
+    nc_data <- ncdf4::nc_open(sextant_file)
+    lon <- ncdf4::ncvar_get(nc_data, "lon")
+    lat <- ncdf4::ncvar_get(nc_data, "lat")
+    lon_idx <- which(lon >= range(df_csv$lon)[1] - 0.05 & lon <= range(df_csv$lon)[2] + 0.05)
+    lat_idx <- which(lat >= range(df_csv$lat)[1] - 0.05 & lat <= range(df_csv$lat)[2] + 0.05)
+    spm <- ncdf4::ncvar_get(nc_data, "analysed_spim")[lon_idx, lat_idx, drop = FALSE]
+    ncdf4::nc_close(nc_data)
+
+    sextant_data <- expand.grid(lon = lon[lon_idx], lat = lat[lat_idx]) |>
+      mutate(spm = as.vector(spm)) |>
+      dplyr::select(lon, lat, spm) |>
+      mutate(lon = round(as.numeric(lon) / 0.005) * 0.005,
              lat = round(as.numeric(lat), 2),
              spm = round(spm, 2))
 

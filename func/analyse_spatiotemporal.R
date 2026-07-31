@@ -10,7 +10,7 @@
 
 # Load necessary libraries
 library(tidyverse)
-library(tidync)
+library(ncdf4)
 library(gganimate)
 library(doParallel); registerDoParallel(cores = 14)
 
@@ -30,19 +30,31 @@ lat_range <- c(43.44, 43.73)
 # lon_range <- c(1, 4)
 load_sextant <- function(file_name, lon_range, lat_range){
 
+  nc_data <- nc_open(file_name)
+  on.exit(nc_close(nc_data))
+
   # Find the date
-  sextant_one_date <- as.Date(tidync(file_name)[["attribute"]][["value"]][["start_date"]])
-  
+  sextant_one_date <- as.Date(ncatt_get(nc_data, varid = 0, "start_date")$value)
+
+  lon <- ncvar_get(nc_data, "lon")
+  lat <- ncvar_get(nc_data, "lat")
+  lon_idx <- which(lon >= lon_range[1] & lon <= lon_range[2])
+  lat_idx <- which(lat >= lat_range[1] & lat <= lat_range[2])
+
+  # ncvar_get() returns (lon, lat) here since the file's single time step
+  # collapses out automatically (drop = TRUE default)
+  mask <- ncvar_get(nc_data, "mask")[lon_idx, lat_idx, drop = FALSE]
+  analysed_spim <- ncvar_get(nc_data, "analysed_spim")[lon_idx, lat_idx, drop = FALSE]
+
   # The necessary code
-  sextant_one <- tidync(file_name) |> 
-    hyper_filter(lon = lon >= lon_range[1] & lon <= lon_range[2],
-                 lat = lat >= lat_range[1] & lat <= lat_range[2]) |> 
-    hyper_tibble() |> 
+  sextant_one <- expand.grid(lon = lon[lon_idx], lat = lat[lat_idx]) |>
     mutate(lon = as.numeric(lon),
            lat = as.numeric(lat),
-           date = sextant_one_date) |> 
+           date = sextant_one_date,
+           mask = as.vector(mask),
+           analysed_spim = as.vector(analysed_spim)) |>
     dplyr::select(lon, lat, date, mask, analysed_spim)
-  
+
   # Exit
   return(sextant_one)
 }

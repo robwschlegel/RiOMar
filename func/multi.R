@@ -137,8 +137,7 @@
 # Libraries ---------------------------------------------------------------
 
 library(tidyverse)
-library(tidync)
-library(ncdf4) # For reading PlumeMasks.nc (load_plume_surface, util.R)
+library(ncdf4) # For reading NetCDF sources (load_plume_surface, load_wind_sub, load_wave, etc. -- util.R)
 library(heatwaveR) # For seasonal smoothing analysis
 library(seasonal) # For X11 analysis (currently not used)
 library(RcppRoll) # For running means to get STL interannual signals closer to X11
@@ -452,6 +451,112 @@ plot_driver_plume_dual_axis <- function(df, driver_name, zone_name){
   ggsave(filename = paste0("figures/driver_comparison/dual_axis_", driver_name, "_plume_", zone_name, ".png"),
          plot = pl, width = 12, height = 6, dpi = 300)
   invisible(pl)
+}
+
+# Direction/magnitude rose for wind or wave, coloured by the flow-controlled
+# plume-area response -- manuscript Figure 7. Replaces plotting wind/wave as
+# a raw magnitude time series (the original Figs 7-9 concept): Robert's
+# point was that wind and wave direction matter as much or more than
+# magnitude, which a time series of speed/height alone can't show. Bar
+# length/frequency = how often the driver comes from that compass sector;
+# fill colour = mean plume-area residual (after removing flow's effect via
+# a plain lm(plume_area ~ flow), same logic as
+# rhone_wind_wave_beyond_season()'s area_resid) for days in that sector --
+# so the rose shows both the driver's climatology and whether the plume
+# responds differently when it comes from a given direction, in one plot.
+# plot_driver_rose("wind", get_zone_meta(mouth_name = "Grand Rhone"))
+plot_driver_rose <- function(driver_name, meta, n_sectors = 16){
+  driver_name <- match.arg(driver_name, c("wind", "wave"))
+  dir_col <- paste0(driver_name, "_dir")
+  disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
+
+  df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
+  df_driver <- load_driver(driver_name, meta)
+
+  df <- df_flow |>
+    dplyr::left_join(df_driver, by = "date") |>
+    tidyr::drop_na(plume_area, flow, dplyr::all_of(dir_col))
+
+  # Bay of Seine's wave file has no VMDR (direction) variable at all (see
+  # load_wave()'s NB 2) -- drop_na() above empties df entirely in that case.
+  # A blank rose would be misleading (looks like "no data collected" rather
+  # than "direction not available"), so say so explicitly instead.
+  if(nrow(df) == 0){
+    pl <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5, label = paste0(toupper(driver_name), " direction\nnot available\nfor this zone"),
+               size = 5, colour = "grey40") +
+      xlim(0, 1) + ylim(0, 1) +
+      labs(title = paste0(meta$mouth_name, ": ", tolower(disp$driver_label))) +
+      theme_void() + theme(plot.title = element_text(hjust = 0.5))
+
+    ggsave(filename = paste0("figures/driver_comparison/rose_", driver_name, "_plume_", meta$mouth_name, ".png"),
+          plot = pl, width = 7, height = 6, dpi = 300)
+    return(invisible(pl))
+  }
+
+  df$area_resid <- residuals(lm(plume_area ~ flow, data = df))
+
+  sector_width <- 360 / n_sectors
+  df$sector <- (round(df[[dir_col]] / sector_width) %% n_sectors) * sector_width
+
+  df_summary <- df |>
+    dplyr::summarise(n_days = dplyr::n(),
+                     mean_area_resid = mean(area_resid, na.rm = TRUE), .by = "sector")
+
+  compass_breaks <- seq(0, 360 - sector_width, by = max(sector_width, 45))
+  compass_labels <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")[seq_along(compass_breaks)]
+
+  pl <- ggplot(df_summary, aes(x = sector, y = n_days, fill = mean_area_resid)) +
+    geom_col(width = sector_width * 0.9, colour = "grey30", linewidth = 0.2) +
+    coord_polar(start = -(sector_width / 2) * pi / 180) +
+    scale_x_continuous(breaks = compass_breaks, labels = compass_labels, limits = c(0, 360)) +
+    scale_fill_gradient2(low = "steelblue", mid = "grey90", high = "firebrick", midpoint = 0,
+                        name = "Plume-area\nresidual (km²)") +
+    labs(x = NULL, y = "Days", title = paste0(meta$mouth_name, ": ", tolower(disp$driver_label))) +
+    theme_minimal() +
+    theme(panel.grid.major = element_line(colour = "grey85"), plot.title = element_text(hjust = 0.5))
+
+  ggsave(filename = paste0("figures/driver_comparison/rose_", driver_name, "_plume_", meta$mouth_name, ".png"),
+        plot = pl, width = 7, height = 6, dpi = 300)
+  invisible(pl)
+}
+
+# Flow-controlled plume-area residual vs. wave height, coloured by on/off-
+# shore wind category -- manuscript Figure 8. Generalises
+# rhone_wind_wave_beyond_season()'s pl_wave panel (Gulf of Lion only, with a
+# bespoke Mistral/onshore/calm classification tuned to that zone's
+# geography -- left as-is above, since it's a specific side-study, not
+# replaced) to all four zones, using the generic on/off-shore
+# classification wind_add_direction() already computes for every zone. Uses
+# wave HEIGHT only (not direction), so this works for the Bay of Seine too,
+# despite that zone's missing VMDR (see load_wave()'s NB 2).
+# plot_driver_category_scatter(get_zone_meta(mouth_name = "Grand Rhone"))
+plot_driver_category_scatter <- function(meta){
+  df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
+  df_wind <- load_driver("wind", meta) |> dplyr::select(date, wind_spd = value, direction)
+  df_wave <- load_driver("wave", meta) |> dplyr::select(date, wave_height = value)
+
+  df <- df_flow |>
+    dplyr::left_join(df_wind, by = "date") |>
+    dplyr::left_join(df_wave, by = "date") |>
+    tidyr::drop_na(plume_area, flow, wind_spd, direction, wave_height)
+  df$area_resid <- residuals(lm(plume_area ~ flow, data = df))
+
+  df$wind_category <- dplyr::case_when(
+    df$wind_spd < 3       ~ "calm (<3 m/s)",
+    df$direction == "off" ~ "offshore",
+    TRUE                  ~ "onshore"
+  )
+  df$wind_category <- factor(df$wind_category, levels = c("calm (<3 m/s)", "onshore", "offshore"))
+  category_colours <- c("calm (<3 m/s)" = "grey50", "onshore" = "steelblue", "offshore" = "firebrick")
+
+  ggplot(df, aes(x = wave_height, y = area_resid, colour = wind_category)) +
+    geom_point(alpha = 0.25, size = 0.8) +
+    geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
+    scale_colour_manual(values = category_colours) +
+    labs(x = "Wave height (m)", y = "Flow-controlled plume-area residual (km²)",
+        colour = NULL, title = meta$mouth_name) +
+    theme(panel.border = element_rect(fill = NA, colour = "black"), legend.position = "bottom")
 }
 
 # AR(1)-weighted / STL-weighted / unweighted linear trend + Newey-West (HAC)

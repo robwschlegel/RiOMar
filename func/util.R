@@ -722,14 +722,65 @@ load_tide_gauge <- function(dir_name){
   list(speed = speed, direction = direction)
 }
 
+# Decode a NetCDF file's numeric time variable into Date, following the CF
+# "<seconds|hours|days> since <origin>" units convention used by every
+# NetCDF source read below. Replaces tidync's automatic CF time decoding
+# (see .nc_read_box() below for why tidync was dropped).
+.nc_time_to_date <- function(nc, time_var = "time"){
+  units_str <- ncatt_get(nc, time_var, "units")$value
+  m <- regmatches(units_str, regexec("^(seconds|hours|days) since (.+)$", units_str))[[1]]
+  if(length(m) != 3) stop("Unrecognised time units string: ", units_str)
+  multiplier <- switch(m[2], seconds = 1, hours = 3600, days = 86400)
+  raw <- ncvar_get(nc, time_var)
+  as.Date(as.POSIXct(raw * multiplier, origin = m[3], tz = "UTC"))
+}
+
+# Read one or more variables from a NetCDF file, cropped to a lon/lat box, as
+# a long (lon, lat, date, <var>...) tibble -- replaces
+# tidync::tidync() |> hyper_filter() |> hyper_tibble(). Switched from tidync
+# to ncdf4 throughout this repo (2026-07-31) because tidync's RNetCDF
+# dependency fails to load under rpy2's embedded R in this environment
+# ("RNetCDF.so: undefined symbol: nc_reclaim_data"), even though it loads
+# fine under a plain Rscript session; ncdf4 has no such conflict.
+# ncdf4::ncvar_get() returns arrays ordered (lon, lat, [depth,] time) for
+# every product read here; a middle depth dimension of size 1 (GLORYS
+# current files) is read down to a single level via start/count so it
+# collapses out, leaving the same (lon, lat, time) shape as the 3-D case.
+.nc_read_box <- function(file_name, var_names, lon_range, lat_range,
+                         lon_var = "longitude", lat_var = "latitude", time_var = "time"){
+  nc <- nc_open(file_name)
+  on.exit(nc_close(nc))
+
+  lon <- ncvar_get(nc, lon_var)
+  lat <- ncvar_get(nc, lat_var)
+  lon_idx <- which(lon >= lon_range[1] & lon <= lon_range[2])
+  lat_idx <- which(lat >= lat_range[1] & lat <= lat_range[2])
+  date <- .nc_time_to_date(nc, time_var)
+
+  grid <- expand.grid(lon = lon[lon_idx], lat = lat[lat_idx], date = date)
+
+  for(v in var_names){
+    n_dims <- length(nc$var[[v]]$dim)
+    if(n_dims == 3){
+      arr <- ncvar_get(nc, v)[lon_idx, lat_idx, , drop = FALSE]
+    } else if(n_dims == 4){
+      dim_sizes <- nc$var[[v]]$size
+      arr_full <- ncvar_get(nc, v, start = c(1, 1, 1, 1),
+                            count = c(dim_sizes[1], dim_sizes[2], 1, dim_sizes[4]))
+      arr <- arr_full[lon_idx, lat_idx, , drop = FALSE]
+    } else {
+      stop("Unexpected variable dimensionality (", n_dims, "D) for ", v, " in ", file_name)
+    }
+    grid[[v]] <- as.vector(arr)
+  }
+
+  tibble::as_tibble(grid)
+}
+
 # Load wind data
 load_wind_sub <- function(file_name, lon_range, lat_range){
-  wind_df <- tidync(file_name) |>
-    hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
-                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |>
-    hyper_tibble() |>
-    dplyr::rename(u = eastward_wind, v = northward_wind, lon = longitude, lat = latitude) |>
-    mutate(date = as.Date(time)) |>
+  wind_df <- .nc_read_box(file_name, c("eastward_wind", "northward_wind"), lon_range, lat_range) |>
+    dplyr::rename(u = eastward_wind, v = northward_wind) |>
     dplyr::select(date, lon, lat, u, v) |>
     dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
 
@@ -755,19 +806,30 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
 # is an arithmetic (not circular) mean, so any day where wave direction
 # crosses the 0/360 wrap can already carry a biased wave_dir before it
 # reaches this function.
+# NB 2 (found 2026-07-31, pre-dates the tidync->ncdf4 migration): the Bay of
+# Seine's wave file (IBI_daily_199801_202601.nc) has no VMDR variable at all
+# (VHM0 + VTM02 only, unlike the other three zones' VHM0 + VMDR) -- an
+# upstream download gap, not something fixable here. wave_dir is returned as
+# NA for that zone rather than erroring, so wave HEIGHT is still usable
+# everywhere; anything that needs wave_dir (e.g. plot_driver_rose()) must
+# handle an all-NA case for the Bay of Seine.
 load_wave <- function(file_name, lon_range, lat_range){
-  wave_df <- tidync(file_name) |>
-    hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
-                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |>
-    hyper_tibble() |>
-    dplyr::rename(wave_height = VHM0, wave_dir = VMDR, lon = longitude, lat = latitude) |>
-    mutate(date = as.Date(time)) |>
+  nc <- nc_open(file_name)
+  has_wave_dir <- "VMDR" %in% names(nc$var)
+  nc_close(nc)
+
+  var_names <- if(has_wave_dir) c("VHM0", "VMDR") else "VHM0"
+  wave_df_raw <- .nc_read_box(file_name, var_names, lon_range, lat_range) |>
+    dplyr::rename(wave_height = VHM0)
+  if(has_wave_dir) wave_df_raw <- dplyr::rename(wave_df_raw, wave_dir = VMDR) else wave_df_raw$wave_dir <- NA_real_
+
+  wave_df <- wave_df_raw |>
     dplyr::select(date, lon, lat, wave_height, wave_dir) |>
     dplyr::summarise(wave_height = mean(wave_height, na.rm = TRUE),
                      wave_dir_x = mean(sin(wave_dir * pi / 180), na.rm = TRUE),
                      wave_dir_y = mean(cos(wave_dir * pi / 180), na.rm = TRUE), .by = "date") |>
     dplyr::mutate(wave_height = round(wave_height, 2),
-                  wave_dir = round(atan2(wave_dir_x, wave_dir_y) * (180 / pi)) %% 360) |>
+                  wave_dir = if(has_wave_dir) round(atan2(wave_dir_x, wave_dir_y) * (180 / pi)) %% 360 else NA_real_) |>
     dplyr::select(date, wave_height, wave_dir)
 
   # Remove final day of data
@@ -779,12 +841,8 @@ load_wave <- function(file_name, lon_range, lat_range){
 
 # Load one GLORYS file's surface currents (uo/vo), reduced to the zone/box daily mean.
 .load_current_sub <- function(file_name, lon_range, lat_range){
-  tidync(file_name) |>
-    hyper_filter(longitude = dplyr::between(longitude, lon_range[1], lon_range[2]),
-                 latitude = dplyr::between(latitude, lat_range[1], lat_range[2])) |>
-    hyper_tibble(select_var = c("uo", "vo")) |>
-    dplyr::rename(u = uo, v = vo, lon = longitude, lat = latitude) |>
-    mutate(date = as.Date(time)) |>
+  .nc_read_box(file_name, c("uo", "vo"), lon_range, lat_range) |>
+    dplyr::rename(u = uo, v = vo) |>
     dplyr::select(date, lon, lat, u, v) |>
     dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
 }
@@ -822,11 +880,12 @@ load_ROFI <- function(file_name){
   } else {
     stop("Zone not recognised from ROFI file name")
   }
-  df_ROFI <- tidync(file_name) |> 
-    tidync::hyper_tibble() |> 
-    mutate(zone = zone,
-           date = as.Date(parse_date_time(time_counter, "Ymd HMS"))) |> 
-    dplyr::select(zone, date, ROFI_surface) |> 
+  nc <- nc_open(file_name)
+  date <- .nc_time_to_date(nc, "time_counter")
+  rofi_surface <- ncvar_get(nc, "ROFI_surface")
+  nc_close(nc)
+
+  df_ROFI <- tibble::tibble(zone = zone, date = date, ROFI_surface = rofi_surface) |>
     dplyr::summarise(ROFI_surface = mean(ROFI_surface, na.rm = TRUE), .by = c("zone", "date"))
   return(df_ROFI)
 }
