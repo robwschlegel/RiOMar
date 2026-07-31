@@ -11,6 +11,7 @@
 
 import os
 import sys
+import pandas as pd
 import matplotlib as mpl
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
@@ -19,7 +20,7 @@ sys.path.append( func_dir )
 
 import util, dl
 from util import daily_integral
-from dl import Download_satellite_data, Plot_and_Save_the_map, download_cmems_subset
+from dl import Download_satellite_data, Plot_and_Save_the_map, download_cmems_subset, download_hubeau_river_flow
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
@@ -104,6 +105,24 @@ for zone in zones_list:
 
 
 # =============================================================================
+#### Download river flow data
+# =============================================================================
+
+# Daily mean river discharge (QmnJ) from the Hub'Eau hydrometrie API,
+# replacing manual HydroPortail CSV exports. Station-to-zone mapping lives
+# in metadata/HydroPortail_station_list.csv.
+river_flow_meta = pd.read_csv('metadata/HydroPortail_station_list.csv')
+for zone in zones_list:
+    station_codes = river_flow_meta.loc[river_flow_meta['zone'] == zone, 'ID'].str.replace(' ', '')
+    for station_code in station_codes:
+        download_hubeau_river_flow(
+            station_code,
+            '1998-01-01', '2025-12-31',
+            f'data/RIVER_FLOW/{zone}/HydroPortail'
+        )
+
+
+# =============================================================================
 #### Download wave height data
 # =============================================================================
 
@@ -152,7 +171,7 @@ for zone in zones_list:
         zone,
         'cmems_mod_glo_phy_my_0.083deg_P1D-m',
         ['uo', 'vo', 'zos', 'thetao', 'bottomT', 'mlotst', 'so'],
-        '1993-01-01T00:00:00', '2024-12-31T00:00:00',
+        '1998-01-01T00:00:00', '2024-12-31T00:00:00',
         f'../pCloudDrive/data/GLORYS/{zone}'
     )
 

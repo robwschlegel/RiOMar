@@ -10,6 +10,7 @@
 import os, sys, subprocess, re, multiprocess, time, bz2, os, gzip, glob, pyinterp, gc, shutil
 import numpy as np
 import pandas as pd
+import requests
 import xarray as xr
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -1073,3 +1074,72 @@ def download_cmems_subset(
         )
     except ImportError:
         raise ImportError("copernicusmarine package is required. Install with 'conda install copernicusmarine'.")
+
+def download_hubeau_river_flow(
+    station_code,
+    start_day,
+    end_day,
+    output_directory,
+    overwrite = False
+):
+    """
+    Download daily mean river discharge (QmnJ) for a single station from the
+    Hub'Eau hydrometrie API (obs_elab endpoint), replacing manual HydroPortail
+    CSV exports. Output matches the existing HydroPortail CSV convention
+    (columns "Date (TU)" and "Valeur (en m³/s)") so downstream R code
+    (func/river_flow_prep.R) needs no changes.
+
+    Args:
+        station_code (str): HydroPortail/Hub'Eau station code, spaces allowed.
+        start_day (str): Start date, "YYYY-MM-DD".
+        end_day (str): End date, "YYYY-MM-DD".
+        output_directory (str): Directory to save the output CSV.
+        overwrite (bool): Re-download even if the output file already exists.
+
+    Returns:
+        None
+    """
+
+    station_code = station_code.replace(" ", "")
+
+    # Check/create dir
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory, exist_ok=True)
+
+    # Create output filename based on station code and date range
+    start_year = pd.to_datetime(start_day).strftime('%Y')
+    end_year = pd.to_datetime(end_day).strftime('%Y')
+    output_filename = f"{station_code}_QmnJ_{start_year}_{end_year}.csv"
+
+    # Skip the rest if not overwrite and the file already exists
+    output_path = os.path.join(output_directory, output_filename)
+    if not overwrite:
+        if os.path.exists(output_path):
+            print(f"File already exists and overwrite is False: {output_path}")
+            return
+
+    # Query the Hub'Eau hydrometrie obs_elab endpoint
+    response = requests.get(
+        "https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab",
+        params={
+            "code_entite": station_code,
+            "grandeur_hydro_elab": "QmnJ",
+            "date_debut_obs_elab": start_day,
+            "date_fin_obs_elab": end_day,
+            "size": 20000,
+            "format": "json"
+        }
+    )
+    response.raise_for_status()
+    records = [r for r in response.json()["data"] if r["resultat_obs_elab"] is not None]
+
+    if len(records) == 0:
+        print(f"No Hub'Eau records returned for station {station_code}")
+        return
+
+    # Build the output dataframe, converting L/s (Hub'Eau) to m3/s (existing convention)
+    df = pd.DataFrame({
+        "Date (TU)": [r["date_obs_elab"] for r in records],
+        "Valeur (en m³/s)": [r["resultat_obs_elab"] / 1000 for r in records]
+    })
+    df.to_csv(output_path, index = False)

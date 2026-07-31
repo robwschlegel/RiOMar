@@ -25,6 +25,10 @@ python code/5_figures.py         # Publication figures
 
 All scripts prepend `func/` to `sys.path` by setting `proj_dir` from `os.path.abspath('__file__')` — they must be executed from the repo root, not from inside `code/`.
 
+## Pipeline map (living document)
+
+A browsable map of which script produces which figure/table, where each output lands, and what's currently a known gap is maintained at https://claude.ai/code/artifact/fd8a00ad-f109-48cd-94c1-2cca329f657f. It is a living document, not a one-time snapshot — update it in place (same URL) whenever the pipeline's wiring changes (a figure function moves, an output path changes, a `\figplaceholder` gets repointed, a gap gets fixed or a new one is found).
+
 ## Data storage
 
 Large datasets are stored **outside** this repo under `~/pCloudDrive/data/` and are never committed. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.
@@ -62,4 +66,4 @@ is the standard argument passed to every major pipeline function. `util.define_p
 `dl.py`, `regmap.py`, `validate.py`, and `plume.py` all use `multiprocess` (not the stdlib `multiprocessing`). The start method is forced to `'spawn'` for macOS compatibility — do not change this.
 
 ### Rhône apportionment
-The Rhône splits near Arles into Grand Rhône and Petit Rhône. River flow is apportioned: 11% to Petit Rhône before 2012-05-28, 10% thereafter. This is baked into the flow preprocessing; do not recompute it from the total gauge reading without accounting for this split.
+The Rhône splits near Arles into Grand Rhône and Petit Rhône, each with its own gauge (Arles, Fourques) through 2022. From 2023 onward, both branches are extended from the upstream Tarascon gauge via a MOVE.1 log-log regression fit separately per branch on the full 1998–2022 overlap (`func/river_flow_prep.R`, `river_config`) — not a flat fraction of the combined discharge. (An earlier fixed-fraction rule — 11% to Petit Rhône before 2012-05-28, 10% thereafter — was superseded by this; it was never actually implemented in code and has been removed from the manuscript.)
