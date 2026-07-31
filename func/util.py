@@ -674,8 +674,8 @@ def define_parameters(Zone) :
         threshold_of_cloud_coverage_in_percentage = 25
         lat_range_of_the_map_to_plot = [49, 50.5] # [49.20, 51.25]
         lon_range_of_the_map_to_plot = [-1.5, 2] # [-1.5, 2.5]
-        lat_range_to_search_plume_area = [49.25, 50.25]
-        lon_range_to_search_plume_area = [-1.5, 0.5]
+        lat_range_of_plume_area = [49.25, 50.25]
+        lon_range_of_plume_area = [-1.5, 0.5]
         maximal_bathymetric_for_zone_with_resuspension = {'Seine' : 30}
         minimal_distance_from_estuary_for_zone_with_resuspension = {'Seine' : 30}
         max_steps_for_the_directions = {'Seine' : 40}
@@ -723,8 +723,8 @@ def define_parameters(Zone) :
         threshold_of_cloud_coverage_in_percentage = 25
         lat_range_of_the_map_to_plot = [45, 46.75] # [44.75, 46.75]
         lon_range_of_the_map_to_plot = [-4, -0.5] # [-4.5, -1]
-        lat_range_to_search_plume_area = [44.5, 46.5]
-        lon_range_to_search_plume_area = [-4, -0.5]
+        lat_range_of_plume_area = [44.5, 46.5]
+        lon_range_of_plume_area = [-4, -0.5]
         maximal_bathymetric_for_zone_with_resuspension = {'Gironde' : 20, 'Charente' : 20, 'Sevre' : 20}
         minimal_distance_from_estuary_for_zone_with_resuspension = {'Gironde' : 30, 'Charente' : 20, 'Sevre' : 20}
         max_steps_for_the_directions = {'Gironde' : 100, 'Charente' : 50, 'Sevre' : 50}
@@ -762,8 +762,8 @@ def define_parameters(Zone) :
         threshold_of_cloud_coverage_in_percentage = 25
         lat_range_of_the_map_to_plot = [42.25, 44] # [42, 43.7]
         lon_range_of_the_map_to_plot = [3, 6] # [2.75, 6.55]
-        lat_range_to_search_plume_area = [41, 44]
-        lon_range_to_search_plume_area = [3, 6]
+        lat_range_of_plume_area = [41, 44]
+        lon_range_of_plume_area = [3, 6]
         maximal_bathymetric_for_zone_with_resuspension = {'Grand Rhone' : 30, 'Petit Rhone' : 30}
         minimal_distance_from_estuary_for_zone_with_resuspension = {'Grand Rhone' : 30, 'Petit Rhone' : 30}
         max_steps_for_the_directions = {'Grand Rhone' : 35, 'Petit Rhone' : 35}
@@ -837,8 +837,8 @@ def define_parameters(Zone) :
         threshold_of_cloud_coverage_in_percentage = 25
         lat_range_of_the_map_to_plot = [49.20, 51.5]
         lon_range_of_the_map_to_plot = [-1.5, 3]
-        lat_range_to_search_plume_area = [49.75, 49.75, 51.15, 50.4]
-        lon_range_to_search_plume_area = [0.5, 1.75, 1.75, 0.5]
+        lat_range_of_plume_area = [49.75, 49.75, 51.15, 50.4]
+        lon_range_of_plume_area = [0.5, 1.75, 1.75, 0.5]
         max_steps_for_the_directions = {'Arques' : None, 'Bresle' : None, 'Somme' : None,
                                         'Authie' : None, 'Canche' : None, 'Liane' : None}
         river_mouth_to_exclude = {}
@@ -869,8 +869,8 @@ def define_parameters(Zone) :
         threshold_of_cloud_coverage_in_percentage = 25
         lat_range_of_the_map_to_plot = [46, 48] # [46, 48.5]
         lon_range_of_the_map_to_plot = [-5, -1] # [-5, -1.5]
-        lat_range_to_search_plume_area = [46.5, 48]
-        lon_range_to_search_plume_area = [-5, -1.5]
+        lat_range_of_plume_area = [46.5, 48]
+        lon_range_of_plume_area = [-5, -1.5]
         maximal_bathymetric_for_zone_with_resuspension = {'Loire' : 20, 'Vilaine' : 20}
         minimal_distance_from_estuary_for_zone_with_resuspension = {'Loire' : 20, 'Vilaine' : 20}
         max_steps_for_the_directions = { 'Loire' : 100, 'Vilaine' : 50}
@@ -899,8 +899,8 @@ def define_parameters(Zone) :
         'threshold_of_cloud_coverage_in_percentage' : threshold_of_cloud_coverage_in_percentage,
         'lat_range_of_the_map_to_plot' : lat_range_of_the_map_to_plot, 
         'lon_range_of_the_map_to_plot' : lon_range_of_the_map_to_plot, 
-        'lat_range_to_search_plume_area' : lat_range_to_search_plume_area, 
-        'lon_range_to_search_plume_area' : lon_range_to_search_plume_area,
+        'lat_range_of_plume_area' : lat_range_of_plume_area, 
+        'lon_range_of_plume_area' : lon_range_of_plume_area,
         'maximal_bathymetric_for_zone_with_resuspension' : maximal_bathymetric_for_zone_with_resuspension,
         'minimal_distance_from_estuary_for_zone_with_resuspension' : minimal_distance_from_estuary_for_zone_with_resuspension,
         'max_steps_for_the_directions' : max_steps_for_the_directions,

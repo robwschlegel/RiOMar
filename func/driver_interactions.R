@@ -188,6 +188,29 @@ plot_gam_figure <- function(gam_models, fig_path){
   invisible(combined)
 }
 
+# Partial-dependence curve for one driver from a fitted GAM: vary that
+# driver over its observed range while holding every other driver at its
+# median, predict plume_area from the model, and return the curve with a
+# +/-2SE band (predict.gam(se.fit = TRUE)). Works with fit_gam() as-is
+# (pairwise te() tensor smooths only, no univariate s() terms) since partial
+# dependence is a post-hoc prediction technique -- it doesn't need a
+# particular smooth-term structure, just a model to predict from. Used by
+# func/figure.R::Figure_9_gam_partial() (manuscript Figure 9).
+# gam_partial_effect(fit_gam(driver_matrices[["GULF_OF_LION"]]), "wind_spd", driver_matrices[["GULF_OF_LION"]])
+gam_partial_effect <- function(gam_model, driver_name, df, n_points = 50){
+  drivers <- available_drivers(df)
+  df_valid <- tidyr::drop_na(df, dplyr::all_of(c("plume_area", drivers)))
+
+  newdata <- as.data.frame(lapply(drivers, function(d) stats::median(df_valid[[d]], na.rm = TRUE)))
+  names(newdata) <- drivers
+  newdata <- newdata[rep(1, n_points), , drop = FALSE]
+  newdata[[driver_name]] <- seq(min(df_valid[[driver_name]], na.rm = TRUE),
+                                max(df_valid[[driver_name]], na.rm = TRUE), length.out = n_points)
+
+  pred <- stats::predict(gam_model, newdata = newdata, se.fit = TRUE)
+  tibble::tibble(driver_name = driver_name, x = newdata[[driver_name]], fit = pred$fit, se = pred$se.fit)
+}
+
 
 # Step 4: regime stratification ----------------------------------------------
 
