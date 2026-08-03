@@ -21,18 +21,14 @@ sys.path.append( func_dir )
 
 from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files,
                   align_bathymetry_to_resolution, define_parameters, order_zones)
-from validate import get_insitu_measurements
-# reduce_resolution/preprocess_annual_dataset_and_compute_land_mask are
-# RiOMar-specific figure-prep utilities with no equivalent in panache.
-# Create_the_plume_mask/Pipeline_to_delineate_the_plume/create_polygon_mask
+# Create_the_plume_mask/delineate_plume_pipeline/create_polygon_mask
 # used to be imported from this repo's own func/plume.py, which forked the
 # plume-detection algorithm and had drifted out of sync with the version
 # actually used to produce every other result in this project (e.g. it was
 # missing the near-mouth-quantile threshold-bound estimation panache gained
 # on 17 Jul). Now imported directly from the installed panache package so
 # Figure 3/4's methodology panels reflect the real, current algorithm.
-from plume import reduce_resolution, preprocess_annual_dataset_and_compute_land_mask
-from panache.plume_algorithm import Create_the_plume_mask, Pipeline_to_delineate_the_plume, create_polygon_mask
+from panache.plume_algorithm import Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask
 # panache.utils.define_parameters is a separately-maintained, cleaned-up
 # fork of this repo's own util.py::define_parameters -- it's authoritative
 # for anything the *algorithm* reads (thresholds, searching_strategies as
@@ -56,6 +52,50 @@ def build_plume_parameters(Zone):
     parameters = define_parameters(Zone)
     parameters.update(panache_define_parameters(Zone))
     return parameters
+
+
+def preprocess_annual_dataset_and_compute_land_mask(path_to_annual_ds, parameters) :
+
+    """
+    Load the annual map and use it to generate a land mask.
+
+    This function processes an annual dataset by loading it and generating
+    a land mask based on null values, at native resolution (plume detection
+    no longer coarsens the data -- see panache.plume_algorithm.main_process,
+    which sets ds_reduced = ds). RiOMar-specific figure-prep utility with no
+    equivalent in panache.
+
+    Parameters
+    ----------
+    path_to_annual_ds : str
+        the path to the annual (yearly) averaged dataset
+    parameters : dict
+        Configuration parameters for plume detection. It contains the limits of the polygon defining the searching area.
+
+    Returns
+    -------
+    tuple
+        A tuple containing:
+        - xarray.DataArray: Subset of the annual dataset for cloud coverage checks.
+        - xarray.DataArray: Boolean mask where True represents land and False represents water.
+    """
+
+    # Load the annual dataset for plume detection
+    with open(path_to_annual_ds, 'rb') as f:
+
+        multi_annual_ds = pickle.load(f)['Basin_map']['map_data']
+        multi_annual_ds.values[multi_annual_ds.values < 0] = np.nan
+
+    # Select a subset of the annual dataset based on the area to check for cloud coverage
+    multi_annual_ds_subset = multi_annual_ds.sel(lat=slice(parameters['lat_range_of_the_area_to_check_for_clouds'][0],
+                                                           parameters['lat_range_of_the_area_to_check_for_clouds'][1]),
+                                                lon=slice(parameters['lon_range_of_the_area_to_check_for_clouds'][0],
+                                                          parameters['lon_range_of_the_area_to_check_for_clouds'][1]))
+
+    # Create a land mask based on null values (land = True), at native resolution
+    land_mask = multi_annual_ds.isnull()
+
+    return multi_annual_ds_subset, land_mask
 
 
 # =============================================================================
@@ -195,7 +235,13 @@ def extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figu
     
     pd.DataFrame.from_dict(coordinates_of_the_RIOMARS).to_csv(folder_where_to_save_Figure_data + "/RIOMAR_limits.csv")
     
-    _, insitu_stations = get_insitu_measurements()
+    # Station coordinates -- written by func/validate.R's in-situ prep
+    # section (metadata/in_situ_site_list.csv), which replaced the retired
+    # func/validate.py::get_insitu_measurements() as the source of this data.
+    insitu_stations = pd.read_csv(os.path.join(proj_dir, 'metadata', 'in_situ_site_list.csv'))
+    insitu_stations = insitu_stations.rename(columns={'source': 'SOURCE', 'site': 'SITE',
+                                                       'lat': 'LATITUDE', 'lon': 'LONGITUDE',
+                                                       'zone': 'REGION'})
     station_LATITUDES = insitu_stations.LATITUDE.to_numpy(dtype=float)
     station_LONGITUDES = insitu_stations.LONGITUDE.to_numpy(dtype=float)
     
@@ -342,10 +388,9 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     with open(path_to_the_satellite_file_to_use, 'rb') as f:
         ds = pickle.load(f)['Basin_map']['map_data']
 
-    # Reduce the resolution of the dataset to the specified latitude and longitude resolutions
-    ds_reduced = (reduce_resolution(ds, parameters['lat_new_resolution'], parameters['lon_new_resolution'])
-                  if parameters['lat_new_resolution'] is not None
-                  else ds)
+    # Plume detection now runs at native resolution (panache no longer
+    # coarsens internally), so no resolution reduction happens here either.
+    ds_reduced = ds
 
     bathymetry_data_aligned_to_reduced_map = align_bathymetry_to_resolution(ds_reduced,
                                                                             f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
@@ -456,10 +501,10 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         with open(path_to_the_satellite_file_to_use, 'rb') as f:
             ds = pickle.load(f)['Basin_map']['map_data']
 
-            # Reduce the resolution of the dataset to the specified latitude and longitude resolutions
-        ds_reduced = (reduce_resolution(ds, parameters['lat_new_resolution'], parameters['lon_new_resolution'])
-                      if parameters['lat_new_resolution'] is not None
-                      else ds)
+            # Plume detection now runs at native resolution (panache no
+            # longer coarsens internally), so no resolution reduction
+            # happens here either.
+        ds_reduced = ds
 
         bathymetry_data_aligned_to_reduced_map = align_bathymetry_to_resolution(ds_reduced,
                                                                                 f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
@@ -487,7 +532,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         # Figure 3 panels looked implausibly small for their record area).
         for plume_name, starting_point in parameters['starting_points'].items():
 
-            the_plume = Pipeline_to_delineate_the_plume(ds_reduced,
+            the_plume = delineate_plume_pipeline(ds_reduced,
                                                         bathymetry_data_aligned_to_reduced_map,
                                                         land_mask,
                                                         parameters,

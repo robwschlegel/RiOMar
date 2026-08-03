@@ -128,7 +128,12 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
                                dplyr::select(SOMLIT, source, lon, lat, site)) |>
   distinct() |>
   summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |>
-  mutate(zone = case_when(lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
+  # Lanveoc (Rade de Brest, ~48.29N) sits just outside the Southern Brittany
+  # bbox (lat_max = 48.00), so the bbox check below would otherwise drop it
+  # entirely -- mirrors func/validate.py's region_mapping fix for the same
+  # station.
+  mutate(zone = case_when(site == "Lanvéoc" ~ "SOUTHERN_BRITTANY",
+                          lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
                             lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
                           lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] &
                             lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
@@ -140,8 +145,10 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
   mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
-# write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
-# in_situ_site_list <- read_csv("metadata/in_situ_site_list.csv")
+# Written for func/figure.py::save_insitu_stations_for_plot() (Figure 1's
+# station overlay) and re-read further below in this script's own
+# Validation tables section -- both need this on disk.
+write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
 
 # Filter in situ stations to just those within a zone
 zone_sites <- in_situ_site_list |> filter(!is.na(zone))
