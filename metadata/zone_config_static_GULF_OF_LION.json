@@ -5,8 +5,6 @@
   "bathymetry_path": "/home/calanus/RiOMar/output/panache/static/GULF_OF_LION/Bathy_data.pkl",
   "coast_shapefile": "/home/calanus/RiOMar/data/FRANCE_shapefile/gadm41_FRA_0.shp",
   "dynamic_threshold": false,
-  "near_mouth_lower_quantile": 0.25,
-  "near_mouth_upper_quantile": 0.75,
   "global_threshold_quantile": 0.95,
   "overwrite": false,
   "gif": false,
