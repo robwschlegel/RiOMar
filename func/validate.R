@@ -297,6 +297,132 @@ extract_pixels_all("SEXTANT")
 # OLCI-B
 
 
+# Satellite grid-window match-up (Table 4) --------------------------------
+
+# Concentric N x N pixel-window statistics (mean/median/std/n) around one
+# grid index, for grid sizes 1, 3, 5, 7. This is a literal square lat/lon-
+# index window (as opposed to get_pixels()'s nearest-by-distance selection
+# above), matching the retired func/validate.py::compute_grid_stats()
+# convention so Table 4 stays numerically consistent with its values before
+# this port.
+sextant_window_stats <- function(window, centre_lon_idx, centre_lat_idx, grid_sizes = c(1, 3, 5, 7)){
+
+  stats <- list()
+  for(size in grid_sizes){
+    h <- size %/% 2
+    lon_range <- (centre_lon_idx - h):(centre_lon_idx + h)
+    lat_range <- (centre_lat_idx - h):(centre_lat_idx + h)
+    lon_range <- lon_range[lon_range >= 1 & lon_range <= dim(window)[1]]
+    lat_range <- lat_range[lat_range >= 1 & lat_range <= dim(window)[2]]
+    vals <- as.vector(window[lon_range, lat_range])
+    stats[[paste0(size, "x", size, "_mean")]] <- mean(vals, na.rm = TRUE)
+    stats[[paste0(size, "x", size, "_median")]] <- median(vals, na.rm = TRUE)
+    stats[[paste0(size, "x", size, "_std")]] <- sd(vals, na.rm = TRUE)
+    stats[[paste0(size, "x", size, "_n")]] <- sum(!is.na(vals))
+  }
+  as.data.frame(stats, check.names = FALSE)
+}
+
+# Build the satellite validation summary (Table 4) by matching each SOMLIT
+# SPM / REPHY turbidity in-situ record to the SEXTANT SPM pixel window
+# around its station, for every date where both exist. Writes
+# output/MATCH_UP_DATA/FRANCE/summary.csv, replacing the retired
+# func/validate.py::Match_up_with_insitu_measurements() path.
+#
+# NB: zone_data_in_situ (built above) is already a QC'd, depth-filtered,
+# day/night-filtered daily mean per site/date/variable -- reused directly
+# here rather than re-deriving in-situ filtering logic. This means Table 4
+# now uses one row per site/day (a daily mean) rather than one row per
+# individual in-situ sample as the retired Python path did; the actual
+# comparison (grid-window satellite vs in-situ value) is unaffected, and
+# per-record satellite/in-situ overhead times are no longer tracked (left
+# NA), since zone_data_in_situ collapses same-day records before this point.
+compile_sextant_validation_summary <- function(){
+
+  sextant_dir <- path.expand("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY")
+
+  # SEXTANT's lat/lon grid is fixed across every daily file -- build the
+  # index lookup once from a reference file.
+  ref_nc <- nc_open(dir(sextant_dir, pattern = "\\.nc$", recursive = TRUE, full.names = TRUE)[1])
+  grid_lon <- ncvar_get(ref_nc, "lon")
+  grid_lat <- ncvar_get(ref_nc, "lat")
+  nc_close(ref_nc)
+
+  in_situ_matches <- zone_data_in_situ |>
+    filter(variable %in% c("SPM", "TUR")) |>
+    mutate(Insitu_variable = if_else(variable == "TUR", "TURB", variable)) |>
+    filter(date >= as.Date("1998-01-01"))
+
+  site_grid_index <- in_situ_matches |>
+    distinct(source, site, zone, lon, lat) |>
+    rowwise() |>
+    mutate(lon_idx = which.min(abs(grid_lon - lon)),
+           lat_idx = which.min(abs(grid_lat - lat))) |>
+    ungroup()
+
+  half <- 3 # max(grid_sizes) %/% 2 for grid_sizes = c(1, 3, 5, 7)
+  summary_rows <- list()
+
+  for(the_date in sort(unique(in_situ_matches$date))){
+
+    the_date <- as.Date(the_date, origin = "1970-01-01")
+    date_str <- format(the_date, "%Y%m%d")
+    nc_path <- file.path(sextant_dir, format(the_date, "%Y"), format(the_date, "%m"), format(the_date, "%d"),
+                         paste0(date_str, "-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"))
+
+    if(!file.exists(nc_path)) next
+
+    records_of_the_day <- in_situ_matches |> filter(date == the_date)
+    sites_of_the_day <- site_grid_index |> semi_join(records_of_the_day, by = c("source", "site"))
+
+    nc <- nc_open(nc_path)
+
+    for(i in seq_len(nrow(sites_of_the_day))){
+
+      site_row <- sites_of_the_day[i, ]
+
+      lon_lo <- max(1, site_row$lon_idx - half); lon_hi <- min(length(grid_lon), site_row$lon_idx + half)
+      lat_lo <- max(1, site_row$lat_idx - half); lat_hi <- min(length(grid_lat), site_row$lat_idx + half)
+
+      window <- ncvar_get(nc, "analysed_spim",
+                          start = c(lon_lo, lat_lo, 1),
+                          count = c(lon_hi - lon_lo + 1, lat_hi - lat_lo + 1, 1))
+
+      window_stats <- sextant_window_stats(window,
+                                           centre_lon_idx = site_row$lon_idx - lon_lo + 1,
+                                           centre_lat_idx = site_row$lat_idx - lat_lo + 1)
+
+      site_records <- records_of_the_day |> filter(source == site_row$source, site == site_row$site)
+
+      for(j in seq_len(nrow(site_records))){
+
+        rec <- site_records[j, ]
+
+        summary_rows[[length(summary_rows) + 1]] <- cbind(
+          data.frame(SOURCE = rec$source, SITE = rec$site, REGION = gsub("_", " ", rec$zone),
+                    LATITUDE = site_row$lat, LONGITUDE = site_row$lon,
+                    Data_source = "SEXTANT", sensor_name = "merged", atmospheric_correction = "Standard",
+                    Satellite_variable = "SPM", Temporal_resolution = "DAILY", Satellite_algorithm = "SPIM",
+                    DATE = format(the_date, "%Y-%m-%d"), Satellite_time = NA_character_, Insitu_time = NA_character_,
+                    Insitu_variable = rec$Insitu_variable, Insitu_value = rec$value, check.names = FALSE),
+          window_stats)
+      }
+    }
+
+    nc_close(nc)
+  }
+
+  summary_df <- bind_rows(summary_rows)
+
+  dir.create("output/MATCH_UP_DATA/FRANCE", recursive = TRUE, showWarnings = FALSE)
+  write_csv(summary_df, "output/MATCH_UP_DATA/FRANCE/summary.csv")
+
+  summary_df
+}
+
+compile_sextant_validation_summary()
+
+
 # Validation stats + figures  --------------------------------------------
 
 # SEXTANT
