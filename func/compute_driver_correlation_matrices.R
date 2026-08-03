@@ -24,7 +24,7 @@
 #
 # Seasons use the same DJF/MAM/JJA/SON meteorological convention, and the
 # same December-belongs-to-the-following-winter attribution, already
-# established in this file's rhone_flood_seasonality_shift() (Dec 2010 +
+# established in this file's rhone_flood_timing_shift() (Dec 2010 +
 # Jan/Feb 2011 are one winter, not split across two calendar years) -- see
 # that function's comment for the reasoning. season_year is computed here
 # for consistency with that precedent even though the pooled (all-years)
@@ -91,7 +91,7 @@ plot_correlation_matrix <- function(cor_result, title){
 }
 
 # Adds meteorological season + season_year to a build_driver_matrix() output,
-# same convention as rhone_flood_seasonality_shift() below in this file.
+# same convention as rhone_flood_timing_shift() below in this file.
 assign_season <- function(df){
   df |>
     dplyr::mutate(month = lubridate::month(date), year = lubridate::year(date),

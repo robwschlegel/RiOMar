@@ -1093,13 +1093,17 @@ sec_axis_adjustement_factors <- function(var_to_scale, var_ref){
                     trans_axis_operation = "var_to_scale = {scaled_var - adjust} / diff)"))
 }
 
-# Consistent theme for project
+# Consistent theme for project. Gridlines-off variant, matching every
+# current manuscript figure (this copy used to also show gridlines plus a
+# plot.subtitle style that nothing else used; func/figure.R's and
+# func/X11.R's copies already agreed on gridlines-off, so this copy was
+# brought in line with those rather than the reverse -- see the refactor
+# that deduplicated the three near-identical copies of this function).
 ggplot_theme <-   function(){
   theme(text = element_text(size = 35, colour = "black"),
         plot.title = element_text(hjust = 0.5, size = 55),
-        plot.subtitle = element_text(hjust = 0.5, size = 30),
-        # panel.grid.major = element_blank(),
-        # panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
         panel.background = element_blank(),
         panel.border = element_rect(linetype = "solid", fill = NA),
         axis.text = element_text(size = 35, colour = "black"),
