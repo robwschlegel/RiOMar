@@ -20,7 +20,7 @@ func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files,
-                  align_bathymetry_to_resolution, define_parameters, order_zones)
+                  align_bathymetry, define_parameters, order_zones)
 # Create_the_plume_mask/delineate_plume_pipeline/create_polygon_mask
 # used to be imported from this repo's own func/plume.py, which forked the
 # plume-detection algorithm and had drifted out of sync with the version
@@ -187,10 +187,10 @@ def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_fi
 
         SPM_map.to_csv(folder_where_to_save_Figure_1_data + "/SPM_map.csv")
 
-    extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figure_1_data)
+    save_insitu_stations_for_plot(folder_where_to_save_Figure_1_data)
     
     
-def load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_maps, where_to_save_the_figure, dates_for_each_zone) :
+def load_and_save_regional_maps_for_plot(where_are_saved_regional_maps, where_to_save_the_figure, dates_for_each_zone) :
 
     # NB: these per-zone regional maps are the insets combined into Figure 1
     # (with SOMLIT/REPHY stations) -- so they are written into FIGURE_1's own
@@ -222,10 +222,10 @@ def load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_m
             
             SPM_map.to_csv(folder_where_to_save_regional_zone_maps_data + f"/{key}.csv")
             
-    extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_regional_zone_maps_data)
+    save_insitu_stations_for_plot(folder_where_to_save_regional_zone_maps_data)
 
 
-def extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figure_data) :     
+def save_insitu_stations_for_plot(folder_where_to_save_Figure_data) :     
 
     coordinates_of_the_RIOMARS = { zone_name : {'lat_min' : define_parameters(zone_name)['lat_range_of_the_map_to_plot'][0],
                                                 'lat_max' : define_parameters(zone_name)['lat_range_of_the_map_to_plot'][1],
@@ -299,7 +299,7 @@ def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, wher
     # shared arbitrary date would defeat that. Manuscript Figure 2 is the
     # satellite-vs-in-situ validation scatterplot instead, produced
     # separately by func/validate.py during 1_validate.py.
-    load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_maps,
+    load_and_save_regional_maps_for_plot(where_are_saved_regional_maps,
                                                       where_to_save_the_figure,
                                                       dates_for_each_zone())
 
@@ -321,7 +321,7 @@ def regional_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure, 
 
     the_dates_for_each_zone = dates_for_each_zone()
 
-    load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_maps,
+    load_and_save_regional_maps_for_plot(where_are_saved_regional_maps,
                                                       where_to_save_the_figure,
                                                       the_dates_for_each_zone)
 
@@ -392,7 +392,7 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     # coarsens internally), so no resolution reduction happens here either.
     ds_reduced = ds
 
-    bathymetry_data_aligned_to_reduced_map = align_bathymetry_to_resolution(ds_reduced,
+    bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced,
                                                                             f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
 
     (_, land_mask) = preprocess_annual_dataset_and_compute_land_mask(
@@ -506,7 +506,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
             # happens here either.
         ds_reduced = ds
 
-        bathymetry_data_aligned_to_reduced_map = align_bathymetry_to_resolution(ds_reduced,
+        bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced,
                                                                                 f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
 
         (_, land_mask) = preprocess_annual_dataset_and_compute_land_mask(
@@ -663,7 +663,7 @@ def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=16):
 def Figure_8_driver_category(where_to_save_the_figure):
     """manuscript Figure 8: flow-controlled plume-area residual vs. wave
     height, coloured by on/off-shore wind category, one panel per zone.
-    Generalises the Rhone-only rhone_wind_wave_beyond_season() analysis.
+    Generalises the Rhone-only rhone_wind_wave_effect() analysis.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)

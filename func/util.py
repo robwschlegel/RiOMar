@@ -82,7 +82,7 @@ def load_bathymetric_data(path_to_bathy_data, min_lon, max_lon, min_lat, max_lat
     return bathymetric_data
 
 
-def align_bathymetry_to_resolution(dataset, path_to_bathy_data) : 
+def align_bathymetry(dataset, path_to_bathy_data) : 
                
     """
     Align bathymetric data to the resolution of the input dataset.
@@ -314,7 +314,7 @@ def create_arborescence(paths):
     return arborescence
 
 
-def return_the_parameter_name_based_on_file_name(file_name) : 
+def parameter_name_from_file_name(file_name) : 
                         
     regular_expression = r'(?:(SPM-[G|R]|SPIM|suspended_matters|TSM_NN|CHL|CHL1|CHL-OC5|CHL-GONS|chlorophyll_a|POC|NRRS[0-9]*|RRS[0-9]*|DOC|CDOM|BBP|T-FNU|SST(?:-NIGHT|)))'
     match = re.search(regular_expression, file_name)
@@ -325,7 +325,7 @@ def return_the_parameter_name_based_on_file_name(file_name) :
             
     else : 
         
-        print('!!! Impossible to find the parameter name from the file name (see the function return_the_parameter_name_based_on_file_name) !!!')                        
+        print('!!! Impossible to find the parameter name from the file name (see the function parameter_name_from_file_name) !!!')                        
 
 
 def add_array_to_dict(dictionary, path, array):
@@ -344,7 +344,7 @@ def add_array_to_dict(dictionary, path, array):
     filename = keys[-1]  # Extract the filename
     
     # Extract parameter name (e.g., SPM-G)
-    param = return_the_parameter_name_based_on_file_name(filename)
+    param = parameter_name_from_file_name(filename)
 
     # Navigate the dictionary hierarchy
     current_level = dictionary
@@ -357,7 +357,7 @@ def add_array_to_dict(dictionary, path, array):
     current_level[param] = array
 
 
-def access_item_in_a_dictionnary(dictionary, path):
+def get_nested_dict_value(dictionary, path):
     
     keys = path.split("/")
 
@@ -466,7 +466,7 @@ def flatten_a_list(lst):
     return flat_list
 
 
-def extract_the_time_from_the_satellite_file(map_data) : 
+def extract_satellite_time(map_data) : 
         
     if 'image_reference_time' in map_data.attrs : # For SEXTANT products
         time = map_data._attrs['image_reference_time']
@@ -482,7 +482,7 @@ def extract_the_time_from_the_satellite_file(map_data) :
     return time
 
 
-def extract_dataframes_iterative(data):
+def extract_nested_dataframes(data):
     """Efficiently extract all DataFrames from a nested dictionary using an iterative approach."""
     stack = [data]  # Use a stack to avoid deep recursion
 
@@ -497,7 +497,7 @@ def extract_dataframes_iterative(data):
             stack.extend(current)  # Add list/tuple elements to the stack
 
 
-def unique_years_between_two_dates(start_date: str, end_date: str):
+def unique_years_in_range(start_date: str, end_date: str):
     start_year = datetime.datetime.strptime(start_date, "%Y/%m/%d").year
     end_year = datetime.datetime.strptime(end_date, "%Y/%m/%d").year
     return list(range(start_year, end_year + 1))
@@ -527,7 +527,7 @@ def load_shapefile_data() :
     #     print("The France shapefiles can be manually downloaded for free : e.g. https://gadm.org/download_country.html ")
  
     
-def extract_and_format_date_from_path(path):
+def date_from_path(path):
     match = re.search(r'/(\d{4})/(\d{2})/(\d{2})/', path)
     return ''.join(match.groups()) if match else None   
 
@@ -611,7 +611,7 @@ def load_csv_files(SOMLIT = False, REPHY = False,
         return final_df
          
         
-def get_the_values_from_a_list_comprehension(lst_comprehension, return_the_unique_values) : 
+def flatten_and_dedupe(lst_comprehension, return_the_unique_values) : 
     
     the_values = list(chain(*lst_comprehension))
     
@@ -908,7 +908,7 @@ def define_parameters(Zone) :
         return None
     
     # TODO: Investigate why this is causing errors
-    searching_strategy_directions = coordinates_of_pixels_to_inspect(searching_strategies)
+    searching_strategy_directions = pixel_inspection_coordinates(searching_strategies)
     
     return {
         'lon_new_resolution' : lon_new_resolution, 
@@ -936,7 +936,7 @@ def define_parameters(Zone) :
     }
 
 
-def coordinates_of_pixels_to_inspect(searching_strategies) : 
+def pixel_inspection_coordinates(searching_strategies) : 
      
     """
    Computes the relative distances from a center pixel to all "True" pixels 

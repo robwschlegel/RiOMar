@@ -12,7 +12,7 @@
 # "wind_dir_cat" testing all 8 octants together).
 #
 # Reuses build_driver_matrix()/fit_gam() directly rather than
-# Apply_driver_interactions_analysis()'s full run_full_analysis() pipeline,
+# run_driver_interactions_analysis()'s full run_full_analysis() pipeline,
 # since only the (already-fitted, already fast) GAM step is needed here --
 # not the slow random-forest H-statistic step that dominated the ~57 min
 # full rerun.

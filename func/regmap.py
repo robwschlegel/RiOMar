@@ -24,10 +24,10 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (load_file, align_bathymetry_to_resolution, degrees_to_km, find_sat_data_files, expand_grid,
+from util import (load_file, align_bathymetry, degrees_to_km, find_sat_data_files, expand_grid,
                             path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,
-                            extract_and_format_date_from_path, define_parameters,
-                            unique_years_between_two_dates, get_all_cases_to_process_for_regional_maps_or_plumes_or_X11)
+                            date_from_path, define_parameters,
+                            unique_years_in_range, get_all_cases_to_process_for_regional_maps_or_plumes_or_X11)
 
 
 # =============================================================================
@@ -35,7 +35,7 @@ from util import (load_file, align_bathymetry_to_resolution, degrees_to_km, find
 # =============================================================================
 
 
-def get_coordinates_of_the_site(Study_area) : 
+def site_coordinates(Study_area) : 
         
     """
     Get geographic coordinates and spatial extents for a given study area.
@@ -274,7 +274,7 @@ def extract_key_data(map_ini, info,
                                                 np.max(map_values_of_the_zone.lon)]]}
 
 
-def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, do_the_plot = True) : 
+def load_and_extract_key_data(nc_file, info, where_to_save_data_extended, do_the_plot = True) : 
         
     """
     Load a NetCDF file and extract key data for analysis.
@@ -316,14 +316,14 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
     if ( (len(map_ini) == 0) or (len(np.unique(map_ini.lat)) == 1) or (len(np.unique(map_ini.lon)) == 1) ) : 
         return "Format is not correct"
                 
-    date = extract_and_format_date_from_path(nc_file)
+    date = date_from_path(nc_file)
       
     # Update info object with date components
     info['day'] = pd.to_datetime(date).strftime("%Y-%m-%d") 
     info['month'] = pd.to_datetime(date).strftime("%m") 
     info['year'] = pd.to_datetime(date).strftime("%Y") 
     nb_of_day = pd.to_datetime(date).strftime("%d")     
-    info['week'] = f'{info.month}_{determine_the_week_based_on_the_day(nb_of_day)}'
+    info['week'] = f'{info.month}_{week_from_day(nb_of_day)}'
     info['date_for_plot'] = info.day
     info['period_name'] = 'daily'
     
@@ -332,7 +332,7 @@ def load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended, d
     map_ini = map_ini.sortby('lon')
     
     # Get coordinates for the site
-    site_coordinates = get_coordinates_of_the_site(info.Zone)
+    site_coordinates = site_coordinates(info.Zone)
 
     # Extract data for the Basin zone
     Basin_data = extract_key_data(map_ini, info, zone_limits = site_coordinates['Basin_limits'])
@@ -445,14 +445,14 @@ def Process_each_week(Year_month_week_pattern,
     map_files_of_the_week = sorted( [x for x in map_files if any([pattern in x for pattern in Year_month_week_days])] )
         
     # Load files and extract key data
-    weekly_results = [load_file_and_extract_key_data(nc_file, info, where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), 
+    weekly_results = [load_and_extract_key_data(nc_file, info, where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY'), 
                                                      save_map_plots_of_which_time_frequency['DAILY']) 
                       for nc_file in map_files_of_the_week]
 
     # # Handle SEXTANT merged data specific computations
     # if (info.Data_source == 'SEXTANT') and (info.sensor_name == 'merged') :
         
-    #     compute_diff_maps_and_save_them(weekly_results, where_to_save_data_extended, info.Satellite_variable)
+    #     compute_and_save_diff_maps(weekly_results, where_to_save_data_extended, info.Satellite_variable)
 
     #     Year_month_week_days = Year_month_week_days[1:]
     #     if previous_day in map_files_of_the_week[0] :
@@ -463,7 +463,7 @@ def Process_each_week(Year_month_week_pattern,
     [pickle.dump({'Basin_map' : x[1]}, open(f"{where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'DAILY')}/{x[0].day[0]}.pkl", 'wb')) for x in weekly_results if isinstance(x, list)]
                
     # Index the files for the current week                 
-    map_files_of_the_week_index = [ all_days_of_the_year.index(date) for date in [extract_and_format_date_from_path(x) for x in map_files_of_the_week ] ]
+    map_files_of_the_week_index = [ all_days_of_the_year.index(date) for date in [date_from_path(x) for x in map_files_of_the_week ] ]
 
     # Update the processing status DataFrame
     files_have_been_processed_of_the_week = files_have_been_processed.iloc[map_files_of_the_week_index].copy()
@@ -486,7 +486,7 @@ def Process_each_week(Year_month_week_pattern,
     
     # Compute and save the mean map for the week
     # NB: There is an issue in here with arguments not being ordered correctly or called explictly
-    get_the_mean_map_and_save_it(where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
+    compute_and_save_mean_map(where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'WEEKLY'), 
                                 [{'Basin_map' : x[1], 'Embouchure_map' : x[2],'Bloom_map' : x[3]} for x in weekly_results],
                                 info,
                                 Year_month_week_pattern[4:], Year_month_week_pattern[4:],
@@ -573,7 +573,7 @@ def previous_day_pattern(current_pattern, suffix_ranges):
     return pattern_of_the_previous_day
 
 
-def determine_the_week_based_on_the_day(num_of_day) : 
+def week_from_day(num_of_day) : 
     
     """
     Determine the week of the month based on the day number.
@@ -725,7 +725,7 @@ def do_and_save_the_plot(info, Basin_data, Embouchure_data, Bloom_data,
     plt.close(fig)  
 
 
-def compute_diff_maps_and_save_them(weekly_results, where_to_save_data_extended, satellite_variable):
+def compute_and_save_diff_maps(weekly_results, where_to_save_data_extended, satellite_variable):
         
     """
     Computes relative difference maps from weekly results and saves them as pickle files.
@@ -822,7 +822,7 @@ def compute_diff_maps_and_save_them(weekly_results, where_to_save_data_extended,
     del Basin_rel_diff_map # Free memory
     
     
-def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period,
+def compute_and_save_mean_map(where_to_save_data_extended, maps_of_the_period,
                                  info, period_name, months_to_use = [str(x+1).zfill(2) for x in range(12)],
                                  climatological_subfolder = "", do_the_plot = True, date_for_plot = '') : 
 
@@ -944,7 +944,7 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
     info['period_name'] = period_name
         
     # Get coordinates for the site
-    # site_coordinates = get_coordinates_of_the_site(info.Zone)
+    # site_coordinates = site_coordinates(info.Zone)
 
     # Extract data for the Basin zone
     # Basin_data = extract_key_data(map_ini, info, zone_limits = site_coordinates['Basin_limits'])
@@ -971,7 +971,7 @@ def get_the_mean_map_and_save_it(where_to_save_data_extended, maps_of_the_period
     gc.collect()
 
 
-def load_the_climatological_files(where_to_save_data_extended, month_nb = '', return_file_names = False):
+def load_climatological_files(where_to_save_data_extended, month_nb = '', return_file_names = False):
     
     """
     Loads climatological files for the specified satellite variable and subfolder.
@@ -1016,7 +1016,7 @@ def load_the_climatological_files(where_to_save_data_extended, month_nb = '', re
         return data
 
 
-def Compute_the_metrics_of_one_map(file, exclude_coastal_areas, coastal_waters_mask) : 
+def compute_map_metrics(file, exclude_coastal_areas, coastal_waters_mask) : 
     
     # map_data = load_file(file)['map_data']
     map_data = load_file(file)['Basin_map']['map_data']
@@ -1096,7 +1096,7 @@ def Compute_the_metrics_of_one_map(file, exclude_coastal_areas, coastal_waters_m
     return metrics
 
 
-def plot_and_save_the_QC_metrics(QC_df, metrics_to_plot, path_to_save_QC_files, info, max_cloud_cover = 100) : 
+def plot_and_save_QC_metrics(QC_df, metrics_to_plot, path_to_save_QC_files, info, max_cloud_cover = 100) : 
 
     # Plot the time series
     subplot_titles = {  "mean_value" : "Average value",
@@ -1199,7 +1199,7 @@ class Create_and_save_the_maps :
             return
         
         # Extract days from filenames and generate all days of the year
-        map_file_days = [extract_and_format_date_from_path(x) for x in map_files]
+        map_file_days = [date_from_path(x) for x in map_files]
                 
         # Create a DataFrame to track file processing status
         files_have_been_processed = pd.DataFrame({'day' : all_days_of_the_year,
@@ -1314,9 +1314,9 @@ class Create_and_save_the_maps :
         # pool = multiprocess.Pool(nb_of_cores_to_use)
         with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
-            pool.starmap(get_the_mean_map_and_save_it, 
+            pool.starmap(compute_and_save_mean_map, 
                         [(folder_where_to_save_maps, 
-                          load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "WEEKLY"), month_nb),
+                          load_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "WEEKLY"), month_nb),
                           self.info,
                           f'{month_nb:02d}', f'{month_nb:02d}', 'MONTHLY', save_map_plots_of_which_time_frequency['MONTHLY'],
                           f'{self.info.Year}{month_nb:02d}15') for month_nb in (np.arange(12)+1 )])
@@ -1330,8 +1330,8 @@ class Create_and_save_the_maps :
         folder_where_to_save_maps = self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'ANNUAL')
         os.makedirs(folder_where_to_save_maps, exist_ok=True)
         
-        get_the_mean_map_and_save_it(folder_where_to_save_maps,  
-                                     load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "MONTHLY")),
+        compute_and_save_mean_map(folder_where_to_save_maps,  
+                                     load_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "MONTHLY")),
                                      self.info,
                                      period_name = 'the year', climatological_subfolder = 'ANNUAL', 
                                      do_the_plot = save_map_plots_of_which_time_frequency['ANNUAL'],
@@ -1347,8 +1347,8 @@ class Create_and_save_the_maps :
         folder_where_to_save_maps = self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', 'MULTIYEAR')
         os.makedirs(folder_where_to_save_maps, exist_ok=True)
         
-        get_the_mean_map_and_save_it(folder_where_to_save_maps,  
-                                     maps_of_the_period = load_the_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "ANNUAL")+"*/"),
+        compute_and_save_mean_map(folder_where_to_save_maps,  
+                                     maps_of_the_period = load_climatological_files(self.where_to_save_data_extended.replace('[TIME_FREQUENCY]', "ANNUAL")+"*/"),
                                      info = self.info,
                                      period_name = 'multi-years', 
                                      climatological_subfolder = 'MULTIYEAR', 
@@ -1364,10 +1364,10 @@ class QC_maps :
                                                local_path = True).replace('/*/*/*', 'MAPS')
                 
         # Find satellite data files for the current year
-        map_files = load_the_climatological_files(where_to_save_data_extended = were_are_data_stored + '/DAILY/*/', 
+        map_files = load_climatological_files(where_to_save_data_extended = were_are_data_stored + '/DAILY/*/', 
                                                   return_file_names = True)
         
-        multiannual_file = load_the_climatological_files(where_to_save_data_extended = were_are_data_stored + '/MULTIYEAR/', 
+        multiannual_file = load_climatological_files(where_to_save_data_extended = were_are_data_stored + '/MULTIYEAR/', 
                                                          return_file_names = True)
         
         where_to_save_QC_data = fill_the_sat_paths(info, 
@@ -1403,7 +1403,7 @@ class QC_maps :
         
         the_annual_map = load_file(self.multiannual_file[0])['Basin_map']['map_data']
                 
-        bathymetry_data_aligned_to_map_resolution = align_bathymetry_to_resolution(the_annual_map, 
+        bathymetry_data_aligned_to_map_resolution = align_bathymetry(the_annual_map, 
                                                                                 f'{self.where_are_saved_regional_maps}/{self.info.Zone}/Bathy_data.pkl')
         
         bathymetric_mask = bathymetry_data_aligned_to_map_resolution > -minimal_bathymetry_in_m
@@ -1452,14 +1452,14 @@ class QC_maps :
         # pool = multiprocess.Pool(nb_of_cores_to_use)
         with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
-            QC_metrics = pool.starmap(Compute_the_metrics_of_one_map, 
+            QC_metrics = pool.starmap(compute_map_metrics, 
                                    [( file_name, exclude_coastal_areas, self.coastal_waters_mask) 
                                                        for file_name in self.map_files ])
                 
         # QC_metrics = []
         # for file_name in self.map_files :  
         #     print(file_name)
-        #     QC_metrics.append(Compute_the_metrics_of_one_map( file_name, exclude_coastal_areas, self.coastal_waters_mask))
+        #     QC_metrics.append(compute_map_metrics( file_name, exclude_coastal_areas, self.coastal_waters_mask))
         
         # TODO: There is a bug here caused by 'date' not existing in some of the dictionaries in QC_metrics
         # So for now I've wrapped this last bit in a logic gate. We shall see if this causes problems later...
@@ -1469,7 +1469,7 @@ class QC_maps :
             QC_metrics_df = QC_metrics_df.sort_values(by='date')
             self.QC_metrics = QC_metrics_df
             
-            self.QC_plot = plot_and_save_the_QC_metrics(QC_df = QC_metrics_df, 
+            self.QC_plot = plot_and_save_QC_metrics(QC_df = QC_metrics_df, 
                                 metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
                                 path_to_save_QC_files = self.where_to_save_QC_data,
                                 info = self.info,
@@ -1485,7 +1485,7 @@ class QC_maps :
         Global_QC_metrics = Global_QC_metrics.sort_values(by='date')
         self.Global_QC_metrics = Global_QC_metrics
         
-        self.Global_QC_plot = plot_and_save_the_QC_metrics(QC_df = Global_QC_metrics, 
+        self.Global_QC_plot = plot_and_save_QC_metrics(QC_df = Global_QC_metrics, 
                                                      metrics_to_plot = ["mean_value", "99th_Percentile", "Lognorm_shape", "n_outliers"], 
                                                      path_to_save_QC_files = self.where_to_save_QC_data,
                                                      info = self.info,
@@ -1501,7 +1501,7 @@ def create_regional_maps(core_arguments, Zones, overwrite_existing_regional_maps
                          save_map_plots_of_which_time_frequency, nb_of_cores_to_use,
                          where_are_saved_satellite_data, where_to_save_regional_maps) :
             
-    core_arguments.update({'Years' : unique_years_between_two_dates(core_arguments['start_day'], core_arguments['end_day']),
+    core_arguments.update({'Years' : unique_years_in_range(core_arguments['start_day'], core_arguments['end_day']),
                            'Zones' : Zones})
     
     cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)
@@ -1546,7 +1546,7 @@ def create_regional_maps(core_arguments, Zones, overwrite_existing_regional_maps
         
 def QC_of_regional_maps(core_arguments, Zones, nb_of_cores_to_use, where_are_saved_regional_maps) : 
     
-    core_arguments.update({'Years' : unique_years_between_two_dates(core_arguments['start_day'], core_arguments['end_day']),
+    core_arguments.update({'Years' : unique_years_in_range(core_arguments['start_day'], core_arguments['end_day']),
                            'Zones' : Zones})
     
     cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)

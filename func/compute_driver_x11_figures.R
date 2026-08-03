@@ -7,7 +7,7 @@
 # other drivers (wind, tide, wave height, current speed), plus a version of
 # the wind and wave-height comparisons split by the on-/off-shore/calm wind
 # categories already established for manuscript Figure 8
-# (func/multi.R::plot_driver_category_scatter()).
+# (func/multi.R::plot_category_scatter()).
 #
 # This reuses the R-side driver-comparison machinery already built in
 # func/multi.R (combine_plume_driver()), rather than extending the Python
@@ -77,7 +77,7 @@ x11_dual_axis_df <- function(driver_name, meta){
 }
 
 # Dual-axis X11 trend-cycle plot with an r annotation -- the same visual
-# convention as Figure 6 itself (figure.R::make_the_X11_plot_of_river_and_plume()),
+# convention as Figure 6 itself (figure.R::plot_x11_river_and_plume()),
 # generalised to any driver via driver_display, and adding the r-value
 # label that function has but plot_driver_plume_dual_axis() (used for the
 # STL version previously) does not.
@@ -138,11 +138,11 @@ for(driver_name in other_drivers){
 # 2. Category-split versions for wind and wave height -----------------------
 # "The categories we have established" = the calm (<3 m/s) / onshore /
 # offshore wind classification already used for manuscript Figure 8
-# (plot_driver_category_scatter(), func/multi.R) -- applied here to both the
+# (plot_category_scatter(), func/multi.R) -- applied here to both the
 # wind and the wave-height comparison, since that's the only categorical
 # scheme in the pipeline that applies uniformly to all four zones (the
 # Rhone-only calm/onshore-easterly/Mistral/other scheme in
-# rhone_wind_wave_beyond_season() is a one-off side-study, not the
+# rhone_wind_wave_effect() is a one-off side-study, not the
 # manuscript's own categorisation, and isn't defined for the other 3 zones).
 #
 # Unlike Section 1 above, this stays at *daily*, raw (not STL-smoothed)
@@ -156,7 +156,7 @@ for(driver_name in other_drivers){
 
 CATEGORY_LEVELS <- c("calm (<3 m/s)", "onshore", "offshore")
 
-plot_driver_plume_by_category <- function(zone_name, driver_name, category){
+plot_by_category <- function(zone_name, driver_name, category){
   meta <- get_zone_meta(zone_name = zone_name)
   df <- combine_plume_driver(driver_name, meta)  # daily, raw plume_area + value
 
@@ -216,7 +216,7 @@ plot_driver_plume_by_category <- function(zone_name, driver_name, category){
 message("Building category-split comparisons for wind and wave height...")
 for(driver_name in c("wind", "wave")){
   for(category in CATEGORY_LEVELS){
-    zone_plots <- purrr::map(zones, plot_driver_plume_by_category, driver_name = driver_name, category = category)
+    zone_plots <- purrr::map(zones, plot_by_category, driver_name = driver_name, category = category)
     composite <- ggpubr::ggarrange(plotlist = zone_plots, ncol = 1, nrow = length(zones), align = "v")
     category_slug <- stringr::str_extract(category, "^[a-z]+")
     out_file <- file.path(CATEGORY_DIR, paste0(driver_name, "_", category_slug, ".png"))

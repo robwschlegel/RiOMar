@@ -51,7 +51,7 @@ in_estuary <- function(lon, lat, zone_name){
 # Area of one PlumeMasks.nc pixel in km^2, same formula as
 # func/plume.py::return_stats_dictionnary() and func/compute_plume_shape.py
 # (degrees -> km via 111.32 km/deg, longitude scaled by cos(latitude)).
-plume_grid_pixel_area_km2 <- function(zone_name, plume_dir = "output/panache/dynamic"){
+pixel_area_km2 <- function(zone_name, plume_dir = "output/panache/dynamic"){
   nc_dat <- nc_open(paste0(plume_dir, "/", zone_name, "/PlumeMasks.nc"))
   lon <- ncvar_get(nc_dat, "lon")
   lat <- ncvar_get(nc_dat, "lat")
@@ -77,7 +77,7 @@ plume_grid_pixel_area_km2 <- function(zone_name, plume_dir = "output/panache/dyn
 # spillover day would be filtered out of the standard plume area but not out
 # of this one.
 load_plume_no_estuary <- function(zone_name, plume_dir = "output/panache/dynamic"){
-  pixel_area_km2 <- plume_grid_pixel_area_km2(zone_name, plume_dir)
+  pixel_area_km2 <- pixel_area_km2(zone_name, plume_dir)
 
   df_ref <- read_csv(paste0(plume_dir, "/", zone_name, "/Results.csv"), show_col_types = FALSE) |>
     dplyr::transmute(date = as.Date(date))

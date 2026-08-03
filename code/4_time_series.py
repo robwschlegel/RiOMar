@@ -69,7 +69,7 @@ Apply_X11_method_on_time_series(sextant_spm_all,
 driver_interactions_R_path = os.path.join(func_dir, 'driver_interactions.R')
 robjects.r['source'](driver_interactions_R_path)
 
-r_function = robjects.r['Apply_driver_interactions_analysis']
+r_function = robjects.r['run_driver_interactions_analysis']
 
 # Call the R function (runs both the dynamic-threshold main analysis and the
 # static-threshold supplementary analysis; see func/driver_interactions.R)

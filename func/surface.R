@@ -61,8 +61,8 @@ load_plume_results <- function(zone, threshold = c("dynamic", "static")){
 # BAY_OF_BISCAY 2018-01-15/17), whose ratios top out below 16. 15 sits in
 # the gap between those two populations across all four zones and both
 # threshold runs.
-# flag_suspicious_plume_days("GULF_OF_LION", "dynamic")
-flag_suspicious_plume_days <- function(zone, threshold = c("dynamic", "static"),
+# flag_suspicious_days("GULF_OF_LION", "dynamic")
+flag_suspicious_days <- function(zone, threshold = c("dynamic", "static"),
                                         window_days = 7, ratio_min = 15, p_floor = 0.95){
   threshold <- match.arg(threshold)
   df <- load_plume_results(zone, threshold)
@@ -82,12 +82,12 @@ flag_suspicious_plume_days <- function(zone, threshold = c("dynamic", "static"),
                   suspicious = !is.na(area) & area > floor_val & ratio > ratio_min)
 }
 
-# Run flag_suspicious_plume_days() over every zone and both threshold runs.
-# flag_all_suspicious_plume_days()
-flag_all_suspicious_plume_days <- function(window_days = 7, ratio_min = 15, p_floor = 0.95){
+# Run flag_suspicious_days() over every zone and both threshold runs.
+# flag_suspicious_days_all()
+flag_suspicious_days_all <- function(window_days = 7, ratio_min = 15, p_floor = 0.95){
   purrr::map_dfr(zones, function(zone){
     purrr::map_dfr(c("dynamic", "static"), function(threshold){
-      flag_suspicious_plume_days(zone, threshold, window_days, ratio_min, p_floor)
+      flag_suspicious_days(zone, threshold, window_days, ratio_min, p_floor)
     })
   })
 }
@@ -100,7 +100,7 @@ flag_all_suspicious_plume_days <- function(window_days = 7, ratio_min = 15, p_fl
 # a panel). Mirrors the daily time-series layout in
 # multi.R::multi_plot()'s plot_daily() -- facet_wrap(~zone, ncol = 1,
 # scales = "free_y"), one panel per zone, year-labelled x-axis.
-# plot_suspicious_plume_days(flag_all_suspicious_plume_days(), "dynamic")
+# plot_suspicious_plume_days(flag_suspicious_days_all(), "dynamic")
 plot_suspicious_plume_days <- function(df_flagged, threshold = c("dynamic", "static")){
   threshold <- match.arg(threshold)
   df <- dplyr::filter(df_flagged, threshold == !!threshold)
@@ -125,14 +125,14 @@ plot_suspicious_plume_days <- function(df_flagged, threshold = c("dynamic", "sta
 }
 
 # Run plot_suspicious_plume_days() for both threshold runs off one shared
-# flag_all_suspicious_plume_days() call.
-# plot_all_suspicious_plume_days()
-plot_all_suspicious_plume_days <- function(window_days = 7, ratio_min = 15, p_floor = 0.95){
-  df_flagged <- flag_all_suspicious_plume_days(window_days, ratio_min, p_floor)
+# flag_suspicious_days_all() call.
+# plot_suspicious_days_all()
+plot_suspicious_days_all <- function(window_days = 7, ratio_min = 15, p_floor = 0.95){
+  df_flagged <- flag_suspicious_days_all(window_days, ratio_min, p_floor)
   plot_suspicious_plume_days(df_flagged, "dynamic")
   plot_suspicious_plume_days(df_flagged, "static")
   invisible(df_flagged)
 }
 
 # Run it
-flag_all_suspicious_plume_days()
+flag_suspicious_days_all()

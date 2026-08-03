@@ -9,7 +9,7 @@
 # Called from code/4_time_series.py via rpy2, the same way func/X11.R,
 # func/figure.R, func/validate.R, and func/plume.R are called from their
 # respective func/*.py modules -- source() this file, then call
-# Apply_driver_interactions_analysis(). This keeps figure/stat generation
+# run_driver_interactions_analysis(). This keeps figure/stat generation
 # centralised behind the numbered code/ pipeline (per CLAUDE.md) rather than
 # split across a separate, unnumbered driver-interactions script.
 #
@@ -208,7 +208,7 @@ fit_gam <- function(df, response = "plume_area"){
 # patchwork::wrap_plots() call produced garbled, overlapping titles and
 # illegibly small axis text -- the same nested-patchwork bug already fixed
 # once for the X11 composite figures (see
-# figure.R::save_x11_two_component_composite()) and fixed here the same way:
+# figure.R::save_x11_component_composite()) and fixed here the same way:
 # render each zone's panel grid to its own PNG (5-column layout instead of
 # 10-across, gratia::draw()'s redundant "Basis: Tensor product" caption
 # suppressed, and a real title), then stack the four zone images with
@@ -454,7 +454,7 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path){
 # (now deleted -- this file replaces it, called in-sequence from Stage 4
 # rather than as a separate, unnumbered Stage 6 script).
 
-Apply_driver_interactions_analysis <- function(){
+run_driver_interactions_analysis <- function(){
 
   # 2026-07-31: Figure 10 moved from main-text to Supplementary Figure S7
   # (Robert: didn't contribute enough to the main narrative), redesigned in
@@ -473,6 +473,6 @@ Apply_driver_interactions_analysis <- function(){
     fig_path  = "figures/ARTICLE/FIGURE_S7/Figure_S7_static.png"
   )
 
-  message("func/driver_interactions.R::Apply_driver_interactions_analysis() complete.")
+  message("func/driver_interactions.R::run_driver_interactions_analysis() complete.")
   invisible(TRUE)
 }

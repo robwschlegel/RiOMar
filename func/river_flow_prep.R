@@ -1,7 +1,7 @@
 # func/river_flow_prep.R
 
 # This script combines and cleans river discharge data downloaded from the
-# Hub'Eau hydrometrie API (see download_hubeau_river_flow() in func/dl.py,
+# Hub'Eau hydrometrie API (see download_hubeau_flow() in func/dl.py,
 # wired into code/0_download_data.py). Station-to-zone mapping lives in
 # metadata/HydroPortail_station_list.csv. For each river, a "target" gauge
 # (the one whose scale/location we want the output series to represent,

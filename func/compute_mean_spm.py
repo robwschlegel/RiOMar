@@ -28,7 +28,7 @@ DATA_DIR = os.path.expanduser("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DA
 OUTPUT_PATH = os.path.join(proj_dir, "output", "STATS", "mean_spm_national.nc")
 
 
-def compute_national_mean_spm(data_dir=DATA_DIR, output_path=OUTPUT_PATH):
+def national_mean_spm(data_dir=DATA_DIR, output_path=OUTPUT_PATH):
     files = sorted(glob.glob(os.path.join(data_dir, "*", "*", "*", "*.nc")))
     print(f"Found {len(files)} daily SPM files under {data_dir}")
     if len(files) == 0:
@@ -78,4 +78,4 @@ def compute_national_mean_spm(data_dir=DATA_DIR, output_path=OUTPUT_PATH):
 
 
 if __name__ == "__main__":
-    compute_national_mean_spm()
+    national_mean_spm()

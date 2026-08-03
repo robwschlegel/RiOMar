@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# The code needed to download the full dataset used in the RiOMar project
-# It can be designed to be called by the Makefile.
+# The code needed to download the full dataset used in the RiOMar project.
 
 
 # =============================================================================
@@ -20,7 +19,7 @@ sys.path.append( func_dir )
 
 import util, dl
 from util import daily_integral
-from dl import Download_satellite_data, Plot_and_Save_the_map, download_cmems_subset, download_hubeau_river_flow
+from dl import Download_satellite_data, download_cmems_subset, download_hubeau_flow, Plot_and_Save_the_map
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
@@ -115,7 +114,7 @@ river_flow_meta = pd.read_csv('metadata/HydroPortail_station_list.csv')
 for zone in zones_list:
     station_codes = river_flow_meta.loc[river_flow_meta['zone'] == zone, 'ID'].str.replace(' ', '')
     for station_code in station_codes:
-        download_hubeau_river_flow(
+        download_hubeau_flow(
             station_code,
             '1998-01-01', '2025-12-31',
             f'data/RIVER_FLOW/{zone}/HydroPortail'
@@ -164,7 +163,7 @@ for zone in zones_list:
 #### Download other surface variables
 # =============================================================================
 
-# The historic GLORYS data (1993-2024)
+# The historic GLORYS data (1998-2024)
 # NB: In the hitoric GLORYS bottom temp. is given as 'bottomT', but in the recent GLORYS it is given as 'tob'
 for zone in zones_list:
     download_cmems_subset(
@@ -181,7 +180,7 @@ for zone in zones_list:
     download_cmems_subset(
         zone,
         'cmems_mod_glo_phy_anfc_0.083deg_P1D-m',
-        ['zos', 'mlotst', 'tob'], # Sea surface height [zos] and mixed layer depth [mlotst], and bottom temperature [tob]
+        ['zos', 'mlotst', 'tob'], # Sea surface height [zos], mixed layer depth [mlotst], bottom temperature [tob]
         '2025-01-01T00:00:00', '2025-12-31T00:00:00',
         f'../pCloudDrive/data/GLORYS/{zone}'
     )

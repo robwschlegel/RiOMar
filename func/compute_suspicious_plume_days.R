@@ -5,7 +5,7 @@
 # Run from repo root: Rscript func/compute_suspicious_plume_days.R
 source("func/surface.R")
 
-all_days <- flag_all_suspicious_plume_days()
+all_days <- flag_suspicious_days_all()
 
 suspicious <- all_days |>
   dplyr::filter(suspicious) |>

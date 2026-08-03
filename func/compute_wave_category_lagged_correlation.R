@@ -13,7 +13,7 @@
 # the lag itself: func/util.R::lagged_correlation() shifts by row position
 # (dplyr::lag()), so removing the other categories' days would make a
 # "lag of 3" mean "3 onshore-days ago" (spanning a variable number of actual
-# calendar days) rather than 3 real days. Instead, category_lagged_correlation()
+# calendar days) rather than 3 real days. Instead, category_lag_correlation()
 # below computes the lagged driver value from the *full, continuous* daily
 # series (so a lag really is a lag in days) and only restricts which day's
 # *plume area* the correlation is computed against to the category's days --
@@ -33,7 +33,7 @@ MAX_LAG_DAILY <- 14
 # df must be date-ordered, complete (load_plume_ts()/combine_plume_driver()
 # already gap-fill to a continuous daily sequence), with plume_area, value,
 # and wind_category columns.
-category_lagged_correlation <- function(df, category, max_lag = MAX_LAG_DAILY){
+category_lag_correlation <- function(df, category, max_lag = MAX_LAG_DAILY){
   in_category <- df$wind_category == category
   purrr::map_dfr(0:max_lag, function(l){
     lagged_value <- dplyr::lag(df$value, l)
@@ -69,7 +69,7 @@ for(category in CATEGORIES_TO_PLOT){
     df <- combine_plume_driver("wave", meta) |> add_wind_category(meta)
     df_cat <- dplyr::filter(df, wind_category == category)
 
-    cor_df <- category_lagged_correlation(df, category)
+    cor_df <- category_lag_correlation(df, category)
     peak <- cor_df |> dplyr::slice_max(cor, n = 1)
 
     zone_label <- zone_title(zone_name)

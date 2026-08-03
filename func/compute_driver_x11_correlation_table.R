@@ -49,7 +49,7 @@ x11_trend_r <- function(driver_name, meta){
        lag_days = NA_integer_)
 }
 
-# Same wind-category derivation as compute_driver_x11_figures.R::plot_driver_plume_by_category().
+# Same wind-category derivation as compute_driver_x11_figures.R::plot_by_category().
 add_wind_category <- function(df, meta){
   df_wind <- load_driver("wind", meta) |> dplyr::select(date, cat_wind_spd = value, cat_wind_direction = direction)
   df <- df |> dplyr::left_join(df_wind, by = "date") |> tidyr::drop_na(cat_wind_spd, cat_wind_direction)

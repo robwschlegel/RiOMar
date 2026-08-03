@@ -26,7 +26,7 @@ sys.path.append( func_dir )
 
 import util
 from util import (find_sat_data_files, km_to_degrees, path_to_fill_to_where_to_save_satellite_files,
-                  fill_the_sat_paths, extract_the_time_from_the_satellite_file, get_all_cases_to_process,
+                  fill_the_sat_paths, extract_satellite_time, get_all_cases_to_process,
                   define_parameters)
 
 
@@ -174,7 +174,7 @@ def download_files_from_ftp(self):
     return None
 
 
-def convert_dates_to_file_path_format(dates, destination_path_to_fill) : 
+def dates_to_path_format(dates, destination_path_to_fill) : 
     
     file_path_format = ""
             
@@ -189,7 +189,7 @@ def convert_dates_to_file_path_format(dates, destination_path_to_fill) :
     return file_path_format 
                 
 
-def which_dates_occured_in_the_sat_file_names(dates_to_look_for, sat_file_names, check_for_non_occurrence_instead = False) : 
+def dates_in_sat_filenames(dates_to_look_for, sat_file_names, check_for_non_occurrence_instead = False) : 
 
     # Convert files_in_the_time_range to a set for O(1) lookups
     files_set = set(sat_file_names)
@@ -208,7 +208,7 @@ def which_dates_occured_in_the_sat_file_names(dates_to_look_for, sat_file_names,
     return(matches)
         
 
-def format_variable_name_with_server_names( info ) :
+def server_variable_name( info ) :
      
     if info.Data_source == 'ODATIS' :
     
@@ -257,7 +257,7 @@ def unzip_gz_file(local_file):
     os.remove(local_file)
     
     
-def merge_and_save_the_download_report(download_report, where_to_save_satellite_data) : 
+def merge_and_save_download_report(download_report, where_to_save_satellite_data) : 
 
     # Convert dictionary to a single DataFrame with dates as index
     download_report = pd.concat(download_report, axis=1)
@@ -293,7 +293,7 @@ def remove_empty_folders(root_folder):
     # shutil.rmtree(root_folder + "SEXTANT/ALL", ignore_errors=True)
 
 
-def download_L2_maps_from_EUMDAC(info, where_to_save_satellite_data, min_lon, max_lon, min_lat, max_lat, dates_to_download) : 
+def download_EUMDAC_L2_maps(info, where_to_save_satellite_data, min_lon, max_lon, min_lat, max_lat, dates_to_download) : 
         
     # =============================================================================
     #% Pre-requisite
@@ -350,7 +350,7 @@ def download_L2_maps_from_EUMDAC(info, where_to_save_satellite_data, min_lon, ma
                             "Re-Processed" : {"Dates" : [ pd.to_datetime('2016-04-25'), pd.to_datetime('2021-04-28') ],
                                               "Collection_name" : "EO:EUM:DAT:0556"}} # list of collections here : https://api.eumetsat.int/data/browse/1.0.0/collections?format=html
 
-    collection_names = adjust_collection_names_to_start_and_end_dates(collection_names, 
+    collection_names = collection_names_for_date_range(collection_names, 
                                                                       np.min(dates_to_download), 
                                                                       pd.to_datetime(f'{np.max(dates_to_download)} 23:59:59'))
                 
@@ -401,7 +401,7 @@ def download_L2_maps_from_EUMDAC(info, where_to_save_satellite_data, min_lon, ma
         subprocess.run(the_command.replace('"', '').split(' '), stdout=subprocess.DEVNULL)
 
 
-def adjust_collection_names_to_start_and_end_dates(collection_names, start_date, end_date) : 
+def collection_names_for_date_range(collection_names, start_date, end_date) : 
     
     if end_date <= collection_names["Re-Processed"]['Dates'][1] :
         
@@ -422,13 +422,13 @@ def adjust_collection_names_to_start_and_end_dates(collection_names, start_date,
     return collection_names
 
 
-def regrid_L2_sat_data_to_regular_grid(L2_files,
+def regrid_L2_to_regular_grid(L2_files,
                                        L2_coordinate_ds,
                                        new_grid) : 
     
     regridded_map_files = {}
     
-    time_value = extract_the_time_from_the_satellite_file(L2_coordinate_ds)
+    time_value = extract_satellite_time(L2_coordinate_ds)
     
     for L2_map_file in [ x for x in L2_files if x.endswith('geo_coordinates.nc') == False ] : 
                 
@@ -464,7 +464,7 @@ def regrid_L2_sat_data_to_regular_grid(L2_files,
     return regridded_map_files
 
 
-def regrid_and_save_EUMDAC_maps_of_one_day(info, where_to_save_satellite_data, destination_path_to_fill, 
+def regrid_and_save_EUMDAC_day(info, where_to_save_satellite_data, destination_path_to_fill, 
                                            the_day, new_grid, min_lon, max_lon, min_lat, max_lat) :
               
     name_pattern_of_L2_map_folders = f'{where_to_save_satellite_data}/EUMETSAT/L2/{info.sensor_name}/*____{the_day.strftime("%Y%m%dT")}*'
@@ -492,7 +492,7 @@ def regrid_and_save_EUMDAC_maps_of_one_day(info, where_to_save_satellite_data, d
             else :
                 L2_coordinate_ds = xr.open_dataset( [ x for x in L2_files if x.endswith('/geo_coordinates.nc') ][0] ) 
         
-            regridded_maps = regrid_L2_sat_data_to_regular_grid(L2_files = L2_files, 
+            regridded_maps = regrid_L2_to_regular_grid(L2_files = L2_files, 
                                                                 L2_coordinate_ds = L2_coordinate_ds,
                                                                 new_grid = new_grid)
                         
@@ -548,19 +548,19 @@ def regrid_and_save_EUMDAC_maps_of_one_day(info, where_to_save_satellite_data, d
 def download_EUMDAC_maps(self, min_lon, max_lon, min_lat, max_lat, new_map_resolution) : 
             
     # for dates_to_download in self.splitted_dates_to_download : 
-    #     download_L2_maps_from_EUMDAC(self.info, self.where_to_save_satellite_data,
+    #     download_EUMDAC_L2_maps(self.info, self.where_to_save_satellite_data,
     #                                     min_lon, max_lon, 
     #                                     min_lat, max_lat, dates_to_download) 
     
     # pool = multiprocess.Pool(self.nb_of_cores_to_use)
     with multiprocess.Pool(self.nb_of_cores_to_use) as pool:
 
-        download_reports = pool.starmap(download_L2_maps_from_EUMDAC, [(self.info, self.where_to_save_satellite_data,
+        download_reports = pool.starmap(download_EUMDAC_L2_maps, [(self.info, self.where_to_save_satellite_data,
                                                        min_lon, max_lon, 
                                                        min_lat, max_lat, dates_to_download) 
                                                    for dates_to_download in self.splitted_dates_to_download ])
         
-        new_grid = define_the_new_grid_for_map_regridding(resolution_in_m_of_the_new_grid = new_map_resolution, 
+        new_grid = define_regrid_target_grid(resolution_in_m_of_the_new_grid = new_map_resolution, 
                                                           mean_latitude_of_the_area = 46.23, 
                                                           min_lon_new_grid = min_lon, 
                                                           max_lon_new_grid = max_lon, 
@@ -568,7 +568,7 @@ def download_EUMDAC_maps(self, min_lon, max_lon, min_lat, max_lat, new_map_resol
                                                           max_lat_new_grid = max_lat) 
             
         # Use multiprocess to process each week
-        download_reports = pool.starmap(regrid_and_save_EUMDAC_maps_of_one_day, [(self.info, 
+        download_reports = pool.starmap(regrid_and_save_EUMDAC_day, [(self.info, 
                                                                                   self.where_to_save_satellite_data, 
                                                                                   self.destination_path_to_fill, 
                                                        the_day, new_grid, 
@@ -580,7 +580,7 @@ def download_EUMDAC_maps(self, min_lon, max_lon, min_lat, max_lat, new_map_resol
         # download_reports = []
         # for the_day in pd.date_range(start=self.start_day, end=self.end_day, freq="D") :
             
-        #     download_report = regrid_and_save_EUMDAC_maps_of_one_day(self, the_day, new_grid, 
+        #     download_report = regrid_and_save_EUMDAC_day(self, the_day, new_grid, 
         #                                            min_lon, max_lon, 
         #                                            min_lat, max_lat) 
         #     download_reports.append(download_report)
@@ -590,7 +590,7 @@ def download_EUMDAC_maps(self, min_lon, max_lon, min_lat, max_lat, new_map_resol
         self.download_report.loc[self.download_report.index == date, 'Message'] = download_message
 
 
-def define_the_new_grid_for_map_regridding(resolution_in_m_of_the_new_grid, 
+def define_regrid_target_grid(resolution_in_m_of_the_new_grid, 
                                            mean_latitude_of_the_area,
                                            min_lon_new_grid,
                                            max_lon_new_grid,
@@ -615,7 +615,7 @@ def define_the_new_grid_for_map_regridding(resolution_in_m_of_the_new_grid,
     return binning
 
 
-def test_if_satellite_data_DOES_NOT_exist_in_the_Data_source(info) : 
+def satellite_data_missing(info) : 
                 
     test = (
                 
@@ -667,7 +667,7 @@ def split_consecutive_dates(dates):
     return splitted_dates
 
 
-def plot_the_maps_in_the_folder(path) : 
+def plot_maps_in_folder(path) : 
     
     # mpl.use('module://matplotlib_inline.backend_inline') # To show plots on the Plot panel (be careful as it consumes RAM memory !)
     mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM memory)
@@ -709,13 +709,13 @@ def plot_the_maps_in_the_folder(path) :
             gc.collect()
 
 
-def find_files_in_the_time_range(info, destination_path_to_fill, all_dates) : 
+def find_files_in_date_range(info, destination_path_to_fill, all_dates) : 
                 
     path_to_sat_data = fill_the_sat_paths(info = info, path_to_fill = destination_path_to_fill, local_path = True, dates = all_dates)
     
     all_files_already_downloaded = find_sat_data_files(info, path_to_sat_data = path_to_sat_data)
     
-    pattern_to_match = f"(^.*/{'.*$)|(^.*/'.join( convert_dates_to_file_path_format(all_dates, destination_path_to_fill) )}.*$)"
+    pattern_to_match = f"(^.*/{'.*$)|(^.*/'.join( dates_to_path_format(all_dates, destination_path_to_fill) )}.*$)"
 
     files_in_the_time_range = np.array(all_files_already_downloaded)[  np.where( pd.Series(all_files_already_downloaded).str.match(pattern_to_match) )[0] ]
     
@@ -723,7 +723,7 @@ def find_files_in_the_time_range(info, destination_path_to_fill, all_dates) :
 
 
 
-def extract_values_from_the_global_file(self) : 
+def extract_station_values_from_file(self) : 
     
     where_to_save_values = fill_the_sat_paths(self.info, 
                                         path_to_fill = self.destination_path_to_fill,
@@ -743,7 +743,7 @@ def extract_values_from_the_global_file(self) :
     # pool = multiprocess.Pool(self.nb_of_cores_to_use)
     with multiprocess.Pool(self.nb_of_cores_to_use) as pool:
         
-        download_reports = pool.starmap(extract_values_from_one_global_file, 
+        download_reports = pool.starmap(extract_station_values_for_one_date, 
                                         [(formatted_dates, report_index, date_to_extract,
                                           self.global_files_already_downloaded,
                                           self.download_report, var_name,
@@ -751,7 +751,7 @@ def extract_values_from_the_global_file(self) :
                                                    for date_to_extract in formatted_dates ])
         
     # for date_to_extract in formatted_dates : 
-    #     extract_values_from_one_global_file(formatted_dates, report_index, date_to_extract,
+    #     extract_station_values_for_one_date(formatted_dates, report_index, date_to_extract,
     #                                       self.global_files_already_downloaded,
     #                                       self.download_report, var_name,
     #                                       where_to_save_values) 
@@ -759,7 +759,7 @@ def extract_values_from_the_global_file(self) :
     self.download_report = pd.concat(download_reports, axis = 1).T.sort_index()
 
 
-def extract_values_from_one_global_file(formatted_dates, report_index, date_to_extract,
+def extract_station_values_for_one_date(formatted_dates, report_index, date_to_extract,
                                         global_files_already_downloaded,
                                         download_report,var_name,
                                         where_to_save_values) :
@@ -805,7 +805,7 @@ class download_satellite_data :
         
     def __init__(self, info, start_day, end_day, where_to_save_satellite_data, nb_of_cores_to_use, overwrite_existing_satellite_files = False)  :
         
-        info['Satellite_variable_name_on_remote_folder'] = format_variable_name_with_server_names( info )
+        info['Satellite_variable_name_on_remote_folder'] = server_variable_name( info )
                 
         destination_path_to_fill = path_to_fill_to_where_to_save_satellite_files(where_to_save_satellite_data)
                     
@@ -834,7 +834,7 @@ class download_satellite_data :
             
         Download_messages = pd.DataFrame({'Message' : ['' for _ in all_dates]}, index = all_dates) 
                                         
-        if test_if_satellite_data_DOES_NOT_exist_in_the_Data_source(info) :
+        if satellite_data_missing(info) :
             self.to_process = False
             Download_messages.loc[:,'Message'] = "The Data source does not distribute such data"
             self.download_report = Download_messages
@@ -845,22 +845,22 @@ class download_satellite_data :
                    
         if overwrite_existing_satellite_files == False : 
                         
-            files_in_the_time_range = find_files_in_the_time_range(info, destination_path_to_fill, all_dates)
+            files_in_the_time_range = find_files_in_date_range(info, destination_path_to_fill, all_dates)
 
         else : 
             
             files_in_the_time_range = np.array([])
        
-        dates_to_download = which_dates_occured_in_the_sat_file_names(all_dates, files_in_the_time_range, 
+        dates_to_download = dates_in_sat_filenames(all_dates, files_in_the_time_range, 
                                                                       check_for_non_occurrence_instead = True)
         
         dates_to_extract = dates_to_download.copy()
         
         if (info.Data_source == 'SEXTANT') and (info.sensor_name != 'merged') :
             
-            global_files_in_the_time_range = find_files_in_the_time_range(info, destination_path_to_fill.replace('[PARAMETER]', 'ALL'), all_dates)
+            global_files_in_the_time_range = find_files_in_date_range(info, destination_path_to_fill.replace('[PARAMETER]', 'ALL'), all_dates)
             
-            dates_to_download = which_dates_occured_in_the_sat_file_names(all_dates, global_files_in_the_time_range, 
+            dates_to_download = dates_in_sat_filenames(all_dates, global_files_in_the_time_range, 
                                                                           check_for_non_occurrence_instead = True)
         
         Download_messages.loc[Download_messages.index.isin(dates_to_extract) == False, 'Message'] = "✅ Already downloaded"
@@ -912,7 +912,7 @@ class download_satellite_data :
             download_files_from_ftp(self)
             
             if (self.info.Data_source == 'SEXTANT') and (self.info.sensor_name != 'merged') :
-                extract_values_from_the_global_file(self)
+                extract_station_values_from_file(self)
                                 
         return None
 
@@ -956,7 +956,7 @@ def Download_satellite_data(core_arguments, nb_of_cores_to_use, overwrite_existi
                 
     remove_empty_folders(where_to_save_satellite_data)
     
-    merge_and_save_the_download_report(download_report, where_to_save_satellite_data)
+    merge_and_save_download_report(download_report, where_to_save_satellite_data)
     
 def Plot_and_Save_the_map(core_arguments,
                           nb_of_cores_to_use,
@@ -982,7 +982,7 @@ def Plot_and_Save_the_map(core_arguments,
                                                    local_path = True, 
                                                    dates = dates_to_plot)
             
-            pool.map(plot_the_maps_in_the_folder, paths_to_sat_data)
+            pool.map(plot_maps_in_folder, paths_to_sat_data)
 
 def download_cmems_subset(
     zone,
@@ -1075,7 +1075,7 @@ def download_cmems_subset(
     except ImportError:
         raise ImportError("copernicusmarine package is required. Install with 'conda install copernicusmarine'.")
 
-def download_hubeau_river_flow(
+def download_hubeau_flow(
     station_code,
     start_day,
     end_day,

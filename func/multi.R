@@ -27,9 +27,9 @@
 #     and multi_stl() below is now wind_add_direction().
 #   - flow.R/wind.R/tide.R's near-identical "4-panel" comparison plot
 #     (raw driver ts / plume ts / scatter / lag-correlation) is now
-#     plot_driver_plume_comparison().
+#     plot_driver_comparison().
 #   - wind.R/tide.R's inline dual-y-axis STL plot (a hand-copy of
-#     figure.R::make_the_X11_plot_of_river_and_plume(), hard-coded there to
+#     figure.R::plot_x11_river_and_plume(), hard-coded there to
 #     the "river_flow" column name) is now plot_driver_plume_dual_axis(),
 #     which is the generalisation flagged as a TODO in
 #     manuscript/make_figures_tables.R for Figures 7-9.
@@ -389,7 +389,7 @@ driver_display <- tibble::tribble(
 #   c) driver vs. plume scatter (+ linear fit)
 #   d) lagged correlation (plume lagged behind driver, 0-30 days)
 # mouth_name is used only for the plot title / output file name.
-plot_driver_plume_comparison <- function(df, driver_name, mouth_name){
+plot_driver_comparison <- function(df, driver_name, mouth_name){
 
   disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
   cor_df <- driver_plume_correlation(df) |> dplyr::filter(timestep == "daily")
@@ -431,7 +431,7 @@ plot_driver_plume_comparison <- function(df, driver_name, mouth_name){
 
 # Dual-y-axis STL plot (plume_stl on the left axis, driver_stl scaled onto
 # the right axis). Generalises the inline duplicate of
-# figure.R::make_the_X11_plot_of_river_and_plume() that wind.R and tide.R had
+# figure.R::plot_x11_river_and_plume() that wind.R and tide.R had
 # each hand-copied and hard-coded to their own driver; also closes the TODO
 # left in manuscript/make_figures_tables.R for Figures 7-9 (wind/wave/tide
 # X11 panels), which asked for exactly this generalisation.
@@ -494,13 +494,13 @@ compass_octant <- function(degrees){
 # length/frequency = how often the driver comes from that compass sector;
 # fill colour = mean plume-area residual (after removing flow's effect via
 # a plain lm(plume_area ~ flow), same logic as
-# rhone_wind_wave_beyond_season()'s area_resid) for days in that sector --
+# rhone_wind_wave_effect()'s area_resid) for days in that sector --
 # so the rose shows both the driver's climatology and whether the plume
 # responds differently when it comes from a given direction, in one plot.
 # plot_driver_rose("wind", get_zone_meta(mouth_name = "Grand Rhone"))
 # Residual of plume_area after removing flow's linear effect (df must have
 # both columns) -- the "what's left once discharge is accounted for" signal
-# shared by plot_driver_rose() and plot_driver_category_scatter() below.
+# shared by plot_driver_rose() and plot_category_scatter() below.
 flow_controlled_residual <- function(df){
   residuals(lm(plume_area ~ flow, data = df))
 }
@@ -573,15 +573,15 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 16, df_flow = NULL){
 
 # Flow-controlled plume-area residual vs. wave height, coloured by on/off-
 # shore wind category -- manuscript Figure 8. Generalises
-# rhone_wind_wave_beyond_season()'s pl_wave panel (Gulf of Lion only, with a
+# rhone_wind_wave_effect()'s pl_wave panel (Gulf of Lion only, with a
 # bespoke Mistral/onshore/calm classification tuned to that zone's
 # geography -- left as-is above, since it's a specific side-study, not
 # replaced) to all four zones, using the generic on/off-shore
 # classification wind_add_direction() already computes for every zone. Uses
 # wave HEIGHT only (not direction), so this works for the Bay of Seine too,
 # despite that zone's missing VMDR (see load_wave()'s NB 2).
-# plot_driver_category_scatter(get_zone_meta(mouth_name = "Grand Rhone"))
-plot_driver_category_scatter <- function(meta){
+# plot_category_scatter(get_zone_meta(mouth_name = "Grand Rhone"))
+plot_category_scatter <- function(meta){
   df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
   df_wind <- load_driver("wind", meta) |> dplyr::select(date, wind_spd = value, direction)
   df_wave <- load_driver("wave", meta) |> dplyr::select(date, wave_height = value)
@@ -785,7 +785,7 @@ run_driver_suite <- function(driver_name){
     meta <- tibble::tibble(...)
     df <- combine_plume_driver(driver_name, meta)
 
-    plot_driver_plume_comparison(df, driver_name, meta$mouth_name)
+    plot_driver_comparison(df, driver_name, meta$mouth_name)
     plot_driver_plume_dual_axis(df, driver_name, meta$zone)
     cor_stats <- driver_plume_correlation(df) |> dplyr::mutate(mouth_name = meta$mouth_name, zone = meta$zone, driver_name = driver_name)
     trend_stats <- driver_plume_trend(df, driver_name, meta$mouth_name)
@@ -1081,10 +1081,10 @@ write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
 # Response to Claude's e-mail on the Grand Rhone plume-area
 # trend. The e-mail raised four ideas; disposition of each below:
 #   1. Concentration-detrending sensitivity test -- IMPLEMENTED,
-#      rhone_concentration_detrend_test().
+#      rhone_detrend_test().
 #   2. Has the balance of northern-tributary vs Cevennes ("cevenol")
 #      floods shifted, explaining the concentration rise? -- PARTIALLY
-#      implemented, rhone_flood_seasonality_shift(). RiOMar only has
+#      implemented, rhone_flood_timing_shift(). RiOMar only has
 #      combined Grand+Petit Rhone discharge at the mouth, not upstream
 #      sub-basin gauges, so this cannot attribute the shift to a specific
 #      tributary -- that needs the Observatoire des Sediments du Rhone
@@ -1094,7 +1094,7 @@ write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
 #   3. Does wind/wave forcing move the plume beyond what flow explains
 #      (reframing "does the plume have its own seasonality" as "does it
 #      respond to wind/wave directly"), including the specific Mistral vs
-#      onshore/calm hypothesis -- IMPLEMENTED, rhone_wind_wave_beyond_season().
+#      onshore/calm hypothesis -- IMPLEMENTED, rhone_wind_wave_effect().
 #   4. Would a more stratified surface layer let the plume slide further
 #      offshore? -- NOT implemented. The e-mail itself frames this as a
 #      question for idealised numerical modelling of academic cases, not
@@ -1135,8 +1135,8 @@ write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
 # collinearity with flow that using real in-situ data is meant to avoid.
 # Because the OSR record only covers 2005-2023, the joined record below is
 # shorter than the full 1998-2025 satellite plume record.
-# rhone_concentration_detrend_test()
-rhone_concentration_detrend_test <- function(){
+# rhone_detrend_test()
+rhone_detrend_test <- function(){
 
   meta <- get_zone_meta(mouth_name = "Grand Rhone")
 
@@ -1247,7 +1247,7 @@ rhone_concentration_detrend_test <- function(){
     theme(panel.border = element_rect(fill = NA, colour = "black"))
 
   pl_combi <- ggpubr::ggarrange(pl_conc, pl_area, ncol = 1, nrow = 2)
-  ggsave(filename = "figures/rhone_side_analyses/rhone_concentration_detrend_test.png", plot = pl_combi, width = 12, height = 10)
+  ggsave(filename = "figures/rhone_side_analyses/rhone_detrend_test.png", plot = pl_combi, width = 12, height = 10)
 
   return(list(stats = stats, data = df, plot = pl_combi))
 }
@@ -1265,8 +1265,8 @@ rhone_concentration_detrend_test <- function(){
 # the *calendar timing* of high-flow days at the combined gauge has moved
 # over the record -- worth reporting even though it can't yet attribute a
 # cause.
-# rhone_flood_seasonality_shift()
-rhone_flood_seasonality_shift <- function(high_flow_quantile = 0.90){
+# rhone_flood_timing_shift()
+rhone_flood_timing_shift <- function(high_flow_quantile = 0.90){
 
   meta <- get_zone_meta(mouth_name = "Grand Rhone")
   df_flow <- load_driver("flow", meta) |>
@@ -1355,7 +1355,7 @@ rhone_flood_seasonality_shift <- function(high_flow_quantile = 0.90){
          title = "Grand Rhone: has the seasonal timing of high-flow days shifted?",
          subtitle = "A rising trend means that season is becoming relatively more prominent for floods (Cevenol = autumn/SON panel)") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
-  ggsave(filename = "figures/rhone_side_analyses/rhone_flood_seasonality_shift.png", plot = pl, width = 10, height = 8)
+  ggsave(filename = "figures/rhone_side_analyses/rhone_flood_timing_shift.png", plot = pl, width = 10, height = 8)
 
   return(list(stats = stats, data = df_season_year, plot = pl))
 }
@@ -1373,8 +1373,8 @@ rhone_flood_seasonality_shift <- function(high_flow_quantile = 0.90){
 # the coast (larger detected area); weak or onshore/easterly wind should
 # leave it hugging the coast, where it may be under-detected because of
 # confounding coastal resuspension.
-# rhone_wind_wave_beyond_season()
-rhone_wind_wave_beyond_season <- function(){
+# rhone_wind_wave_effect()
+rhone_wind_wave_effect <- function(){
 
   meta <- get_zone_meta(mouth_name = "Grand Rhone")
   df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
@@ -1481,7 +1481,7 @@ rhone_wind_wave_beyond_season <- function(){
   # -- avoided here by just dropping pl_category's legend (identical
   # categories/colours to pl_wave's) and keeping pl_wave's own.
   pl_combi <- ggpubr::ggarrange(pl_terms, pl_category, pl_wave, ncol = 3, nrow = 1)
-  ggsave(filename = "figures/rhone_side_analyses/rhone_wind_wave_beyond_season.png", plot = pl_combi, width = 18, height = 6)
+  ggsave(filename = "figures/rhone_side_analyses/rhone_wind_wave_effect.png", plot = pl_combi, width = 18, height = 6)
 
   return(list(model_comparison = model_comparison, wind_category_summary = category_summary,
               wind_category_anova = category_anova, data = df, plot = pl_combi))
@@ -1489,6 +1489,6 @@ rhone_wind_wave_beyond_season <- function(){
 
 
 # NB: not run automatically on source() -- call explicitly
-# rhone_concentration_detrend_test()
-# rhone_flood_seasonality_shift()
-# rhone_wind_wave_beyond_season()
+# rhone_detrend_test()
+# rhone_flood_timing_shift()
+# rhone_wind_wave_effect()

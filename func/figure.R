@@ -65,7 +65,7 @@ source("func/multi.R")
 # pipeline, until that conda/GEOS conflict is resolved -- see the pipeline
 # map's "Still open" list.
 .high_res_france_coastline_cache <- NULL
-get_high_res_france_coastline <- function(){
+high_res_coastline <- function(){
   if(is.null(.high_res_france_coastline_cache)){
     library(sf)
     .high_res_france_coastline_cache <<- sf::st_read("data/FRANCE_shapefile/gadm41_FRA_0.shp", quiet = TRUE) %>%
@@ -116,7 +116,7 @@ create_the_basic_map <- function(map_df, var_name,
       ## High-resolution France coastline (GADM), for zoomed insets where
       ## the crude "world" database coastline is visibly blocky -- other
       ## countries aren't relevant at inset zoom levels, so no world layer.
-      geom_polygon(data = get_high_res_france_coastline(), aes(x = long, y = lat, group = group), color = 'grey60', fill = 'black')
+      geom_polygon(data = high_res_coastline(), aes(x = long, y = lat, group = group), color = 'grey60', fill = 'black')
     } else {
       list(
         ## First layer: worldwide map
@@ -143,64 +143,11 @@ create_the_basic_map <- function(map_df, var_name,
 }
 
 
-ggplot_theme <-   function() {
-  theme(text = element_text(size=35, colour = "black"), #25
-        plot.title = element_text(hjust = 0.5, size = 55),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        panel.border = element_rect(linetype = "solid", fill = NA),
-        axis.text = element_text(size = 35, colour = "black"),
-        axis.title = element_text(size = 40, colour = "black"),
-        axis.text.x=element_text(angle=0),
-        axis.ticks.length=unit(.25, "cm"))}
+# ggplot_theme(), save_plot_as_png(), and sec_axis_adjustement_factors()
+# used to be redefined here identically (ggplot_theme differed slightly --
+# see func/util.R's copy for the note); now sourced from func/util.R above.
 
-
-save_plot_as_png <- function(plot, name = c(), width = 14, height = 8.27, path, res = 150) {
-  
-  graphics.off()
-  
-  if (name %>% length() == 1) {
-    if (dir.exists(path) == FALSE) {dir.create(path, recursive = TRUE)}
-    path <- file.path(path, paste(name, ".png", sep = ""))
-  } else {
-    path <- paste(path, ".png", sep = "")
-  }
-  
-  if (grepl(pattern = ".png.png", path)) {path <- path %>% gsub(pattern = ".png.png", replacement = ".png", x = .)}
-  
-  png(path, width = width, height = height, units = "in", res = res)
-  print(plot)
-  dev.off()
-  
-}
-
-sec_axis_adjustement_factors <- function(var_to_scale, var_ref) {
-  
-  index_to_keep <- which(is.finite(var_ref))
-  var_ref <- var_ref[index_to_keep]
-  
-  index_to_keep <- which(is.finite(var_to_scale))
-  var_to_scale <- var_to_scale[index_to_keep]
-  
-  max_var_to_scale <- max(var_to_scale, na.rm = T) 
-  min_var_to_scale <- min(var_to_scale, na.rm = T) 
-  max_var_ref <- max(var_ref, na.rm = T) 
-  min_var_ref <- min(var_ref, na.rm = T) 
-  
-  diff_to_scale <- max_var_to_scale - min_var_to_scale
-  diff_to_scale <- ifelse(diff_to_scale == 0, 1 , diff_to_scale)
-  diff_ref <- max_var_ref - min_var_ref
-  diff <- diff_ref / diff_to_scale
-  
-  adjust <- (max_var_ref - max_var_to_scale*diff) 
-  
-  return(data.frame(diff = diff, adjust = adjust, operation = "scaled var = (var_to_scale * diff) + adjust",
-                    trans_axis_operation = "var_to_scale = {scaled_var - adjust} / diff)"))
-  
-}
-
-make_the_X11_plot_of_river_and_plume <- function(X11_data, type_of_signal) {
+plot_x11_river_and_plume <- function(X11_data, type_of_signal) {
   
   unique_years <- X11_data$dates %>% year() %>% unique()
   
@@ -405,7 +352,7 @@ Figure_1 <- function(where_to_save_the_figure) {
 # station overlay), shared by Figure_1() (with stations, embedded as insets)
 # and regional_zone_maps() below (without stations, a standalone reference
 # figure used by Figure_5()).
-regional_zone_maps_panels <- function(data_folder, include_station_points) {
+zone_maps_panels <- function(data_folder, include_station_points) {
 
   SPM_map_data <- file.path(data_folder, "DATA") %>%
     list.files(pattern = "*.csv", full.names = TRUE) %>%
@@ -472,7 +419,7 @@ regional_zone_maps <- function(where_to_save_the_figure, include_station_points)
 
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_1")
 
-  SPM_maps <- regional_zone_maps_panels(main_folder, include_station_points)
+  SPM_maps <- zone_maps_panels(main_folder, include_station_points)
 
   save_plot_as_png(SPM_maps, paste("regional_zone_maps", ifelse(include_station_points, "with_stations", "wo_stations"), sep = "_"),
                    width = 28, height = 16, path = main_folder)
@@ -949,9 +896,9 @@ compute_x11_zone_plots <- function(data_dir){
     X11_ts <- plume_data_region %>% inner_join(river_data_region, by = "dates", suffix = c("_plume_area", "_river_flow"))
 
     zone_label <- zone_title(region)
-    list("Interannual" = make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Interannual') + labs(title = zone_label),
-        "Seasonal" = make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Seasonal') + labs(title = zone_label),
-        "Residual" = make_the_X11_plot_of_river_and_plume(X11_ts, type_of_signal = 'Residual') + labs(title = zone_label))
+    list("Interannual" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Interannual') + labs(title = zone_label),
+        "Seasonal" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Seasonal') + labs(title = zone_label),
+        "Residual" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Residual') + labs(title = zone_label))
 
   })
 }
@@ -976,7 +923,7 @@ Figure_6_x11_interannual <- function(where_to_save_the_figure){
 # instead corrupts the rotated secondary-axis text (checked visually: the
 # y-axis labels overlap into an unreadable smear). Compositing at the image
 # level, like the pre-2026-08-01 Figure_8/Figure_10 assembly did, avoids this.
-save_x11_two_component_composite <- function(zone_plots, components, name, path){
+save_x11_component_composite <- function(zone_plots, components, name, path){
   panel_files <- purrr::map_chr(components, function(component){
     save_plot_as_png(stack_x11_component(zone_plots, component), paste0(name, "_", tolower(component)),
                      width = 20, height = 16, path = path)
@@ -997,7 +944,7 @@ Figure_S2_x11_components <- function(where_to_save_the_figure){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S2")
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
   zone_plots <- compute_x11_zone_plots(data_dir)
-  save_x11_two_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S2", main_folder)
+  save_x11_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S2", main_folder)
 }
 
 # manuscript Figure S5: X11 interannual signal, static threshold
@@ -1017,7 +964,7 @@ Figure_S6_x11_components_static <- function(where_to_save_the_figure){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S6")
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
   zone_plots <- compute_x11_zone_plots(data_dir)
-  save_x11_two_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S6", main_folder)
+  save_x11_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S6", main_folder)
 }
 
 # manuscript Figure S3: seasonal (JJA vs. NDJ) boxplots of plume metrics,
