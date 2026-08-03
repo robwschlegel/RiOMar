@@ -54,14 +54,14 @@ Four coastal zones used throughout: `GULF_OF_LION`, `BAY_OF_SEINE`, `BAY_OF_BISC
 ### func/ modules (Python)
 - [func/dl.py](func/dl.py) — FTP/CMEMS downloads via `copernicusmarine`; `Download_satellite_data`, `download_cmems_subset`, `daily_integral`
 - [func/util.py](func/util.py) — shared helpers: file discovery, parameter parsing, zone coordinates, path templating
-- [func/validate.py](func/validate.py) — satellite vs in situ match-up (`Match_up_with_insitu_measurements`)
+- [func/validate.py](func/validate.py) — placeholder, kept for git history; satellite vs in situ match-up now lives entirely in `func/validate.R` (see below)
 - [func/regmap.py](func/regmap.py) — regional map creation and QC (`create_regional_maps`, `QC_of_regional_maps`)
-- [func/plume.py](func/plume.py) — plume geometry and pixel extraction (supports the panache workflow)
-- [func/X11.py](func/X11.py) — X11 seasonal decomposition, calls R via `rpy2`; `Apply_X11_method_on_time_series`
-- [func/figure.py](func/figure.py) — all publication figures (`Figure_1` through `Figure_8_9_10`)
+- [func/plume.py](func/plume.py) — placeholder, kept for git history; plume detection is now handled entirely by the external `panache` package (`panache.plume_algorithm`, `panache.utils`), and the one RiOMar-specific figure-prep helper this file used to hold (`preprocess_annual_dataset_and_compute_land_mask`) now lives in `func/figure.py`, its only caller
+- [func/X11.py](func/X11.py) — X11 seasonal decomposition, calls R via `rpy2`; `Apply_X11_method_on_time_series`. **Frozen**: this file and its R counterpart `func/X11.R` are intentionally excluded from renaming/refactor passes — do not edit either, even for naming consistency
+- [func/figure.py](func/figure.py) — all publication figures (`Figure_1`, `Figure_2`, `Figure_3`/`Figure_3_panels`/`Figure_3_zone_maps`, `Figure_4_S1_timeseries`, `Figure_5_driver_comparison`, `Figure_X11_weekly_results`, `Figure_7_driver_rose`, `Figure_8_driver_category`, `Figure_9_gam_partial`, `Figure_S3_seasonal_boxplots`)
 
 ### func/ modules (R)
-Parallel R implementations exist for most modules (`util.R`, `validate.R`, `regmap.R`, `X11.R`, etc.). These are used for analyses that rely on R packages (e.g. X11 seasonal decomposition) and are called from Python via `rpy2`.
+Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.R`, etc. — there is no `regmap.R`, regional-map creation is Python-only). These are used for analyses that rely on R packages (e.g. X11 seasonal decomposition, all plotting) and are called from Python via `rpy2`. `func/validate.R` is the authoritative satellite-vs-in-situ match-up pipeline (writes both `output/MATCH_UP_DATA/FRANCE/summary.csv`, feeding manuscript Table 4, and the SEXTANT/ODATIS-MR `STATISTICS/*.csv` tables feeding Figure 2).
 
 ### metadata/
 Zone configuration JSONs consumed directly by `panache` and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
@@ -76,7 +76,7 @@ A Python dict like:
 is the standard argument passed to every major pipeline function. `util.define_parameters` converts it into a named-tuple `info` object.
 
 ### Multiprocessing
-`dl.py`, `regmap.py`, `validate.py`, and `plume.py` all use `multiprocess` (not the stdlib `multiprocessing`). The start method is forced to `'spawn'` for macOS compatibility — do not change this.
+`dl.py` and `regmap.py` use `multiprocess` (not the stdlib `multiprocessing`). The start method is forced to `'spawn'` for macOS compatibility — do not change this.
 
 ### Rhône apportionment
 The Rhône splits near Arles into Grand Rhône and Petit Rhône, each with its own gauge (Arles, Fourques) through 2022. From 2023 onward, both branches are extended from the upstream Tarascon gauge via a MOVE.1 log-log regression fit separately per branch on the full 1998–2022 overlap (`func/river_flow_prep.R`, `river_config`) — not a flat fraction of the combined discharge. (An earlier fixed-fraction rule — 11% to Petit Rhône before 2012-05-28, 10% thereafter — was superseded by this; it was never actually implemented in code and has been removed from the manuscript.)
