@@ -194,26 +194,7 @@ def find_sat_data_files(info, path_to_sat_data) :
     return map_files
 
 
-def store_arguments(arguments, locally = False, globally = False, return_arguments = False):
-    
-    arguments_to_return = []
-    for key, value in arguments.items():
-        if locally : 
-            locals()[key] = value
-            continue
-        if globally : 
-            globals()[key] = value
-            continue
-        if return_arguments : 
-            arguments_to_return.append(value)
-        
-    if return_arguments : 
-        return arguments_to_return
-            
-    # print(Data_sources)  # Works inside this function
-
-
-def path_to_fill_to_where_to_save_satellite_files(where_to_save_files) : 
+def path_to_fill_to_where_to_save_satellite_files(where_to_save_files) :
     
     path = f'{where_to_save_files}/[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]/[YEAR]/[MONTH]/[DAY]'
 
