@@ -6,7 +6,7 @@
 import os
 import subprocess
 
-proj_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+proj_dir = os.path.dirname(os.path.abspath('__file__'))
 
 # NB: The plume detection is done via the panache module.
 # NB: Takes roughly 60 minutes per zone.
