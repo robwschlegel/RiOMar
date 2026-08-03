@@ -1,5 +1,5 @@
-,GULF_OF_LION,BAY_OF_BISCAY,SOUTHERN_BRITTANY,BAY_OF_SEINE
-lat_min,42.25,45.0,46,49.0
-lat_max,44.0,46.75,48,50.5
-lon_min,3.0,-4.0,-5,-1.5
-lon_max,6.0,-0.5,-1,2.0
+,BAY_OF_SEINE,SOUTHERN_BRITTANY,BAY_OF_BISCAY,GULF_OF_LION
+lat_min,49.0,46,45.0,42.25
+lat_max,50.5,48,46.75,44.0
+lon_min,-1.5,-5,-4.0,3.0
+lon_max,2.0,-1,-0.5,6.0

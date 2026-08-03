@@ -34,6 +34,14 @@ All scripts prepend `func/` to `sys.path` by setting `proj_dir` from `os.path.ab
 
 A browsable map of which script produces which figure/table, where each output lands, and what's currently a known gap is maintained at https://claude.ai/code/artifact/fd8a00ad-f109-48cd-94c1-2cca329f657f. It is a living document, not a one-time snapshot — update it in place (same URL) whenever the pipeline's wiring changes (a figure function moves, an output path changes, a `\figplaceholder` gets repointed, a gap gets fixed or a new one is found).
 
+## French river plume literature review (gaps document)
+
+When considering weaknesses or gaps in the current RiOMar plume-analysis methodology (e.g. for Discussion/Conclusion writing, or before proposing a methodological change), consult [manuscript/french_plume_literature_review.md](manuscript/french_plume_literature_review.md). It reviews every French river plume study (Seine, Loire, Gironde, Rhône, plus the Adour as an out-of-sample comparator) in `manuscript/references.bib`, grouped by zone, and synthesises seven recurring gap themes (no dynamical/process model, exclusion of the near-mouth/turbidity-maximum zone, no sub-daily/tidal-phase resolution, surface-only detection, plume detachment invisible to a threshold-and-flood-fill detector, ROFI used only as a static check, no compositional/biogeochemical SPM breakdown).
+
+A live, formatted version of the same content is published at https://claude.ai/code/artifact/a282bc0a-b486-4e88-897c-76d7a94db34b. Like the pipeline map above, this is a living document: if RiOMar's methodology changes in a way that closes, changes, or adds to one of the gaps it identifies, update both the `.md` file and that artifact URL together, in place.
+
+This document is a strong source of material for the manuscript's Discussion and Conclusion sections (which gaps are worth naming as limitations, which are natural future work) but has not yet been drawn on for that text -- it is currently reference-only.
+
 ## Data storage
 
 Large datasets are stored **outside** this repo under `~/pCloudDrive/data/` and are never committed. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.

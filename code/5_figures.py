@@ -18,7 +18,7 @@ sys.path.append( func_dir )
 import util, figure
 from figure import (Figure_1, Figure_2, Figure_3, Figure_3_panels, Figure_3_zone_maps, Figure_5_driver_comparison,
                     Figure_7_driver_rose, Figure_8_driver_category, Figure_9_gam_partial,
-                    Figure_4_S1_timeseries, Figure_X11_weekly_results, Figure_S4_seasonal_boxplots)
+                    Figure_4_S1_timeseries, Figure_X11_weekly_results, Figure_S3_seasonal_boxplots)
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg')
@@ -29,6 +29,7 @@ mpl.use('agg')
 # =============================================================================
 
 Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
+         where_are_saved_regional_maps = "output",
          where_to_save_the_figure = "figures")
 
 Figure_2(where_to_save_the_figure = "figures")
@@ -76,7 +77,8 @@ Figure_X11_weekly_results(where_are_saved_X11_results_dynamic = "output/panache/
 # ### Supplementary figures
 # =============================================================================
 
-# Figure S4: seasonal (JJA vs. NDJ) boxplots of plume metrics, dynamic vs.
+# Figure S3: seasonal (JJA vs. NDJ) boxplots of plume metrics, dynamic vs.
 # static threshold -- migrated from manuscript/make_figures_tables.R into
-# the real pipeline (2026-08-01).
-Figure_S4_seasonal_boxplots(where_to_save_the_figure = "figures")
+# the real pipeline (2026-08-01). Renamed 2026-07-31 from Figure S4 when
+# the daily-vs-weekly Figure S2 was removed and later figures renumbered.
+Figure_S3_seasonal_boxplots(where_to_save_the_figure = "figures")

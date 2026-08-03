@@ -640,7 +640,45 @@ def get_the_values_from_a_list_comprehension(lst_comprehension, return_the_uniqu
     return the_values
 
 
-def define_parameters(Zone) : 
+ZONE_DISPLAY_NAMES = {
+    'BAY_OF_SEINE': 'Bay of Seine',
+    'BAY_OF_BISCAY': 'Bay of Biscay',
+    'SOUTHERN_BRITTANY': 'Southern Brittany',
+    'GULF_OF_LION': 'Gulf of Lion',
+}
+
+
+def zone_title(zone_name):
+    """
+    Human-facing zone display name (e.g. "BAY_OF_SEINE" -> "Bay of Seine").
+
+    The single shared source of this mapping across the Python side of the
+    codebase -- use this instead of hand-writing zone titles or leaving zone
+    codes in ALL_CAPS on any human-facing plot/table/caption. See
+    func/multi.R::zone_title() for the R-side equivalent.
+    """
+    return ZONE_DISPLAY_NAMES[zone_name]
+
+
+# Canonical zone order, north to south, for consistent panel ordering across
+# every multi-zone figure/table (top to bottom, or left to right): Bay of
+# Seine, Southern Brittany, Bay of Biscay, Gulf of Lion. See
+# func/util.R::ZONE_ORDER/order_zones() for the R-side equivalent.
+ZONE_ORDER = ['BAY_OF_SEINE', 'SOUTHERN_BRITTANY', 'BAY_OF_BISCAY', 'GULF_OF_LION']
+
+
+def order_zones(zone_iterable):
+    """
+    Sort any iterable of zone codes into the canonical north-to-south order.
+
+    Use this instead of a plain sorted()/dict key order, which would
+    otherwise come out alphabetical or reflect whatever order zones happened
+    to be listed in at each call site.
+    """
+    return sorted(zone_iterable, key=ZONE_ORDER.index)
+
+
+def define_parameters(Zone) :
     
     """
     Define region-specific parameters based on the selected zone.

@@ -149,8 +149,8 @@ library(doParallel); doParallel::registerDoParallel(cores = 14)
 # Common function
 source("func/util.R")
 
-# Zones
-zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY", "GULF_OF_LION")
+# Zones, north to south (see func/util.R::ZONE_ORDER/order_zones())
+zones <- ZONE_ORDER
 
 
 # Zone / gauge metadata -----------------------------------------------------
@@ -176,7 +176,8 @@ zone_meta <- river_mouths |>
       zone == "GULF_OF_LION"      ~ "MARSEILLE",
       TRUE ~ NA_character_
     )
-  )
+  ) |>
+  dplyr::arrange(match(zone, ZONE_ORDER))
 
 # Look up zone metadata by either the river mouth name (as used in
 # river_mouths/zone_meta) or the zone code (as used in zones_bbox / output/
@@ -193,6 +194,25 @@ get_zone_meta <- function(mouth_name = NULL, zone_name = NULL){
   }
   if(nrow(out) != 1) stop("Zone/mouth not recognised in zone_meta.")
   return(out)
+}
+
+# Human-facing zone display name (e.g. "BAY_OF_SEINE" -> "Bay of Seine"),
+# vectorised. The single shared source of this mapping across the R side of
+# the codebase (previously duplicated ad hoc, e.g. Figure_S3_seasonal_boxplots()'s
+# local zone_labels vector) -- use this instead of hand-writing zone titles or
+# leaving zone codes in ALL_CAPS on any human-facing plot/table/caption. See
+# func/util.py::zone_title() for the Python-side equivalent.
+zone_display_names <- c(
+  BAY_OF_SEINE      = "Bay of Seine",
+  BAY_OF_BISCAY     = "Bay of Biscay",
+  SOUTHERN_BRITTANY = "Southern Brittany",
+  GULF_OF_LION      = "Gulf of Lion"
+)
+zone_title <- function(zone_name){
+  out <- unname(zone_display_names[zone_name])
+  if(anyNA(out) && !anyNA(zone_name)) stop("zone_title(): unrecognised zone code(s): ",
+                                            paste(setdiff(zone_name, names(zone_display_names)), collapse = ", "))
+  out
 }
 
 
@@ -504,16 +524,19 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 16, df_flow = NULL){
     dplyr::left_join(df_driver, by = "date") |>
     tidyr::drop_na(plume_area, flow, dplyr::all_of(dir_col))
 
-  # Bay of Seine's wave file has no VMDR (direction) variable at all (see
-  # load_wave()'s NB 2) -- drop_na() above empties df entirely in that case.
-  # A blank rose would be misleading (looks like "no data collected" rather
-  # than "direction not available"), so say so explicitly instead.
+  # Defensive fallback for a zone/driver missing direction entirely (see
+  # load_wave()'s NB 2 -- this specifically affected the Bay of Seine's wave
+  # direction until the 2026-07-31 WAVE re-download added VMDR there too;
+  # kept here in case of a future data regression) -- drop_na() above would
+  # empty df entirely in that case. A blank rose would be misleading (looks
+  # like "no data collected" rather than "direction not available"), so say
+  # so explicitly instead.
   if(nrow(df) == 0){
     pl <- ggplot() +
       annotate("text", x = 0.5, y = 0.5, label = paste0(toupper(driver_name), " direction\nnot available\nfor this zone"),
                size = 5, colour = "grey40") +
       xlim(0, 1) + ylim(0, 1) +
-      labs(title = paste0(meta$mouth_name, ": ", tolower(disp$driver_label))) +
+      labs(title = paste0(zone_title(meta$zone), ": ", tolower(disp$driver_label))) +
       theme_void() + theme(plot.title = element_text(hjust = 0.5))
 
     ggsave(filename = paste0("figures/driver_comparison/rose_", driver_name, "_plume_", meta$mouth_name, ".png"),
@@ -539,7 +562,7 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 16, df_flow = NULL){
     scale_x_continuous(breaks = compass_breaks, labels = compass_labels, limits = c(0, 360)) +
     scale_fill_gradient2(low = "steelblue", mid = "grey90", high = "firebrick", midpoint = 0,
                         name = "Plume-area\nresidual (km²)") +
-    labs(x = NULL, y = "Days", title = paste0(meta$mouth_name, ": ", tolower(disp$driver_label))) +
+    labs(x = NULL, y = "Days", title = paste0(zone_title(meta$zone), ": ", tolower(disp$driver_label))) +
     theme_minimal() +
     theme(panel.grid.major = element_line(colour = "grey85"), plot.title = element_text(hjust = 0.5))
 
@@ -582,7 +605,7 @@ plot_driver_category_scatter <- function(meta){
     geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
     scale_colour_manual(values = category_colours) +
     labs(x = "Wave height (m)", y = "Flow-controlled plume-area residual (km²)",
-        colour = NULL, title = meta$mouth_name) +
+        colour = NULL, title = zone_title(meta$zone)) +
     theme(panel.border = element_rect(fill = NA, colour = "black"), legend.position = "bottom")
 }
 

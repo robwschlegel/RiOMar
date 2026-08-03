@@ -79,6 +79,7 @@ def get_insitu_measurements(zones = ['FRANCE']) :
         'pk 86': 'Pays de la Loire - Pertuis', 
         'Antioche': 'Pays de la Loire - Pertuis',
         'Portzic': 'Bretagne Sud',
+        'Lanvéoc': 'Bretagne Sud',
         'Estacade': 'Manche occidentale', 
         'Astan': 'Manche occidentale', 
         'Bizeux': 'Manche occidentale', 
@@ -93,8 +94,8 @@ def get_insitu_measurements(zones = ['FRANCE']) :
     zone_mapping = {
         'Mer ligurienne - Corse' : 'GULF OF LION',
         'Golfe du Lion' : 'GULF OF LION',
-        'Sud Golfe de Gascogne' : 'GULF OF BISCAY',         
-        'Pays de la Loire - Pertuis': 'GULF OF BISCAY',
+        'Sud Golfe de Gascogne' : 'BAY OF BISCAY',
+        'Pays de la Loire - Pertuis': 'BAY OF BISCAY',
         'Bretagne Sud' : 'SOUTHERN BRITTANY',
         'Manche occidentale' : 'SOUTHERN BRITTANY', 
         'Baie de Seine' : 'BAY OF SEINE', 

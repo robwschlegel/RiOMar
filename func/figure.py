@@ -20,7 +20,7 @@ func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files,
-                  align_bathymetry_to_resolution, define_parameters)
+                  align_bathymetry_to_resolution, define_parameters, order_zones)
 from validate import get_insitu_measurements
 # reduce_resolution/preprocess_annual_dataset_and_compute_land_mask are
 # RiOMar-specific figure-prep utilities with no equivalent in panache.
@@ -127,27 +127,26 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
 
 
 def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_figure,
-                            date_of_the_map, coordinates_of_the_map) :
+                            mean_spm_path, coordinates_of_the_map) :
+    # Main-panel background changed 2026-08-01 (per Robert) from a single
+    # hardcoded snapshot date (2011/02/02) to the pixel-wise temporal mean
+    # SPM field across the whole SEXTANT archive (func/compute_mean_spm.py,
+    # output/STATS/mean_spm_national.nc) -- a proper climatological
+    # background rather than one arbitrary day's cloud/turbidity pattern.
 
     folder_where_to_save_Figure_1_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
     os.makedirs(folder_where_to_save_Figure_1_data, exist_ok = True)
-    
-    path_to_nc_file = (path_to_fill_to_where_to_save_satellite_files(where_are_saved_satellite_data)
-                       .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
-                                'SEXTANT/SPM/merged/Standard/DAILY')
-                       .replace('[YEAR]/[MONTH]/[DAY]',
-                                date_of_the_map))
-        
-    with xr.open_dataset( glob.glob(path_to_nc_file + "/*.nc")[0] ) as ds :
-        SPM_map = (ds['analysed_spim']
-                   .sel(lat=slice(coordinates_of_the_map['lat_min'], coordinates_of_the_map['lat_max']), 
-                        lon=slice(coordinates_of_the_map['lon_min'], coordinates_of_the_map['lon_max'])) 
+
+    with xr.open_dataset(mean_spm_path) as ds :
+        SPM_map = (ds['mean_analysed_spim']
+                   .sel(lat=slice(coordinates_of_the_map['lat_min'], coordinates_of_the_map['lat_max']),
+                        lon=slice(coordinates_of_the_map['lon_min'], coordinates_of_the_map['lon_max']))
                    .to_dataframe()
                    .reset_index()
-                   .drop(columns=["time"]))
-        
+                   .rename(columns={'mean_analysed_spim': 'analysed_spim'}))
+
         SPM_map.to_csv(folder_where_to_save_Figure_1_data + "/SPM_map.csv")
-          
+
     extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figure_1_data)
     
     
@@ -192,7 +191,7 @@ def extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figu
                                                 'lat_max' : define_parameters(zone_name)['lat_range_of_the_map_to_plot'][1],
                                                 'lon_min' : define_parameters(zone_name)['lon_range_of_the_map_to_plot'][0],
                                                 'lon_max' : define_parameters(zone_name)['lon_range_of_the_map_to_plot'][1]}
-                                  for zone_name in ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY', 'BAY_OF_SEINE'] }
+                                  for zone_name in order_zones(['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY', 'BAY_OF_SEINE']) }
     
     pd.DataFrame.from_dict(coordinates_of_the_RIOMARS).to_csv(folder_where_to_save_Figure_data + "/RIOMAR_limits.csv")
     
@@ -213,11 +212,24 @@ def extract_insitu_stations_and_save_the_file_for_plot(folder_where_to_save_Figu
     stations_in_the_RIOMARS.to_csv(folder_where_to_save_Figure_data + "/Stations_position.csv")
     
     
-def dates_for_each_zone() : 
-    return {'GULF_OF_LION' : '2014-01-04',
-            'BAY_OF_BISCAY' : '2009-04-22',
-            'SOUTHERN_BRITTANY' : '2016-05-23',# '2022-01-21',
-            'BAY_OF_SEINE' : '2018-02-25'}
+def dates_for_each_zone() :
+    # Dict order here is the panel order used by Figure 1's insets and
+    # Figure_3_zone_maps() -- kept north to south (util.ZONE_ORDER) rather
+    # than alphabetical or ad hoc, so multi-panel figures read consistently
+    # top to bottom.
+    #
+    # Dates updated 2026-08-01 (per Robert): each zone's date of maximum
+    # dynamic-threshold plume area (output/panache/dynamic/<zone>/Results.csv),
+    # with func/util.R's plume_area_ceiling artefact screen applied first --
+    # the raw per-zone maxima before that screen (Bay of Seine 2014-02-02 at
+    # 9563 km^2; Gulf of Lion 2005-05-12 at 22359 km^2) are known flood-fill
+    # spillover artefacts, both far above their zone's ceiling (2500 and
+    # 10000 km^2 respectively), not real plume days.
+    dates = {'GULF_OF_LION' : '2005-01-27',
+            'BAY_OF_BISCAY' : '2018-01-17',
+            'SOUTHERN_BRITTANY' : '2007-12-09',
+            'BAY_OF_SEINE' : '2001-02-19'}
+    return {zone : dates[zone] for zone in order_zones(dates.keys())}
 
 
 # =============================================================================
@@ -225,18 +237,25 @@ def dates_for_each_zone() :
 # =============================================================================
 
 
-def Figure_1(where_are_saved_satellite_data, where_to_save_the_figure):
+def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, where_to_save_the_figure):
     save_files_for_Figure_1(where_are_saved_satellite_data,
                             where_to_save_the_figure,
-                            date_of_the_map="2011/02/02",
+                            mean_spm_path=os.path.join(proj_dir, "output", "STATS", "mean_spm_national.nc"),
                             coordinates_of_the_map={"lat_min": 42, "lat_max": 51.5, "lon_min": -6, "lon_max": 8})
 
     # The four regional zoomed insets (the former standalone Figure_2(), with
-    # SOMLIT/REPHY station overlays) are built inside Figure_1() in figure.R
-    # by cropping this same national SPM_map -- not a separate per-zone
-    # snapshot date -- so no extra data prep is needed here. Manuscript
-    # Figure 2 is the satellite-vs-in-situ validation scatterplot instead,
-    # produced separately by func/validate.py during 1_validate.py.
+    # SOMLIT/REPHY station overlays) are built inside Figure_1() in figure.R.
+    # Changed 2026-08-01 (per Robert): each inset now uses its own zone's date
+    # of maximum plume area (dates_for_each_zone()) instead of being cropped
+    # from the national map's single date/mean -- the point of the change is
+    # to actually show each zone's plume at its most visually striking, so a
+    # climatological mean (now used for the national backdrop) or a single
+    # shared arbitrary date would defeat that. Manuscript Figure 2 is the
+    # satellite-vs-in-situ validation scatterplot instead, produced
+    # separately by func/validate.py during 1_validate.py.
+    load_the_regional_maps_and_save_them_for_plotting(where_are_saved_regional_maps,
+                                                      where_to_save_the_figure,
+                                                      dates_for_each_zone())
 
     # Source the R scrip
     figure_R_path = os.path.join(func_dir, 'figure.R')
@@ -280,10 +299,16 @@ def Figure_2(where_to_save_the_figure):
     # func/validate.py's match-up pipeline (run during 1_validate.py). This
     # function does not regenerate the scatterplots themselves, so tweaking
     # them and re-running 1_validate.py is picked up automatically next time.
+    # Panel b changed 2026-08-01 (per Robert) from the Chl-a scatterplot to
+    # the SPM-vs-turbidity one: REPHY (the larger in situ network) measures
+    # only turbidity, not SPM (only SOMLIT measures SPM directly), so this
+    # panel is what actually makes use of the REPHY match-ups -- see
+    # Section 2.3.1's discussion of Doxaran et al. (2009) for why comparing
+    # satellite SPM against in situ turbidity is a defensible substitution.
     spm_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
                                         'SEXTANT_SPM_SPM_Standard_OC5_3x3.png')
-    chla_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
-                                         'SEXTANT_CHLA_CHL_Standard_OC5_3x3.png')
+    turb_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
+                                         'SEXTANT_TUR_SPM_Standard_OC5_3x3.png')
 
     # Source the R script
     figure_R_path = os.path.join(func_dir, 'figure.R')
@@ -293,7 +318,7 @@ def Figure_2(where_to_save_the_figure):
 
     # Call the R function
     r_function(spm_scatterplot_path=robjects.StrVector([spm_scatterplot_path]),
-               chla_scatterplot_path=robjects.StrVector([chla_scatterplot_path]),
+               turb_scatterplot_path=robjects.StrVector([turb_scatterplot_path]),
                where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
@@ -412,16 +437,6 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
     # Figure_5_driver_comparison()'s Figure_5.png).
     the_dates_for_each_zone = dates_for_each_zone()
 
-    plume_fixed_thresholds = {
-        'Seine': 5.5,
-        # 'Gironde' : 5,
-        'Grand Rhone': 3,
-        'Petit Rhone': 3,
-        'Loire': 5,
-        'Sevre': 11}
-    # 'SOUTHERN_BRITTANY' : '2008-01-26',# '2022-01-21',
-    # 'BAY_OF_SEINE' : '2018-02-25'}
-
     # Folded into Figure 3 (methodology composite) rather than a standalone
     # manuscript figure -- this panel is now an input to Figure_3(), not
     # FIGURE_5 (which is manuscript Figure 5, the plume-vs-flow driver
@@ -461,14 +476,16 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         all_mask_area = []
         all_river_mouth_to_remove = []
         thresholds = {key: None for key in parameters['starting_points']}
-        # Loop through each plume starting point to process plume detection
+        # Loop through each plume starting point to process plume detection.
+        # Always dynamic threshold (matching Figure_3_panels() and every
+        # zone's real metadata/zone_config_dynamic_*.json, all of which set
+        # dynamic_threshold: True) -- this used to override several river
+        # mouths (Seine, Grand Rhone, Petit Rhone, Loire, Sevre) with fixed
+        # thresholds hand-tuned for a since-replaced set of dates, which
+        # under-detected the plume on the zones' actual record dynamic-
+        # threshold days (Robert, 2026-08-01: Bay of Seine and Gulf of Lion's
+        # Figure 3 panels looked implausibly small for their record area).
         for plume_name, starting_point in parameters['starting_points'].items():
-
-            if plume_name in plume_fixed_thresholds:
-                parameters['fixed_threshold'][plume_name] = plume_fixed_thresholds[plume_name]
-                use_dynamic_threshold = False
-            else:
-                use_dynamic_threshold = True
 
             the_plume = Pipeline_to_delineate_the_plume(ds_reduced,
                                                         bathymetry_data_aligned_to_reduced_map,
@@ -476,7 +493,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
                                                         parameters,
                                                         plume_name,
                                                         inside_polygon_mask,
-                                                        dynamic_thresh=use_dynamic_threshold)
+                                                        dynamic_thresh=True)
 
             thresholds[plume_name] = the_plume.SPM_threshold
             all_mask_area.append(the_plume.plume_mask)
@@ -503,23 +520,6 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
 
         SPM_map = ds_reduced.to_dataframe().reset_index()
         SPM_map['plume'] = final_mask_area.values.flatten()
-
-        if Zone == 'GULF_OF_LION':
-            SPM_map.plume[np.where((SPM_map.plume == False) &
-                                   (SPM_map.analysed_spim > 10) &
-                                   (SPM_map.lat > 43.2) &
-                                   (SPM_map.lat < 43.375) &
-                                   (SPM_map.lon < 5) &
-                                   (SPM_map.lon > 4.7))[0]] = True
-            SPM_map.plume[np.where((SPM_map.plume == True) &
-                                   (SPM_map.analysed_spim < 10) &
-                                   (SPM_map.lon < 4.7))[0]] = False
-            # SPM_map.plume[np.where((SPM_map.plume == False) &
-            #                        (SPM_map.analysed_spim > thresholds['Grand Rhone']) &
-            #                        (SPM_map.lat > 43.2) &
-            #                        (SPM_map.lat < 43.35) &
-            #                        (SPM_map.lon < 5) &
-            #                        (SPM_map.lon > 4.6))[0]] = True
 
         SPM_map.to_csv(where_to_save_the_figure_5 + f"/DATA/{Zone}.csv")
 
@@ -741,37 +741,41 @@ def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_sav
     """
     Replaces the deprecated Figure_8_9_10()/Figures_8_9_10(), which produced
     3 plots (Seasonal/Interannual/Residual) per threshold but only wired the
-    dynamic-threshold ones into the manuscript (Figure 6, Figure S3) --
+    dynamic-threshold ones into the manuscript (Figure 6, Figure S2) --
     its static-threshold counterpart was computed and saved but never cited
     anywhere (2026-08-01 audit). This version wires all 4 real manuscript
-    figures: Figure 6 + Figure S3 (dynamic), Figure S6 + Figure S7 (static,
-    supplementary robustness check mirroring 6/S3).
+    figures: Figure 6 + Figure S2 (dynamic), Figure S5 + Figure S6 (static,
+    supplementary robustness check mirroring 6/S2). Renamed 2026-07-31 (S3->S2,
+    S6->S5, S7->S6) when the daily-vs-weekly Figure S2 was removed from the
+    manuscript and every later supplementary figure renumbered down by one.
     """
     figure_6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
-    figure_s6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S6")
+    figure_s5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S5")
     _prep_x11_weekly_data(where_are_saved_X11_results_dynamic, figure_6_dir)
-    _prep_x11_weekly_data(where_are_saved_X11_results_static, figure_s6_dir)
+    _prep_x11_weekly_data(where_are_saved_X11_results_static, figure_s5_dir)
 
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    for r_func_name in ['Figure_6_x11_interannual', 'Figure_S3_x11_components',
-                       'Figure_S6_x11_interannual_static', 'Figure_S7_x11_components_static']:
+    for r_func_name in ['Figure_6_x11_interannual', 'Figure_S2_x11_components',
+                       'Figure_S5_x11_interannual_static', 'Figure_S6_x11_components_static']:
         try:
             robjects.r[r_func_name](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
         except Exception as e:
             print(f"Warning: {r_func_name} R plot failed: {e}. Skipping.")
 
 
-def Figure_S4_seasonal_boxplots(where_to_save_the_figure):
+def Figure_S3_seasonal_boxplots(where_to_save_the_figure):
     """
     Migrated 2026-08-01 from manuscript/make_figures_tables.R's
     generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
-    writes straight to figures/ARTICLE/FIGURE_S4/ instead of via the
+    writes straight to figures/ARTICLE/FIGURE_S3/ instead of via the
     manuscript/figures/ copy step. No Python-side data prep needed -- the R
     function reads output/panache/{dynamic,static}/{zone}/Results.csv directly.
+    Renamed 2026-07-31 from Figure_S4_seasonal_boxplots(), see
+    Figure_X11_weekly_results()'s note above.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
-    robjects.r['Figure_S4_seasonal_boxplots'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+    robjects.r['Figure_S3_seasonal_boxplots'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 

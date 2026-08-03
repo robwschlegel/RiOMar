@@ -150,20 +150,22 @@ plot_flow_plume_rofi_panel <- function(zone_name){
 # three), sharing one legend, so the flow -> plume -> ROFI succession can be
 # compared across all three rivers at a glance.
 plot_flow_plume_rofi_succession <- function(){
-  rofi_zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
+  rofi_zones <- order_zones(c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY"))
   panels <- purrr::map(rofi_zones, plot_flow_plume_rofi_panel)
 
   full_plot <- patchwork::wrap_plots(panels, ncol = 1) +
     patchwork::plot_layout(guides = "collect") &
     theme(legend.position = "bottom")
 
-  # manuscript Figure S5a. Fixed 2026-08-01: manuscript.tex's \figplaceholder
-  # expected this at figures/flow_plume_rofi_succession.png (flat), but it
-  # was actually saved to figures/driver_comparison/ -- the figure was never
-  # actually rendering (silent \figplaceholder fallback). Now in its own
-  # FIGURE_S5/ folder, matching every other manuscript figure.
-  if (!dir.exists("figures/ARTICLE/FIGURE_S5")) dir.create("figures/ARTICLE/FIGURE_S5", recursive = TRUE)
-  ggsave(filename = "figures/ARTICLE/FIGURE_S5/flow_plume_rofi_succession.png", plot = full_plot, width = 12, height = 10, dpi = 300)
+  # manuscript Figure S4a (renamed 2026-07-31 from S5a when the daily-vs-
+  # weekly Figure S2 was removed and every later supplementary figure
+  # renumbered down by one). Fixed 2026-08-01: manuscript.tex's
+  # \figplaceholder expected this at figures/flow_plume_rofi_succession.png
+  # (flat), but it was actually saved to figures/driver_comparison/ -- the
+  # figure was never actually rendering (silent \figplaceholder fallback).
+  # Now in its own FIGURE_S4/ folder, matching every other manuscript figure.
+  if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
+  ggsave(filename = "figures/ARTICLE/FIGURE_S4/flow_plume_rofi_succession.png", plot = full_plot, width = 12, height = 10, dpi = 300)
   invisible(full_plot)
 }
 
@@ -218,9 +220,10 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
          subtitle = "Daily resolution; estuary excluded from plume area; red = lag of maximum r") +
     theme_bw()
 
-  # manuscript Figure S5b -- same broken-path fix as Figure S5a above.
-  if (!dir.exists("figures/ARTICLE/FIGURE_S5")) dir.create("figures/ARTICLE/FIGURE_S5", recursive = TRUE)
-  ggsave(filename = "figures/ARTICLE/FIGURE_S5/rofi_plume_lagged_correlation.png", plot = pl, width = 12, height = 9, dpi = 300)
+  # manuscript Figure S4b (renamed 2026-07-31, see Figure S4a above) -- same
+  # broken-path fix as Figure S4a above.
+  if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
+  ggsave(filename = "figures/ARTICLE/FIGURE_S4/rofi_plume_lagged_correlation.png", plot = pl, width = 12, height = 9, dpi = 300)
   invisible(pl)
 }
 
@@ -229,7 +232,7 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
 # throughout (the only version we're keeping -- see combine_flow_plume_rofi()),
 # and save the combined correlation table + figures.
 run_rofi_plume_succession <- function(){
-  rofi_zones <- c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
+  rofi_zones <- order_zones(c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY"))
   pairs <- tibble::tribble(
     ~x_col,       ~y_col,  ~pair_label,
     "plume_area", "flow",  "Plume vs flow",

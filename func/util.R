@@ -4,6 +4,19 @@
 
 # Meta-data ---------------------------------------------------------------
 
+# Canonical zone order, north to south, for consistent panel ordering across
+# every multi-zone figure/table (top to bottom, or left to right): Bay of
+# Seine, Southern Brittany, Bay of Biscay, Gulf of Lion. See
+# func/util.py::ZONE_ORDER/order_zones() for the Python equivalent. Use
+# order_zones() to sort any vector/data frame of zone codes -- e.g. replacing
+# a plain sort()/unique() that would otherwise come out alphabetical --
+# rather than hand-ordering zones at each call site.
+ZONE_ORDER <- c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION")
+
+order_zones <- function(zone_vector){
+  zone_vector[order(match(zone_vector, ZONE_ORDER))]
+}
+
 # In the future this will be taken from define_parameters() in func/util.py
 river_mouths <- data.frame(row_name = 1:4,
                            mouth_name = c("Seine", "Gironde", "Loire", "Grand Rhone"),
@@ -18,10 +31,11 @@ zones_bbox <- data.frame(zone = zones_list,
                          lon_min = c(3.50, -1.50, -4.00, -5.00),
                          lon_max = c(6.00, 0.50, -0.50, -1.50),
                          lat_min  = c(42.25, 49.25, 44.50, 46.5),
-                         lat_max = c(44.00, 50.25, 46.50, 48.00)) |> 
-  mutate(zone_pretty = factor(zone, 
-                              levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone")
+                         lat_max = c(44.00, 50.25, 46.50, 48.00)) |>
+  mutate(zone_pretty = factor(zone,
+                              levels = ZONE_ORDER,
+                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
+  dplyr::arrange(match(zone, ZONE_ORDER))
 
 # Create FRANCE bounding box with same structure as zones_bbox
 france_bbox <- data.frame(zone = "FRANCE",
@@ -806,13 +820,15 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
 # is an arithmetic (not circular) mean, so any day where wave direction
 # crosses the 0/360 wrap can already carry a biased wave_dir before it
 # reaches this function.
-# NB 2 (found 2026-07-31, pre-dates the tidync->ncdf4 migration): the Bay of
-# Seine's wave file (IBI_daily_199801_202601.nc) has no VMDR variable at all
-# (VHM0 + VTM02 only, unlike the other three zones' VHM0 + VMDR) -- an
-# upstream download gap, not something fixable here. wave_dir is returned as
-# NA for that zone rather than erroring, so wave HEIGHT is still usable
-# everywhere; anything that needs wave_dir (e.g. plot_driver_rose()) must
-# handle an all-NA case for the Bay of Seine.
+# NB 2 (found 2026-07-31, pre-dates the tidync->ncdf4 migration; RESOLVED
+# 2026-07-31 by the WAVE data re-download): the Bay of Seine's wave file
+# (IBI_daily_199801_202601.nc) used to have no VMDR variable at all (VHM0 +
+# VTM02 only, unlike the other three zones' VHM0 + VMDR), an upstream
+# download gap. The re-download confirmed in that day's driver-interactions
+# rerun added VMDR for the Bay of Seine too, so wave_dir is no longer
+# expected to be all-NA for that zone -- the has_wave_dir fallback below
+# (and plot_driver_rose()'s all-NA handling) is kept as defensive code in
+# case a future re-download regresses, not because the gap is current.
 load_wave <- function(file_name, lon_range, lat_range){
   nc <- nc_open(file_name)
   has_wave_dir <- "VMDR" %in% names(nc$var)

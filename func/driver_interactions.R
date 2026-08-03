@@ -19,12 +19,12 @@
 # shows the plume changing before the ROFI does, both following discharge),
 # not an independent physical forcing on plume size -- it is used elsewhere
 # in this project purely as an external accuracy check on panache's plume-area
-# estimates (Supplementary Fig. S5 in manuscript.tex), never as a model input.
+# estimates (Supplementary Fig. S4 in manuscript.tex), never as a model input.
 #
 # Road map step -> what this script does -> where the output goes:
 #   1. Baseline additive GLM              -> fit_baseline_glm()          -> output/STATS/driver_glm_comparison.csv
 #   2. + pairwise interaction terms, LRT/AIC -> fit_interaction_glm() / compare_glms() -> output/STATS/driver_glm_comparison.csv
-#   3. GAM with te() tensor smooths       -> fit_gam() / plot_gam_figure()  -> output/STATS/driver_gam_summary.csv, figures/ARTICLE/FIGURE_10/Figure_10.png
+#   3. GAM with te() tensor smooths       -> fit_gam() / plot_gam_figure()  -> output/STATS/driver_gam_summary.csv, figures/ARTICLE/FIGURE_S7/Figure_S7.png (main-text Fig. 10, moved to Supplementary S7 2026-07-31)
 #   4. Regime stratification (Rossby proxy, 6 m/s wind threshold, tidal bin) -> refit_by_regime() -> output/STATS/driver_regime_glm.csv
 #   5. Per-metric models (area, centroid lon/lat, not just area)         -> fit_metric_models() over multiple response variables -> output/STATS/driver_metric_models_<response>.csv
 #   6. Exploratory random forest + iml H-statistic                       -> fit_rf_diagnostic() -> output/STATS/driver_rf_importance.csv, output/STATS/driver_rf_interaction_hstat.csv
@@ -201,13 +201,36 @@ fit_gam <- function(df, response = "plume_area"){
   mgcv::gam(form, data = df_valid, method = "REML")
 }
 
+# Moved 2026-07-31 from main-text Figure 10 to Supplementary Figure S7, per
+# Robert's request (didn't contribute enough to the main narrative) and
+# redesigned at the same time to fix the original layout: nesting one
+# already-multi-panel gratia::draw() patchwork object inside a second
+# patchwork::wrap_plots() call produced garbled, overlapping titles and
+# illegibly small axis text -- the same nested-patchwork bug already fixed
+# once for the X11 composite figures (see
+# figure.R::save_x11_two_component_composite()) and fixed here the same way:
+# render each zone's panel grid to its own PNG (5-column layout instead of
+# 10-across, gratia::draw()'s redundant "Basis: Tensor product" caption
+# suppressed, and a real title), then stack the four zone images with
+# magick::image_append() rather than nesting patchwork objects.
 plot_gam_figure <- function(gam_models, fig_path){
-  plots <- purrr::imap(gam_models, function(m, zone_name){
-    gratia::draw(m) + patchwork::plot_annotation(title = zone_name)
+  if (!dir.exists(dirname(fig_path))) dir.create(dirname(fig_path), recursive = TRUE)
+  tmp_dir <- tempfile("gam_zone_panels_")
+  dir.create(tmp_dir)
+
+  zone_files <- purrr::imap_chr(gam_models, function(m, zone_name){
+    p <- gratia::draw(m, ncol = 5, caption = FALSE) +
+      patchwork::plot_annotation(title = zone_title(zone_name),
+                                 theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 24, face = "bold", hjust = 0.5)))
+    out_file <- file.path(tmp_dir, paste0(zone_name, ".png"))
+    ggplot2::ggsave(out_file, p, width = 20, height = 9, dpi = 200)
+    out_file
   })
-  combined <- patchwork::wrap_plots(plots, ncol = 2)
-  ggplot2::ggsave(fig_path, combined, width = 16, height = 12, dpi = 300)
-  invisible(combined)
+
+  composite <- magick::image_append(magick::image_read(zone_files), stack = TRUE)
+  magick::image_write(composite, fig_path)
+  unlink(tmp_dir, recursive = TRUE)
+  invisible(composite)
 }
 
 # Partial-dependence curve for one driver from a fitted GAM: vary that
@@ -224,14 +247,22 @@ gam_partial_effect <- function(gam_model, driver_name, df, n_points = 50){
   df_valid <- tidyr::drop_na(df, dplyr::all_of(c("plume_area", drivers)))
 
   # Hold every driver but driver_name at a "typical" value: median for
-  # numeric drivers, most-frequent level for categorical ones (median()
-  # errors on a factor). Levels are preserved explicitly so predict.gam()
-  # sees the same factor structure it was fitted on.
+  # numeric drivers, most-frequent level (as a plain string) for categorical
+  # ones (median() errors on a factor). categorical drivers arrive here as
+  # character, not factor (read straight from daily_driver_matrix_*.csv), so
+  # levels(col) is NULL; factor(x, levels = NULL) creates a broken 0-level
+  # factor -- not "use the default levels" the way omitting the argument
+  # would -- which silently makes every predict.gam() call below return NA
+  # (confirmed 2026-07-31: this was producing entirely blank Figure 9 panels
+  # for the two zones/drivers with a categorical predictor in the model,
+  # i.e. every zone, since wind_dir_cat/wave_dir_cat are always present).
+  # Passing the modal value as a plain string instead lets predict.gam()
+  # re-level it against the fitted model's own stored factor levels.
   newdata <- df_valid[1, drivers, drop = FALSE]
   for(d in drivers){
     col <- df_valid[[d]]
     newdata[[d]] <- if(is.numeric(col)) stats::median(col, na.rm = TRUE) else
-      factor(names(which.max(table(col))), levels = levels(col))
+      names(which.max(table(col)))
   }
   newdata <- newdata[rep(1, n_points), , drop = FALSE]
   newdata[[driver_name]] <- seq(min(df_valid[[driver_name]], na.rm = TRUE),
@@ -425,18 +456,21 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path){
 
 Apply_driver_interactions_analysis <- function(){
 
+  # 2026-07-31: Figure 10 moved from main-text to Supplementary Figure S7
+  # (Robert: didn't contribute enough to the main narrative), redesigned in
+  # the same pass -- see plot_gam_figure()'s note.
   message("== Driver interactions: dynamic threshold (main results) ==")
   run_full_analysis(
     plume_dir = "output/panache/dynamic",
     stats_dir = "output/STATS",
-    fig_path  = "figures/ARTICLE/FIGURE_10/Figure_10.png"
+    fig_path  = "figures/ARTICLE/FIGURE_S7/Figure_S7.png"
   )
 
   message("== Driver interactions: static threshold (supplementary) ==")
   run_full_analysis(
     plume_dir = "output/panache/static",
     stats_dir = "output/STATS/static",
-    fig_path  = "figures/ARTICLE/FIGURE_10/Figure_10_static.png"
+    fig_path  = "figures/ARTICLE/FIGURE_S7/Figure_S7_static.png"
   )
 
   message("func/driver_interactions.R::Apply_driver_interactions_analysis() complete.")
