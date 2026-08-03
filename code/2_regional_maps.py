@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# The code needed to create the regional maps used in the RiOMar project. 
-# It can be designed to be called by the Makefile.
+# The code needed to create the regional maps used in the RiOMar project.
 
 
 # =============================================================================

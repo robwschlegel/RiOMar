@@ -30,3 +30,4 @@ subprocess.run("panache metadata/zone_config_static_GULF_OF_LION.json", shell=Tr
 subprocess.run("panache metadata/zone_config_static_BAY_OF_BISCAY.json", shell=True, cwd=proj_dir, check=True)
 subprocess.run("panache metadata/zone_config_static_SOUTHERN_BRITTANY.json", shell=True, cwd=proj_dir, check=True)
 subprocess.run("panache metadata/zone_config_static_BAY_OF_SEINE.json", shell=True, cwd=proj_dir, check=True)
+

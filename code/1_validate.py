@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 # The code needed to validate the full dataset used in the RiOMar project.
-# It can be designed to be called by the Makefile.
 
 
 # =============================================================================
