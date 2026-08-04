@@ -562,17 +562,12 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
                                   ifelse(slope_p < 0.001, "p < 0.001", paste0("p = ", signif(slope_p, 2))), ")"))
 
     df_merged <- df_zone %>% filter(Satellite_sensor == "merged")
-    spm_scaling <- sec_axis_adjustement_factors(var_to_scale = df_merged$mean_SPM_in_the_plume_area,
-                                                var_ref = df_merged$area_of_the_plume_mask_in_km2)
-    df_merged <- df_merged %>% mutate(SPM_scaled = mean_SPM_in_the_plume_area * spm_scaling$diff + spm_scaling$adjust)
 
     the_ts_plot_wo_modis <- ggplot() +
       geom_point(data = df_merged,
                  aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") +
       geom_path(data = df_merged,
                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") +
-      geom_point(data = df_merged, aes(x = date, y = SPM_scaled), color = "steelblue", alpha = 0.4) +
-      geom_path(data = df_merged, aes(x = date, y = SPM_scaled), color = "steelblue", alpha = 0.4) +
       geom_abline(data = zone_trend, aes(intercept = intercept, slope = slope),
                   colour = "black", linewidth = 1.2, linetype = "dashed") +
       geom_text(data = zone_trend, aes(x = -Inf, y = Inf, label = trend_label), inherit.aes = FALSE,
@@ -584,9 +579,7 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
                    expand = c(0.01,0.01)) +
 
       coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
-      scale_y_continuous(name = "Plume area (km²)",
-                         sec.axis = sec_axis(transform = ~ {. - spm_scaling$adjust} / spm_scaling$diff,
-                                            name = "Mean SPM in plume (g m⁻³)")) +
+      scale_y_continuous(name = "Plume area (km²)") +
       labs(x = "", title = zone_title(df_zone$Zone[1])) +
       ggplot_theme() +
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
@@ -597,8 +590,6 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
             plot.title = element_text(size=30, colour = "black"),
             text = element_text(size=25, colour = "black"),
             axis.text = element_text(size=20, colour = "black"),
-            axis.title.y.right = element_text(size = 22, colour = "steelblue"),
-            axis.text.y.right = element_text(colour = "steelblue"),
             axis.title = element_text(size=30, colour = "black"))
     
     
