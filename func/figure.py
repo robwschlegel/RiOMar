@@ -436,9 +436,9 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_4,
              name_of_the_plot='C')
 
-    the_plume.include_cloudy_regions_to_plume_area()
+    the_plume.include_cloudy_regions()
 
-    the_plume.remove_the_areas_with_sediment_resuspension(
+    the_plume.remove_resuspension_areas(
         maximal_bathymetry=parameters['maximal_bathymetric_for_zone_with_resuspension'][plume_name],
         minimal_distance_from_estuary=parameters['minimal_distance_from_estuary_for_zone_with_resuspension'][
             plume_name])
@@ -458,13 +458,13 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     #                    name_of_the_plot='before_')
     ##
 
-    the_plume.dilate_the_main_plume_area_to_merge_close_plume_areas()
+    the_plume.dilate_and_merge_close_areas()
 
-    the_plume.remove_small_shapes_that_do_not_meet_a_minimum_size_criterion()
+    the_plume.remove_undersized_shapes()
 
-    the_plume.set_pixels_to_False_if_outside_of_the_searching_area(inside_polygon_mask)
+    the_plume.set_false_outside_search_area(inside_polygon_mask)
 
-    the_plume.identify_the_main_plume_shape_based_on_the_plume_core_location()
+    the_plume.select_shape_by_core()
 
     the_plume.remove_shallow_waters()
 
@@ -474,7 +474,7 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     ##
 
     if not np.isin(plume_name, ['Seine']):
-        the_plume.remove_parts_of_the_plume_area_that_widden_after_the_shrinking_phase()
+        the_plume.remove_post_shrink_widening()
 
     do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_4,
              name_of_the_plot='E')
