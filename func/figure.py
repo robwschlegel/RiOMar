@@ -7,7 +7,7 @@
 # =============================================================================
 
 
-import os, sys, pickle, re, glob
+import os, sys, pickle, re, glob, subprocess
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -303,15 +303,19 @@ def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, wher
                                                       where_to_save_the_figure,
                                                       dates_for_each_zone())
 
-    # Source the R scrip
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-    # robjects.r['source']("myRIOMAR_dev/_5_Figures_for_article/utils.R")
-
-    r_function = robjects.r['Figure_1']
-
-    # Call the R function
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+    # Run as a standalone Rscript process rather than via in-process rpy2
+    # (like every other figure function below): Figure_1() is the only
+    # figure that loads the 'sf' package (for the zoomed insets' high-res
+    # coastline), and 'sf' links against the system's GDAL/GEOS/PROJ, which
+    # conflict with the conda geospatial stack (shapely/geopandas/pyproj)
+    # already loaded in this process via panache -- two incompatible
+    # GEOS/PROJ/HDF5 builds in one process crashes R. A separate process has
+    # its own library address space, so the conflict can't occur.
+    subprocess.run(
+        ['Rscript', 'func/run_figure_1.R', where_to_save_the_figure],
+        cwd=proj_dir,
+        check=True,
+    )
 
 
 def regional_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure, include_station_points=True):
