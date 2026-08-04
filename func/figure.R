@@ -807,7 +807,7 @@ Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 16){
 
 # manuscript Figure 8: flow-controlled plume-area residual vs. wave height,
 # coloured by on/off-shore wind category, one panel per zone
-# (multi.R::plot_driver_category_scatter()). Replaces the original Figure 8
+# (multi.R::plot_category_scatter()). Replaces the original Figure 8
 # concept (X11-decomposed wave-height magnitude time series).
 Figure_8_driver_category <- function(where_to_save_the_figure){
 
@@ -816,7 +816,7 @@ Figure_8_driver_category <- function(where_to_save_the_figure){
 
   plotlist <- purrr::pmap(zone_meta, function(...){
     meta <- tibble::tibble(...)
-    plot_driver_category_scatter(meta)
+    plot_category_scatter(meta)
   })
 
   full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = 2, common.legend = TRUE, legend = "bottom")
