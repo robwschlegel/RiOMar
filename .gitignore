@@ -29,7 +29,6 @@ output/panache
 
 # Figures
 figures/ARTICLE/FIGURES/*/DATA
-figures/surface_daily_maps*
 
 # Other content
 notebooks

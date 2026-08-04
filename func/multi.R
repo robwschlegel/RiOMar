@@ -811,11 +811,6 @@ run_all_driver_suites <- function(){
 
 
 # Surface / pixel-level multi-driver maps ------------------------------
-# Carried over from func/surface.R with light cleanup (zone_meta /
-# make_pretty_title instead of an inline zone lookup); conceptually distinct
-# from the time-series work above since these operate per-pixel rather than
-# per-day, so they keep their own section.
-
 # Facet daily plume maps by year x month for a zone.
 surface_plot_daily_maps <- function(zone_name){
 
@@ -830,6 +825,10 @@ surface_plot_daily_maps <- function(zone_name){
   ggsave(filename = paste0("figures/driver_comparison/surface_daily_maps_", zone_name, ".png"), plot = plot_daily, height = 34, width = 36)
   invisible(plot_daily)
 }
+
+# Plot all surface daily maps
+# NB: Tgis takes a while and is pretty heavy
+# walk(zones, surface_plot_daily_maps)
 
 
 # STL ---------------------------------------------------------------------

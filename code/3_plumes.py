@@ -16,6 +16,7 @@ proj_dir = os.path.dirname(os.path.abspath('__file__'))
 #### Dynamic thresholds
 # =============================================================================
 
+
 subprocess.run("panache metadata/zone_config_dynamic_GULF_OF_LION.json", shell=True, cwd=proj_dir, check=True)
 subprocess.run("panache metadata/zone_config_dynamic_BAY_OF_BISCAY.json", shell=True, cwd=proj_dir, check=True)
 subprocess.run("panache metadata/zone_config_dynamic_SOUTHERN_BRITTANY.json", shell=True, cwd=proj_dir, check=True)
@@ -25,6 +26,7 @@ subprocess.run("panache metadata/zone_config_dynamic_BAY_OF_SEINE.json", shell=T
 # =============================================================================
 #### Static thresholds
 # =============================================================================
+
 
 subprocess.run("panache metadata/zone_config_static_GULF_OF_LION.json", shell=True, cwd=proj_dir, check=True)
 subprocess.run("panache metadata/zone_config_static_BAY_OF_BISCAY.json", shell=True, cwd=proj_dir, check=True)
