@@ -42,6 +42,20 @@ A live, formatted version of the same content is published at https://claude.ai/
 
 This document is a strong source of material for the manuscript's Discussion and Conclusion sections (which gaps are worth naming as limitations, which are natural future work) but has not yet been drawn on for that text -- it is currently reference-only.
 
+## Target journal
+
+The manuscript (`manuscript/manuscript.tex`) targets *Remote Sensing of Environment* (Elsevier). Guide for authors: https://www.sciencedirect.com/journal/remote-sensing-of-environment/publish/guide-for-authors. Consult it (or fetch it fresh, since Elsevier updates these pages) before drafting end-matter/boilerplate sections (CRediT, Declaration of competing interest, Data availability, Declaration of Generative AI use, Funding, Acknowledgements) or checking structural requirements (word limits, reference style, appendix numbering). Note: Research Articles are capped at 15,000 words including references and figure captions (Review Articles get 20,000) — the 20,000-word figure in `manuscript.tex`'s header comment is the wrong article type's limit and should be corrected.
+
+## Google Doc sync (co-author review copy)
+
+`manuscript.tex` is mirrored into a Google Doc for co-author comments/editing, in place (same URL, same open comment threads survive each push). To push the current `.tex` to the Doc:
+
+```bash
+manuscript/google_doc_sync/sync.sh
+```
+
+~8s to build the docx (figures downscaled to JPEG, citations resolved via `references.bib`, section/figure/table numbering reconstructed since pandoc doesn't do this on its own — see script comments) + ~30-40s for Drive's server-side conversion. Full mechanism, setup, and known limitations (payload-size ceiling on the relay, the one cosmetic equation-rendering gap) are in [manuscript/google_doc_sync/README.md](manuscript/google_doc_sync/README.md). Credentials live in `manuscript/google_doc_sync/.env` (gitignored, not in this repo's history — read it directly rather than asking the user to re-paste the token).
+
 ## Data storage
 
 Large datasets are stored **outside** this repo under `~/pCloudDrive/data/` and are never committed. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.
