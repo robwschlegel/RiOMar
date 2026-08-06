@@ -1,0 +1,5 @@
+zone,mouth_name,mouth_lon,mouth_lat,lon_min,lon_max,lat_min,lat_max
+BAY_OF_SEINE,Seine,0.145,49.44,-1.25,0.5,49.25,50.25
+BAY_OF_BISCAY,Gironde,-1.14,45.61,-3.5,-1.0,45.0,46.5
+SOUTHERN_BRITTANY,Loire,-2.25,47.2,-4.5,-1.5,46.5,48.0
+GULF_OF_LION,Grand Rhone,4.85,43.32,3.5,5.5,42.5,43.6

@@ -1116,13 +1116,13 @@ write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
     facet_wrap(~year) +
     labs(x = NULL, y = "count", title = "Monthly count of missing SPM SEXTANT files") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
-  ggsave("figures/validation/missng_SPM.png", width = 9, height = 9, dpi = 600)
+  ggsave("figures/validation/missing_SPM.png", width = 9, height = 9, dpi = 600)
   ggplot(chla_files_NA_count, aes(x = month, y = miss_count_month_year)) +
     geom_col() +
     facet_wrap(~year) +
     labs(x = NULL, y = "count", title = "Monthly count of missing chl a SEXTANT files") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
-  ggsave("figures/validation/missng_chla.png", width = 9, height = 9, dpi = 600)
+  ggsave("figures/validation/missing_chla.png", width = 9, height = 9, dpi = 600)
 }
 
 

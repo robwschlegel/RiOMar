@@ -479,8 +479,6 @@ process_pixels <- function(sat_name, var_name){
       message("Saving ",var_name," extraction at : ", Sys.time())
       data.table::fwrite(zone_data_var, file_name_var)
       plan(sequential)
-      gc()
-      gc()
     }
 
     # Create median value time series
@@ -503,7 +501,7 @@ process_pixels <- function(sat_name, var_name){
                   n = n(), 
                   .by = c("zone", "source", "site", "date", "variable"))
       data.table::fwrite(zone_median_all, file_name_median_all)
-      rm(zone_median_all); gc()
+      rm(zone_data_var, file_name_var, file_name_median_all, zone_median_all); gc()
     }
 
     # Create medians etc. from 'small' pixels
@@ -531,13 +529,11 @@ process_pixels <- function(sat_name, var_name){
                   n = n(), 
                   .by = c("zone", "source", "site", "date", "variable"))
       data.table::fwrite(zone_median_small, file_name_median_small)
-      rm(zone_median_small); gc()
+      rm(zone_data_var, file_name_var, file_name_median_small, zone_median_small); gc()
     }
 
     # Cleanup and exit
-    rm(zone_data_var, file_name_var, file_name_median_all, file_name_median_small, file_stub, zone_pixels)
-    gc()
-    gc()
+    rm(file_stub, zone_pixels)
   }
 }
 
@@ -1698,7 +1694,7 @@ validate_sensor <- function(sat_name, median_base){
   write_csv(zone_all_monthly_lm, paste0("output/MATCH_UP_DATA/FRANCE/STATISTICS/",sat_name,"_lm_stats_",median_base,".csv"))
 
   # Plot the linear TS matchups
-  plan(multicore, workers = 10)
+  plan(multisession, workers = 10)
   future_walk(unique(zone_all_in_situ_monthly$variable_combi), validation_lm_plots, 
               sat_name = sat_name, median_base = median_base,
               df = zone_all_in_situ_monthly, df_stats = zone_all_monthly_lm)
@@ -1793,7 +1789,7 @@ validate_sensor <- function(sat_name, median_base){
                                                  zone_all_in_situ_stats$correction, "_",
                                                  zone_all_in_situ_stats$processing, "_",
                                                  zone_all_in_situ_stats$grid_size)
-  plan(multicore, workers = 10)
+  plan(multisession, workers = 10)
   future_walk(unique(zone_all_in_situ_stats$variable_combi), validation_plots,
                      sat_name = sat_name, median_base = median_base,
                      match_up_df = zone_all_in_situ, match_up_stats = zone_all_in_situ_stats)

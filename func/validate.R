@@ -18,7 +18,6 @@ library(scales) # For better plot labels
 library(ggExtra) # For histogram border plots
 library(gt) # For fancy tables
 library(geosphere) # For pixel distances
-# library(doParallel); registerDoParallel(cores = detectCores()-6) # NB: Trying to move away from this
 
 # The shared functions
 source("func/util.R")
@@ -30,71 +29,68 @@ source("func/util.R")
 # This could be used to correctly filter the in situ data by time when possible
 ## SEXTANT
 ### NB: Handled differently because the values are always the same and downloading all files takes an hour...
-times_SEXTANT <- data.frame(date_start = ymd(unlist(lapply(str_split(basename(dir("~/pCloudDrive/data/SEXTANT/SPM",
-                                                                                  recursive = TRUE, pattern = "SPIM")), "-"), "[[", 1)))) |>
-  mutate(date_end = date_start + 1,
-         start_time = ymd_hms(paste(date_start, "12:00:00"), tz = "GMT"),
-         end_time = ymd_hms(paste(date_end, "12:00:00"), tz = "GMT")) |>
-  dplyr::select(start_time, end_time)
-save(times_SEXTANT, file = "metadata/times_SEXTANT.RData")
+# times_SEXTANT <- data.frame(date_start = ymd(unlist(lapply(str_split(basename(dir("~/pCloudDrive/data/SEXTANT/SPM",
+#                                                                                   recursive = TRUE, pattern = "SPIM")), "-"), "[[", 1)))) |>
+#   mutate(date_end = date_start + 1,
+#          start_time = ymd_hms(paste(date_start, "12:00:00"), tz = "GMT"),
+#          end_time = ymd_hms(paste(date_end, "12:00:00"), tz = "GMT")) |>
+#   dplyr::select(start_time, end_time)
+# save(times_SEXTANT, file = "metadata/times_SEXTANT.RData")
 load("metadata/times_SEXTANT.RData")
 
-# Set cores for following calculations
-plan(multicore, workers = parallel::detectCores() - 2)
-
 ## MODIS
-times_MODIS <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
-                               pattern = "SPM", full.names = TRUE), get_start_end_time)
-save(times_MODIS, file = "metadata/times_MODIS.RData")
+# times_MODIS <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
+#                                pattern = "SPM", full.names = TRUE), get_start_end_time)
+# save(times_MODIS, file = "metadata/times_MODIS.RData")
 load("metadata/times_MODIS.RData")
 
 ### Double check that times are the same for any region
 # Yes, start and end times are exactly the same
-times_MODIS_check <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", 
-                                     pattern = "SPM", full.names = TRUE), get_start_end_time)
-times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |>
-  mutate(start_diff = start_time...1 - start_time...3, end_diff = end_time...2 - end_time...4)
+# times_MODIS_check <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/GULF_OF_LION/daily", 
+#                                      pattern = "SPM", full.names = TRUE), get_start_end_time)
+# times_MODIS_test <- bind_cols(times_MODIS, times_MODIS_check) |>
+#   mutate(start_diff = start_time...1 - start_time...3, end_diff = end_time...2 - end_time...4)
 
 ### SST-NIGHT are meant to have a different time
-times_MODIS_SST_NIGHT <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
-                                         pattern = "SST-NIGHT", full.names = TRUE), get_start_end_time)
-save(times_MODIS_SST_NIGHT, file = "metadata/times_MODIS_SST_NIGHT.RData")
+# times_MODIS_SST_NIGHT <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MODIS/BAY_OF_SEINE/daily",
+#                                          pattern = "SST-NIGHT", full.names = TRUE), get_start_end_time)
+# save(times_MODIS_SST_NIGHT, file = "metadata/times_MODIS_SST_NIGHT.RData")
 load("metadata/times_MODIS_SST_NIGHT.RData")
 ### SST day time
 ## These are calculated on rs-pro2 where the expert data are located
 load("metadata/times_MODIS_SST.RData")
 
 ## MERIS
-times_MERIS <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
-                               pattern = "SPM", full.names = TRUE), get_start_end_time)
-save(times_MERIS, file = "metadata/times_MERIS.RData")
+# times_MERIS <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/MERIS/BAY_OF_SEINE/daily",
+#                                pattern = "SPM", full.names = TRUE), get_start_end_time)
+# save(times_MERIS, file = "metadata/times_MERIS.RData")
 load("metadata/times_MERIS.RData")
 
 ## OLCI-A
-times_OLCI_A <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
-                                pattern = "SPM", full.names = TRUE), get_start_end_time)
-save(times_OLCI_A, file = "metadata/times_OLCI_A.RData")
+# times_OLCI_A <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-A/BAY_OF_SEINE/daily",
+#                                 pattern = "SPM", full.names = TRUE), get_start_end_time)
+# save(times_OLCI_A, file = "metadata/times_OLCI_A.RData")
 load("metadata/times_OLCI_A.RData")
 
 ## OLCI-B
-times_OLCI_B <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
-                                pattern = "SPM", full.names = TRUE), get_start_end_time)
-save(times_OLCI_B, file = "metadata/times_OLCI_B.RData")
+# times_OLCI_B <- future_map_dfr(dir("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR/OLCI-B/BAY_OF_SEINE/daily",
+#                                 pattern = "SPM", full.names = TRUE), get_start_end_time)
+# save(times_OLCI_B, file = "metadata/times_OLCI_B.RData")
 load("metadata/times_OLCI_B.RData")
 
 ## ALL
-times_ALL <- bind_rows(mutate(times_SEXTANT, sat_name = "SEXTANT"),
-                       mutate(times_MODIS, sat_name = "MODIS"),
-                       mutate(times_MODIS_SST, sat_name = "MODIS (SST)"),
-                       mutate(times_MODIS_SST_NIGHT, sat_name = "MODIS (SST-NIGHT)"),
-                       mutate(times_MERIS, sat_name = "MERIS"),
-                       mutate(times_OLCI_A, sat_name = "OLCI-A"),
-                       mutate(times_OLCI_B, sat_name = "OLCI-B")) |>
-  mutate(date = as.Date(start_time),
-         start_hms = hms::as_hms(start_time),
-         end_hms = hms::as_hms(end_time)) |>
-  complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA), nesting(sat_name))
-save(times_ALL, file = "metadata/times_ALL.RData") # Saving in R format to maintain time stamps
+# times_ALL <- bind_rows(mutate(times_SEXTANT, sat_name = "SEXTANT"),
+#                        mutate(times_MODIS, sat_name = "MODIS"),
+#                        mutate(times_MODIS_SST, sat_name = "MODIS (SST)"),
+#                        mutate(times_MODIS_SST_NIGHT, sat_name = "MODIS (SST-NIGHT)"),
+#                        mutate(times_MERIS, sat_name = "MERIS"),
+#                        mutate(times_OLCI_A, sat_name = "OLCI-A"),
+#                        mutate(times_OLCI_B, sat_name = "OLCI-B")) |>
+#   mutate(date = as.Date(start_time),
+#          start_hms = hms::as_hms(start_time),
+#          end_hms = hms::as_hms(end_time)) |>
+#   complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA), nesting(sat_name))
+# save(times_ALL, file = "metadata/times_ALL.RData") # Saving in R format to maintain time stamps
 load("metadata/times_ALL.RData")
 
 # Plot the times of day during which the satellites are available
@@ -128,26 +124,7 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
                                dplyr::select(SOMLIT, source, lon, lat, site)) |>
   distinct() |>
   summarise(lon = mean(lon), lat = mean(lat), .by = c("source", "site")) |>
-  # Lanveoc (Rade de Brest, ~48.29N) sits just outside the Southern Brittany
-  # bbox (lat_max = 48.00), so the bbox check below would otherwise drop it
-  # entirely -- mirrors func/validate.py's region_mapping fix for the same
-  # station.
-  mutate(zone = case_when(site == "Lanvéoc" ~ "SOUTHERN_BRITTANY",
-                          # Looked up by zone NAME, not row position: zones_bbox
-                          # (func/util.R) ends with dplyr::arrange(match(zone,
-                          # ZONE_ORDER)), which reorders its rows into ZONE_ORDER
-                          # (BAY_OF_SEINE, SOUTHERN_BRITTANY, BAY_OF_BISCAY,
-                          # GULF_OF_LION) -- a different order from the
-                          # GULF_OF_LION-first sequence this case_when used to
-                          # assume via zones_bbox$...[1..4]. That positional
-                          # indexing silently mislabelled every zone except
-                          # BAY_OF_BISCAY (which happens to land at position 3
-                          # in both orderings): Bay of Seine stations were
-                          # tagged GULF_OF_LION, Gulf of Lion stations were
-                          # tagged SOUTHERN_BRITTANY, and Southern Brittany
-                          # stations were tagged BAY_OF_SEINE. Found 2026-08-04
-                          # verifying Table 4 -- fixed by matching on zone name.
-                          lon >= zones_bbox$lon_min[zones_bbox$zone == "GULF_OF_LION"] & lon <= zones_bbox$lon_max[zones_bbox$zone == "GULF_OF_LION"] &
+  mutate(zone = case_when(lon >= zones_bbox$lon_min[zones_bbox$zone == "GULF_OF_LION"] & lon <= zones_bbox$lon_max[zones_bbox$zone == "GULF_OF_LION"] &
                             lat >= zones_bbox$lat_min[zones_bbox$zone == "GULF_OF_LION"] & lat <= zones_bbox$lat_max[zones_bbox$zone == "GULF_OF_LION"] ~ "GULF_OF_LION",
                           lon >= zones_bbox$lon_min[zones_bbox$zone == "BAY_OF_SEINE"] & lon <= zones_bbox$lon_max[zones_bbox$zone == "BAY_OF_SEINE"] &
                             lat >= zones_bbox$lat_min[zones_bbox$zone == "BAY_OF_SEINE"] & lat <= zones_bbox$lat_max[zones_bbox$zone == "BAY_OF_SEINE"] ~ "BAY_OF_SEINE",
@@ -159,9 +136,6 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
   mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
-# Written for func/figure.py::save_insitu_stations_for_plot() (Figure 1's
-# station overlay) and re-read further below in this script's own
-# Validation tables section -- both need this on disk.
 write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
 
 # Filter in situ stations to just those within a zone
@@ -219,7 +193,7 @@ write_csv(zone_data_in_situ, "data/INSITU_data/zone_data_in_situ.csv")
 # Map In situ -------------------------------------------------------------
 
 # Load high-res shape files
-# Tuto here : https://www.etiennebacher.com/posts/2021-12-27-mapping-french-rivers-network/
+# Tutorial here : https://www.etiennebacher.com/posts/2021-12-27-mapping-french-rivers-network/
 if(!exists("borders_FR")) borders_FR <- read_sf("data/FRANCE_shapefile/gadm41_FRA_0.shp")
 if(!exists("rivers_FR")) rivers_FR <- st_intersection(read_sf("data/HydroRIVERS_v10_eu_shp/HydroRIVERS_v10_eu.shp"), borders_FR)
 
@@ -257,12 +231,17 @@ in_situ_station_map <- ggplot() +
              hjust = 0, vjust = 1, size = 7, linewidth = 0.0,
              fill = "white", alpha = 1, inherit.aes = FALSE) +
   coord_sf(xlim = c(-5, 10), ylim = c(41.5, 51)) +
-  geom_point(data = in_situ_site_list,
-             aes(x = lon, y = lat, shape = source), color = "black", size = 4) +
-  geom_point(data = filter(in_situ_site_list, is.na(zone)),
+  # Non-zone stations
+  geom_point(data = filter(in_situ_site_list, is.na(zone)), show.legend = FALSE,
              aes(x = lon, y = lat, shape = source), color = "red", size = 3) +
-  geom_point(data = filter(in_situ_site_list, !is.na(zone)),
+  # REPHY points
+  geom_point(data = filter(in_situ_site_list, !is.na(zone), source == "REPHY"), 
              aes(x = lon, y = lat, shape = source, color = zone_pretty), size = 3) +
+  # SOMLIT points
+  geom_point(data = filter(in_situ_site_list, !is.na(zone), source == "SOMLIT"),
+             aes(x = lon, y = lat, shape = source), color = "black", size = 6) +
+  geom_point(data = filter(in_situ_site_list, !is.na(zone), source == "SOMLIT"), 
+             aes(x = lon, y = lat, shape = source, color = zone_pretty), size = 5) +
   labs(x = NULL, y = NULL) +
   scale_x_continuous(labels = scales::unit_format(unit = "°E")) +
   scale_y_continuous(labels = scales::unit_format(unit = "°N")) +
@@ -309,132 +288,6 @@ extract_pixels_all("SEXTANT")
 # MERIS
 # OLCI-A
 # OLCI-B
-
-
-# Satellite grid-window match-up (Table 4) --------------------------------
-
-# Concentric N x N pixel-window statistics (mean/median/std/n) around one
-# grid index, for grid sizes 1, 3, 5, 7. This is a literal square lat/lon-
-# index window (as opposed to get_pixels()'s nearest-by-distance selection
-# above), matching the retired func/validate.py::compute_grid_stats()
-# convention so Table 4 stays numerically consistent with its values before
-# this port.
-sextant_window_stats <- function(window, centre_lon_idx, centre_lat_idx, grid_sizes = c(1, 3, 5, 7)){
-
-  stats <- list()
-  for(size in grid_sizes){
-    h <- size %/% 2
-    lon_range <- (centre_lon_idx - h):(centre_lon_idx + h)
-    lat_range <- (centre_lat_idx - h):(centre_lat_idx + h)
-    lon_range <- lon_range[lon_range >= 1 & lon_range <= dim(window)[1]]
-    lat_range <- lat_range[lat_range >= 1 & lat_range <= dim(window)[2]]
-    vals <- as.vector(window[lon_range, lat_range])
-    stats[[paste0(size, "x", size, "_mean")]] <- mean(vals, na.rm = TRUE)
-    stats[[paste0(size, "x", size, "_median")]] <- median(vals, na.rm = TRUE)
-    stats[[paste0(size, "x", size, "_std")]] <- sd(vals, na.rm = TRUE)
-    stats[[paste0(size, "x", size, "_n")]] <- sum(!is.na(vals))
-  }
-  as.data.frame(stats, check.names = FALSE)
-}
-
-# Build the satellite validation summary (Table 4) by matching each SOMLIT
-# SPM / REPHY turbidity in-situ record to the SEXTANT SPM pixel window
-# around its station, for every date where both exist. Writes
-# output/MATCH_UP_DATA/FRANCE/summary.csv, replacing the retired
-# func/validate.py::Match_up_with_insitu_measurements() path.
-#
-# NB: zone_data_in_situ (built above) is already a QC'd, depth-filtered,
-# day/night-filtered daily mean per site/date/variable -- reused directly
-# here rather than re-deriving in-situ filtering logic. This means Table 4
-# now uses one row per site/day (a daily mean) rather than one row per
-# individual in-situ sample as the retired Python path did; the actual
-# comparison (grid-window satellite vs in-situ value) is unaffected, and
-# per-record satellite/in-situ overhead times are no longer tracked (left
-# NA), since zone_data_in_situ collapses same-day records before this point.
-compile_sextant_validation_summary <- function(){
-
-  sextant_dir <- path.expand("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY")
-
-  # SEXTANT's lat/lon grid is fixed across every daily file -- build the
-  # index lookup once from a reference file.
-  ref_nc <- nc_open(dir(sextant_dir, pattern = "\\.nc$", recursive = TRUE, full.names = TRUE)[1])
-  grid_lon <- ncvar_get(ref_nc, "lon")
-  grid_lat <- ncvar_get(ref_nc, "lat")
-  nc_close(ref_nc)
-
-  in_situ_matches <- zone_data_in_situ |>
-    filter(variable %in% c("SPM", "TUR")) |>
-    mutate(Insitu_variable = if_else(variable == "TUR", "TURB", variable)) |>
-    filter(date >= as.Date("1998-01-01"))
-
-  site_grid_index <- in_situ_matches |>
-    distinct(source, site, zone, lon, lat) |>
-    rowwise() |>
-    mutate(lon_idx = which.min(abs(grid_lon - lon)),
-           lat_idx = which.min(abs(grid_lat - lat))) |>
-    ungroup()
-
-  half <- 3 # max(grid_sizes) %/% 2 for grid_sizes = c(1, 3, 5, 7)
-  summary_rows <- list()
-
-  for(the_date in sort(unique(in_situ_matches$date))){
-
-    the_date <- as.Date(the_date, origin = "1970-01-01")
-    date_str <- format(the_date, "%Y%m%d")
-    nc_path <- file.path(sextant_dir, format(the_date, "%Y"), format(the_date, "%m"), format(the_date, "%d"),
-                         paste0(date_str, "-EUR-L4-SPIM-ATL-v01-fv01-OI.nc"))
-
-    if(!file.exists(nc_path)) next
-
-    records_of_the_day <- in_situ_matches |> filter(date == the_date)
-    sites_of_the_day <- site_grid_index |> semi_join(records_of_the_day, by = c("source", "site"))
-
-    nc <- nc_open(nc_path)
-
-    for(i in seq_len(nrow(sites_of_the_day))){
-
-      site_row <- sites_of_the_day[i, ]
-
-      lon_lo <- max(1, site_row$lon_idx - half); lon_hi <- min(length(grid_lon), site_row$lon_idx + half)
-      lat_lo <- max(1, site_row$lat_idx - half); lat_hi <- min(length(grid_lat), site_row$lat_idx + half)
-
-      window <- ncvar_get(nc, "analysed_spim",
-                          start = c(lon_lo, lat_lo, 1),
-                          count = c(lon_hi - lon_lo + 1, lat_hi - lat_lo + 1, 1))
-
-      window_stats <- sextant_window_stats(window,
-                                           centre_lon_idx = site_row$lon_idx - lon_lo + 1,
-                                           centre_lat_idx = site_row$lat_idx - lat_lo + 1)
-
-      site_records <- records_of_the_day |> filter(source == site_row$source, site == site_row$site)
-
-      for(j in seq_len(nrow(site_records))){
-
-        rec <- site_records[j, ]
-
-        summary_rows[[length(summary_rows) + 1]] <- cbind(
-          data.frame(SOURCE = rec$source, SITE = rec$site, REGION = gsub("_", " ", rec$zone),
-                    LATITUDE = site_row$lat, LONGITUDE = site_row$lon,
-                    Data_source = "SEXTANT", sensor_name = "merged", atmospheric_correction = "Standard",
-                    Satellite_variable = "SPM", Temporal_resolution = "DAILY", Satellite_algorithm = "SPIM",
-                    DATE = format(the_date, "%Y-%m-%d"), Satellite_time = NA_character_, Insitu_time = NA_character_,
-                    Insitu_variable = rec$Insitu_variable, Insitu_value = rec$value, check.names = FALSE),
-          window_stats)
-      }
-    }
-
-    nc_close(nc)
-  }
-
-  summary_df <- bind_rows(summary_rows)
-
-  dir.create("output/MATCH_UP_DATA/FRANCE", recursive = TRUE, showWarnings = FALSE)
-  write_csv(summary_df, "output/MATCH_UP_DATA/FRANCE/summary.csv")
-
-  summary_df
-}
-
-compile_sextant_validation_summary()
 
 
 # Validation stats + figures  --------------------------------------------
@@ -516,69 +369,4 @@ zone_all_stats_top <- zone_all_stats |>
 
 # Fancy tables
 validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
-
-
-# Time series analyses ----------------------------------------------------
-
-# Load MODIS SST and in situ temperatures
-zone_median_SST <- map_dfr(dir("output/MATCH_UP_DATA/FRANCE", pattern = "zone_median_MODIS_", 
-                               full.names = TRUE), data.table::fread) |> 
-  mutate(date = as.Date(date)) |> 
-  filter(variable == "SST")
-# write_csv(zone_median_SST, "output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
-# zone_median_SST <- read_csv("output/MATCH_UP_DATA/FRANCE/zone_MODIS_SST.csv")
-
-# Load in situ data
-zone_data_in_situ <- read_csv("data/INSITU_data/zone_data_in_situ.csv")
-
-# List number of unique sites per source
-zone_data_in_situ |> dplyr::select(source, site) |> distinct() |> 
-  summarise(site_count = n(), .by = "source")
-
-# List date range for each source of in situ data
-zone_data_in_situ |> dplyr::select(source, date) |> 
-  summarise(min_date = min(date), max_date = max(date), .by = "source")
-
-# List the variables used in the in situ data
-zone_data_in_situ |> dplyr::select(source, variable) |> distinct()
-
-# Join
-zone_all_TEMP <- zone_data_in_situ |> 
-  filter(variable == "TEMP") |> 
-  group_by(site) |> 
-  mutate(count = n()) |> 
-  ungroup() |> 
-  filter(count > 90) |> 
-  mutate(variable_sat = "SST") |> 
-  left_join(zone_median_SST, by = c("zone", "source", "site", "date", "variable_sat" = "variable")) |> 
-  filter(value > 0, median > 0) |> 
-  dplyr::rename(value_in_situ = value, value_satellite = median) |> 
-  mutate(season = case_when(
-    month(date) %in% c(12, 1, 2) ~ "Winter", month(date) %in% 3:5  ~ "Spring",
-    month(date) %in% 6:8  ~ "Summer", month(date) %in% 9:11 ~ "Autumn"), .after = "date") |> 
-  dplyr::select(zone, dplyr::everything())
-
-# Basic plot
-plot_temp_compare <- zone_all_TEMP |> 
-  mutate(zone_pretty = factor(zone_pretty,
-                              levels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion"))) |> 
-  filter(date >= "2004-07-04") |> 
-  ggplot(aes(x = date, y = value_in_situ)) +
-  geom_point(aes(group = site, shape = source), show.legend = FALSE) +
-  geom_point(aes(y = value_satellite, group = site, shape = source), colour = "red", show.legend = FALSE) +
-  geom_smooth(method = "lm", colour = "black", se = FALSE) +
-  geom_smooth(aes(y = value_satellite), method = "lm", colour = "red", se = FALSE) +
-  facet_wrap(~zone_pretty) +
-  labs(title = "Comparison of in situ TEMP (black) and MODIS SST (red)",
-       y = "Temperature (°C)", x = NULL) +
-  theme(plot.title = element_text(size = 25, face = "bold"),
-        axis.title = element_text(size = 23),
-        axis.text = element_text(size = 20),
-        strip.text = element_text(size = 23),
-        legend.title = element_text(size = 23),
-        legend.text = element_text(size = 20),
-        legend.position = "bottom",
-        panel.border = element_rect(colour = "black", fill = NA))
-plot_temp_compare
-ggsave("figures/validation/comparison_TEMP_SST.png", height = 10, width = 16)
 
