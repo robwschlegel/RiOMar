@@ -4,11 +4,6 @@
 
 # Libraries ---------------------------------------------------------------
 
-# list_of_packages <- c("plyr", "tidyverse", "maps", "scales", "ggpubr")
-# new.packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,"Package"])]
-# if(length(new.packages)) install.packages(new.packages)
-# lapply(list_of_packages, require, character.only = TRUE)
-
 library(plyr)
 library(tidyverse)
 library(scales)
@@ -17,60 +12,26 @@ library(ggpubr)
 library(cowplot)
 library(magick)
 
-# For zones_bbox -- the authoritative zone boundaries (also used by
-# func/validate.R for actual zone classification), as opposed to util.py's
-# separate, wider lat/lon_range_of_the_map_to_plot (map-cropping extent only).
+# For zones_bbox
 source("func/util.R")
 
-# For zone_meta/get_zone_meta/combine_plume_driver/plot_driver_rose/etc,
-# used by Figure_5_driver_comparison()/Figure_7_driver_rose()/
-# Figure_8_driver_category() below. (func/driver_interactions.R, needed only
-# by Figure_9_gam_partial(), is sourced lazily inside that one function
-# instead -- it pulls in several heavyweight modelling packages (mgcv,
-# gratia, ranger, iml) not worth loading for every other figure in this file.)
+# For zone_meta/get_zone_meta/combine_plume_driver/plot_driver_rose/etc
 source("func/multi.R")
-
-
-# Tests -------------------------------------------------------------------
-
-# test1 <- tidync::tidync("~/pCloudDrive/data/WIND/BAY_OF_BISCAY/wind_202501_202509.nc") |> tidync::hyper_tibble()
-# test2 <- tidync::tidync("~/pCloudDrive/data/WIND/BAY_OF_BISCAY/wind_daily_202501_202509.nc") |> tidync::hyper_tibble()
-# test3 <- tidync::tidync("~/pCloudDrive/data/GLORYS/BAY_OF_BISCAY/glorys_202107_202507.nc") |> tidync::hyper_tibble()
 
 
 # Utils -------------------------------------------------------------------
 
 # High-resolution France coastline (GADM level-0 boundary, ~216,000 vertices)
-# for Figure 1's zoomed insets -- Robert asked for this in place of
-# maps::map_data("world")'s coastline, which is visibly blocky once cropped
-# to a single zone. Same file panache's own zone configs already point to as
-# coast_shapefile (metadata/zone_config_dynamic_*.json), so this isn't a new
-# input, just reusing what the real detection pipeline already trusts for
-# coastline masking.
+# for Figure 1's zoomed insets
 #
-# Loaded lazily (library(sf) is NOT called at file scope, unlike the other
-# packages above) and cached in .high_res_france_coastline_cache, rather than
-# read once eagerly when this file is sourced: figure.R is source()'d for
-# every manuscript figure via func/figure.py's rpy2 calls, and loading `sf`
-# unconditionally broke every one of them, not just Figure 1 -- the RiOMar
-# conda env bundles an older GEOS (3.10.6) than the system R/GDAL stack
-# expects (3.12.1), and rpy2 embeds R inside the conda Python process, so R's
-# dynamic linker picks up the conda env's older GEOS and sf's dyn.load() then
-# fails with "undefined symbol: GEOSConcaveHull_r" against the system
-# libgdal.so.34 -- confirmed 2026-08-02 by reproducing the failure via
-# Figure_1() called through func/figure.py (rpy2), while a plain
-# `Rscript -e 'source("func/figure.R"); Figure_1(...)'` (no conda Python
-# involved) works fine. This lazy load means only Figure_1()'s insets are
-# still affected when run through the real python code/5_figures.py
-# pipeline, until that conda/GEOS conflict is resolved -- see the pipeline
-# map's "Still open" list.
+# Loaded lazily (library(sf) is NOT called at file scope
 .high_res_france_coastline_cache <- NULL
 high_res_coastline <- function(){
   if(is.null(.high_res_france_coastline_cache)){
     library(sf)
-    .high_res_france_coastline_cache <<- sf::st_read("data/FRANCE_shapefile/gadm41_FRA_0.shp", quiet = TRUE) %>%
-      sf::st_coordinates() %>%
-      as.data.frame() %>%
+    .high_res_france_coastline_cache <<- sf::st_read("data/FRANCE_shapefile/gadm41_FRA_0.shp", quiet = TRUE) |> 
+      sf::st_coordinates() |> 
+      as.data.frame() |> 
       dplyr::transmute(long = X, lat = Y, group = interaction(L1, L2, L3, drop = TRUE))
   }
   .high_res_france_coastline_cache
@@ -141,11 +102,6 @@ create_the_basic_map <- function(map_df, var_name,
   return(the_map)
   
 }
-
-
-# ggplot_theme(), save_plot_as_png(), and sec_axis_adjustement_factors()
-# used to be redefined here identically (ggplot_theme differed slightly --
-# see func/util.R's copy for the note); now sourced from func/util.R above.
 
 plot_x11_river_and_plume <- function(X11_data, type_of_signal) {
   
@@ -226,15 +182,9 @@ Figure_1 <- function(where_to_save_the_figure) {
 
   main_folder_of_Figure_1 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_1")
 
-  SPM_map <- file.path( main_folder_of_Figure_1, "DATA", "SPM_map.csv" ) %>% read_csv()
-  insitu_stations <- file.path( main_folder_of_Figure_1, "DATA", "Stations_position.csv" ) %>% read_csv()
+  SPM_map <- file.path(main_folder_of_Figure_1, "DATA", "SPM_map.csv") %>% read_csv()
+  insitu_stations <- file.path(main_folder_of_Figure_1, "DATA", "Stations_position.csv") %>% read_csv()
 
-  # Zone boundaries: use util.R's zones_bbox (the boxes func/validate.R
-  # actually classifies stations/match-ups against), NOT the separate,
-  # wider lat_range_of_the_map_to_plot/lon_range_of_the_map_to_plot in
-  # util.py (used only for cropping the regional map extent to load/plot,
-  # not the zone definition itself) -- the old RIOMAR_limits.csv was built
-  # from the latter and had drifted out of sync with the former.
   RIOMAR_limits <- zones_bbox %>% dplyr::rename(Zone = zone)
 
   basic_map <- create_the_basic_map(map_df = SPM_map, var_name = 'SPM', in_situ_fixed_station = insitu_stations, log_scale = FALSE)
@@ -274,25 +224,6 @@ Figure_1 <- function(where_to_save_the_figure) {
           legend.spacing.x = unit(5, "cm"))
 
   # Zoomed regional insets, floating near each river mouth -------------------
-  # Manuscript Figure 2 is the satellite-vs-in-situ validation scatterplot
-  # (produced by func/validate.R during 1_validate.py) -- these insets are
-  # the former standalone Figure_2(), now folded into Figure_1() per Robert's
-  # request. Changed 2026-08-01 (per Robert): each inset now reads its own
-  # zone-specific date-of-maximum-plume-area CSV (figure.py::
-  # dates_for_each_zone(), written by load_the_regional_maps_and_save_them_
-  # for_plotting() into DATA/<zone>.csv) rather than cropping the national
-  # SPM_map (now the temporal-mean field used only for the backdrop) -- the
-  # point of using each zone's biggest-plume day is to actually show that,
-  # which the shared national map's date/mean can no longer do.
-  # Zone name shown in the corner of each inset (previously the single
-  # representative river's name -- changed 2026-08-01 per Robert, since a
-  # river name mislabels zones with more than one contributing river).
-  # River-mouth coordinates below, marked with a red x on each inset per
-  # Robert's request, are the exact starting_points panache.utils.define_parameters()
-  # uses for plume detection (verified directly, not RiOMar's older,
-  # now-unmaintained local copy of that function) -- several zones have more
-  # than one contributing river (Southern Brittany: Loire, Vilaine; Bay of
-  # Biscay: Gironde, Charente, Sevre; Gulf of Lion: Grand Rhone, Petit Rhone).
   zone_river_mouths <- tibble::tribble(
     ~zone,               ~river,         ~lat,   ~lon,
     "BAY_OF_SEINE",       "Seine",        49.43,  0.145,
@@ -301,16 +232,32 @@ Figure_1 <- function(where_to_save_the_figure) {
     "BAY_OF_BISCAY",      "Gironde",      45.61, -1.14,
     "BAY_OF_BISCAY",      "Charente",     45.98, -1.15,
     "BAY_OF_BISCAY",      "Sevre",        46.26, -1.2,
-    "GULF_OF_LION",       "Grand Rhone",  43.32,  4.85,
-    "GULF_OF_LION",       "Petit Rhone",  43.45,  4.39
+    "GULF_OF_LION",       "Grand\nRhône",  43.32,  4.85,
+    "GULF_OF_LION",       "Petit\nRhône",  43.45,  4.39
   )
 
   build_zone_inset <- function(zone_name) {
     zone_SPM <- file.path(main_folder_of_Figure_1, "DATA", paste0(zone_name, ".csv")) %>% read_csv()
     mouths <- zone_river_mouths %>% dplyr::filter(zone == zone_name)
 
+    # Nudges are tuned per zone (not per river) -- within a zone the mouths
+    # are spaced far enough apart that one offset direction clears the
+    # coastline/other mouths for every river in that zone; see the lat/lon
+    # spread in zone_river_mouths above.
+    river_label <- switch(zone_name,
+      "BAY_OF_SEINE" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "white",
+                                  fontface = "bold", size = 8, hjust = 0, nudge_x = 0.03, nudge_y = 0.08),
+      "SOUTHERN_BRITTANY" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "white",
+                                       fontface = "bold", size = 8, hjust = 0, nudge_x = 0.08, nudge_y = 0.00),
+      "BAY_OF_BISCAY" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "black",
+                                   fontface = "bold", size = 8, hjust = 1, nudge_x = -0.30, nudge_y = 0.05),
+      "GULF_OF_LION" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "black",
+                                  fontface = "bold", size = 8, hjust = 0, nudge_x = -0.10, nudge_y = -0.15)
+    )
+
     create_the_basic_map(zone_SPM, 'SPM', log_scale = FALSE, high_res_coast = TRUE) +
       geom_point(data = mouths, aes(x = lon, y = lat), shape = 4, colour = "red", size = 4, stroke = 2) +
+      river_label +
       ggtitle(zone_title(zone_name)) +
       theme_void() +
       theme(legend.position = "none",
@@ -323,15 +270,15 @@ Figure_1 <- function(where_to_save_the_figure) {
   # x/y = bottom-left corner of each inset, w/h = width/height, all as
   # fractions of the whole canvas (cowplot::draw_plot() convention), over the
   # empty land in the middle of the map. Deliberately irregular sizing/
-  # spacing rather than an even grid, per Robert: Seine upper right, Rhone
+  # spacing rather than an even grid: Seine upper right, Rhone
   # underneath it, Loire where Seine used to sit, Gironde roughly in place --
   # shifted further right than that as a whole group so no inset covers any
   # coloured SPM pixels (checked against zones_bbox's true-box fractions).
   inset_layout <- tibble::tribble(
     ~Zone,               ~x,    ~y,    ~w,    ~h,
-    "BAY_OF_SEINE",       0.66,  0.62,  0.26,  0.22,
-    "SOUTHERN_BRITTANY",  0.43,  0.49,  0.21,  0.22,
-    "BAY_OF_BISCAY",      0.46,  0.24,  0.23,  0.21,
+    "BAY_OF_SEINE",       0.66,  0.62,  0.24,  0.20,
+    "SOUTHERN_BRITTANY",  0.43,  0.50,  0.22,  0.23,
+    "BAY_OF_BISCAY",      0.46,  0.25,  0.23,  0.21,
     "GULF_OF_LION",       0.72,  0.34,  0.24,  0.20
   )
 
@@ -348,10 +295,7 @@ Figure_1 <- function(where_to_save_the_figure) {
 
 }
 
-# Builds the 4-zone regional SPM map grid (optionally with SOMLIT/REPHY
-# station overlay), shared by Figure_1() (with stations, embedded as insets)
-# and regional_zone_maps() below (without stations, a standalone reference
-# figure used by Figure_5()).
+# Builds the 4-zone regional SPM map grid
 zone_maps_panels <- function(data_folder, include_station_points) {
 
   SPM_map_data <- file.path(data_folder, "DATA") %>%
@@ -412,9 +356,7 @@ zone_maps_panels <- function(data_folder, include_station_points) {
     ggarrange(plotlist = ., common.legend = TRUE)
 }
 
-# Standalone regional-zone-maps figure, kept for Figure_5()'s
-# without-stations reference-map byproduct. The with-stations version is no
-# longer produced standalone -- it is embedded directly in Figure_1().
+# Standalone regional-zone-maps figure
 regional_zone_maps <- function(where_to_save_the_figure, include_station_points) {
 
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_1")
@@ -428,13 +370,7 @@ regional_zone_maps <- function(where_to_save_the_figure, include_station_points)
 
 
 # Manuscript Figure 2: satellite-vs-in-situ validation scatterplots, panel
-# (a) SPM and panel (b) Chl-a. Combines the two already-rendered, 3x3
-# grid-size (spatially averaged over the 3x3 pixel window around each in
-# situ station -- not the 1x1 single-native-pixel version) SEXTANT
-# scatterplots from func/validate.py's match-up pipeline (run during
-# 1_validate.py) -- does not regenerate the scatterplots themselves, so
-# re-tweaking them there and re-running 1_validate.py is picked up
-# automatically next time this runs.
+# (a) SPM and panel (b) Turbidity.
 Figure_2 <- function(spm_scatterplot_path, turb_scatterplot_path, where_to_save_the_figure) {
 
   main_folder_of_Figure_2 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_2")
@@ -459,61 +395,51 @@ Figure_2 <- function(spm_scatterplot_path, turb_scatterplot_path, where_to_save_
 }
 
 
-# Renders one methodology panel (A-E) for manuscript Figure 3 -- renamed
-# from Figure_4 (2026-08-01): it has never produced manuscript Figure 4,
-# that name was left over from before the manuscript was renumbered.
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_3'
+# Renders one methodology panel (A-D) for manuscript Figure 3
+# where_to_save_the_figure <- '/figures/ARTICLE/FIGURE_3'
 # name_of_the_plot <- "C"
 Figure_3_panel <- function(where_to_save_the_figure, name_of_the_plot) {
   
-  SPM_map_data <- read_csv(file.path( where_to_save_the_figure, "DATA", paste(name_of_the_plot, ".csv", sep = "") ))
+  SPM_map_data <- read_csv(file.path(where_to_save_the_figure, "DATA", paste(name_of_the_plot, ".csv", sep = "")))
   
-  # legend_limits matches Figure_3_zone_maps()'s panels E-H (0.1-10 g/m3,
-  # displayed/labelled as "0-10") -- this row's own colour bar was removed
-  # 2026-08-05 (per Robert) since it duplicated across all four panels, so
-  # A-D now rely on the shared E-H legend below; that only works if both
-  # rows are on the same colour scale, hence matching the range here too
-  # (was c(4,10), inconsistent with E-H's 0-10 even before the legend was
-  # hidden). Lower bound is 0.1, not 0: create_the_basic_map()'s fill scale
-  # is log10-transformed, on which log10(0) = -Inf breaks ggplot's break
-  # computation -- 0.1 is the same near-zero floor already used as this
-  # function's own default legend_limits elsewhere in this file.
+  # legend_limits matches Figure_3_zone_maps()'s panels E-H
   if (name_of_the_plot %in% c("A", "B")) {
-    the_map <- create_the_basic_map(SPM_map_data, 'SPM', legend_limits = c(0.1,10))
+    the_map <- create_the_basic_map(SPM_map_data, 'SPM', legend_limits = c(0.1,10), high_res_coast = TRUE)
   } else {
-    the_map <- create_the_basic_map(SPM_map_data, 'plume', legend_limits = c(0.1,10))
+    the_map <- create_the_basic_map(SPM_map_data, 'plume', legend_limits = c(0.1,10), high_res_coast = TRUE)
   }
+
+  # Convert name_of_plot to pretty labels
+  tag_label <- paste0(tolower(name_of_the_plot),")")
   
-  # No per-panel colour bar or lon/lat axis text on this top methodology
-  # row (2026-08-05, per Robert): each of A-D previously carried its own
-  # copy of the same SPM legend, which visually duplicated across the row;
-  # the zone maps panel below already carries the shared legend, and the
-  # lon/lat axis ticks are already shown there too.
+  # No per-panel colour bar or lon/lat axis text on the top row
   the_map <- the_map +
+    labs(tag = tag_label) +
     theme(legend.position = "none",
-          axis.text = element_blank(),
-          axis.ticks = element_blank(),
-          plot.tag = element_text(size = 35, face = "bold"),
-          plot.tag.position = c(0.02, 0.98)) +
-    labs(tag = name_of_the_plot)
+          # NB: For some reason it is necessary to call x and y explicitly
+          axis.text.x = element_blank(),
+          axis.ticks.x = element_blank(),
+          axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(),
+          plot.tag = element_text(size = 50, face = "bold"),
+          plot.tag.position = c(0.02, 0.98))
 
   if (name_of_the_plot == "B") {
-    points_used_for_finding_SPM_threshold <- read_csv(file.path( where_to_save_the_figure, "DATA", "B_points_used_for_finding_SPM_threshold.csv" ))
-    all_points_used_for_finding_SPM_threshold <- read_csv(file.path( where_to_save_the_figure, "DATA", "B_all_points_used_for_finding_SPM_threshold.csv" ))
+    points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure, 
+                                                                "DATA", "B_points_used_for_finding_SPM_threshold.csv"))
+    all_points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure, 
+                                                                    "DATA", "B_all_points_used_for_finding_SPM_threshold.csv"))
     the_map <- the_map +
-      geom_point(data = all_points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "grey50", size = 5) +
-      geom_point(data = points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "red", size = 5)
+      geom_point(data = all_points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "grey50", size = 3) +
+      geom_point(data = points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "red", size = 3)
   }
   
-  save_plot_as_png(the_map, name_of_the_plot, width = 28, height = 16, path = where_to_save_the_figure)
+  save_plot_as_png(the_map, name_of_the_plot, width = 12, height = 8, path = where_to_save_the_figure)
   
 }
 
 
-# Renders the per-zone plume-maps panel feeding manuscript Figure 3 --
-# renamed from Figure_5 (2026-08-01): it produces zone_maps_panel.png, not
-# manuscript Figure 5 (that's Figure_5_driver_comparison()'s Figure_5.png).
-# where_to_save_the_figure <- '/home/terrats/Desktop/RIOMAR/TEST/ARTICLE/FIGURE_3'
+# Renders the per-zone plume-maps panel feeding manuscript Figure 3
 Figure_3_zone_maps <- function(where_to_save_the_figure) {
 
   # Read only the four per-zone SPM-map CSVs figure.py's Figure_3_zone_maps()
@@ -522,17 +448,18 @@ Figure_3_zone_maps <- function(where_to_save_the_figure) {
   # Figure_3_panels()' A-E.csv (which lack a `plume` column entirely) and its
   # *_threshold.csv debug files, crashing create_the_basic_map()'s
   # which(map_df$plume) on the first file missing that column.
-  SPM_map_data <- where_to_save_the_figure %>% file.path('DATA', paste0(zone_meta$zone, ".csv")) %>%
+  SPM_map_data <- where_to_save_the_figure |> 
+    file.path('DATA', paste0(zone_meta$zone, ".csv")) |> 
     llply(read_csv)
 
   # Continues the lettering from Figure_3_panel()'s methodology row (A-D)
   # -- zone_meta$zone is already arranged by ZONE_ORDER (north to south:
   # Seine, Southern Brittany, Bay of Biscay, Gulf of Lion), matching the
   # order these zones are listed in the Figure 3 caption.
-  panel_letters <- c("E", "F", "G", "H")
+  panel_letters <- c("e)", "f)", "g)", "h)")
   SPM_maps <- purrr::map2(SPM_map_data, panel_letters, function(SPM_map, letter) {
 
-    create_the_basic_map(SPM_map, 'plume', legend_limits = c(0.1,10)) +
+    create_the_basic_map(SPM_map, 'plume', legend_limits = c(0.1,10), high_res_coast = TRUE) +
       guides(fill = guide_colorbar(barwidth = 60, barheight = 2, title.position = "top")) +
       theme(legend.position = "top",
             legend.title = element_text(angle = 0, hjust = 0.5),

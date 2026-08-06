@@ -38,8 +38,7 @@ Figure_2(where_to_save_the_figure = "figures")
 Figure_3_panels(where_are_saved_regional_maps = "output",
                 where_to_save_the_figure = "figures")
 
-# Writes its regional-zone-maps panel into FIGURE_3/ (folded into the
-# Figure 3 composite, not a standalone figure -- see figure.py's docstring)
+# Writes its regional-zone-maps panel into FIGURE_3
 Figure_3_zone_maps(where_are_saved_regional_maps = "output",
                    where_to_save_the_figure = "figures")
 

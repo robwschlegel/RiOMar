@@ -23,6 +23,7 @@ from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files,
 from panache.plume_algorithm import (Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask,
                                      derive_masks_from_bathymetry)
 from panache.utils import define_parameters, align_bathymetry
+from panache.io import load_map_data
 
 
 # =============================================================================
@@ -64,11 +65,12 @@ def build_plume_parameters(Zone):
 def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     """
     Convert a panache Create_the_plume_mask instance's SPM map and plume mask
-    to an R dataframe and plot using ggplot2. Extracted out of the class
-    itself (it used to be a bound method, the_plume.do_R_plot(...)) because
-    it's a RiOMar-manuscript-specific plotting helper, not something the
-    general-purpose panache library needs -- panache's own version of the
-    class doesn't have it, only reads the same public attributes it sets.
+    to a CSV for Figure_3_panel() (func/figure.R) to plot later. The R call
+    itself is deferred to a single batched Rscript subprocess in
+    Figure_3_panels() (run_figure_3_panels.R) rather than done here
+    in-process, since Figure_3_panel() now renders a high-res coastline via
+    sf, which conflicts with the conda geospatial stack already loaded in
+    this process via panache -- same workaround as Figure_1().
     """
 
     folder_where_to_save_data = os.path.join(where_to_save_the_plot, 'DATA')
@@ -111,26 +113,9 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
 
     df.to_csv( os.path.join(folder_where_to_save_data, f"{name_of_the_plot}.csv") )
 
-    # Source the R script
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_3_panel']
-
-    # Call the R function
-    r_function(
-        where_to_save_the_figure = robjects.StrVector([where_to_save_the_plot]),
-        name_of_the_plot = robjects.StrVector([name_of_the_plot])
-    )
-
 
 def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_figure,
                             mean_spm_path, coordinates_of_the_map) :
-    # Main-panel background changed 2026-08-01 (per Robert) from a single
-    # hardcoded snapshot date (2011/02/02) to the pixel-wise temporal mean
-    # SPM field across the whole SEXTANT archive (func/compute_mean_spm.py,
-    # output/STATS/mean_spm_national.nc) -- a proper climatological
-    # background rather than one arbitrary day's cloud/turbidity pattern.
 
     folder_where_to_save_Figure_1_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
     os.makedirs(folder_where_to_save_Figure_1_data, exist_ok = True)
@@ -150,10 +135,6 @@ def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_fi
     
 def load_and_save_regional_maps_for_plot(where_are_saved_regional_maps, where_to_save_the_figure, dates_for_each_zone) :
 
-    # NB: these per-zone regional maps are the insets combined into Figure 1
-    # (with SOMLIT/REPHY stations) -- so they are written into FIGURE_1's own
-    # DATA folder, not a separate FIGURE_2 (manuscript Figure 2 is the
-    # satellite-vs-in-situ validation scatterplot from func/validate.py).
     folder_where_to_save_regional_zone_maps_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
     os.makedirs(folder_where_to_save_regional_zone_maps_data, exist_ok = True)
     
@@ -193,9 +174,7 @@ def save_insitu_stations_for_plot(folder_where_to_save_Figure_data) :
     
     pd.DataFrame.from_dict(coordinates_of_the_RIOMARS).to_csv(folder_where_to_save_Figure_data + "/RIOMAR_limits.csv")
     
-    # Station coordinates -- written by func/validate.R's in-situ prep
-    # section (metadata/in_situ_site_list.csv), which replaced the retired
-    # func/validate.py::get_insitu_measurements() as the source of this data.
+    # Station coordinates -- written by func/validate.R
     insitu_stations = pd.read_csv(os.path.join(proj_dir, 'metadata', 'in_situ_site_list.csv'))
     insitu_stations = insitu_stations.rename(columns={'source': 'SOURCE', 'site': 'SITE',
                                                        'lat': 'LATITUDE', 'lon': 'LONGITUDE',
@@ -217,24 +196,11 @@ def save_insitu_stations_for_plot(folder_where_to_save_Figure_data) :
     
     
 def dates_for_each_zone() :
-    # Dict order here is the panel order used by Figure 1's insets and
-    # Figure_3_zone_maps() -- kept north to south (util.ZONE_ORDER) rather
-    # than alphabetical or ad hoc, so multi-panel figures read consistently
-    # top to bottom.
-    #
-    # Dates updated 2026-08-04 (per Robert, after that day's panache re-run
-    # regenerated output/panache/dynamic/<zone>/Results.csv): each zone's
-    # date of maximum dynamic-threshold plume area, with func/util.R's
-    # plume_area_ceiling artefact screen applied first. Superseded the
-    # 2026-08-01 dates below, which were tied to the pre-rerun Results.csv
-    # and had drifted well off the post-rerun maxima (e.g. the old Bay of
-    # Seine date's area fell to 211 km^2 out of a post-rerun max of 2499 km^2).
-    #     GULF_OF_LION : '2005-01-27', BAY_OF_BISCAY : '2018-01-17',
-    #     SOUTHERN_BRITTANY : '2007-12-09', BAY_OF_SEINE : '2001-02-19'
-    dates = {'GULF_OF_LION' : '2025-04-02',
-            'BAY_OF_BISCAY' : '2001-02-10',
-            'SOUTHERN_BRITTANY' : '2001-01-23',
-            'BAY_OF_SEINE' : '2014-12-26'}
+
+    dates = {'GULF_OF_LION' : '2025-01-11',
+            'BAY_OF_BISCAY' : '2025-01-11',
+            'SOUTHERN_BRITTANY' : '2025-01-11',
+            'BAY_OF_SEINE' : '2025-01-11'}
     return {zone : dates[zone] for zone in order_zones(dates.keys())}
 
 
@@ -249,19 +215,10 @@ def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, wher
                             mean_spm_path=os.path.join(proj_dir, "output", "STATS", "mean_spm_national.nc"),
                             coordinates_of_the_map={"lat_min": 42, "lat_max": 51.5, "lon_min": -6, "lon_max": 8})
 
-    # The four regional zoomed insets (the former standalone Figure_2(), with
-    # SOMLIT/REPHY station overlays) are built inside Figure_1() in figure.R.
-    # Changed 2026-08-01 (per Robert): each inset now uses its own zone's date
-    # of maximum plume area (dates_for_each_zone()) instead of being cropped
-    # from the national map's single date/mean -- the point of the change is
-    # to actually show each zone's plume at its most visually striking, so a
-    # climatological mean (now used for the national backdrop) or a single
-    # shared arbitrary date would defeat that. Manuscript Figure 2 is the
-    # satellite-vs-in-situ validation scatterplot instead, produced
-    # separately by func/validate.py during 1_validate.py.
+    # The four regional zoomed insets are built inside Figure_1() in figure.R.
     load_and_save_regional_maps_for_plot(where_are_saved_regional_maps,
-                                                      where_to_save_the_figure,
-                                                      dates_for_each_zone())
+                                         where_to_save_the_figure,
+                                         dates_for_each_zone())
 
     # Run as a standalone Rscript process rather than via in-process rpy2
     # (like every other figure function below): Figure_1() is the only
@@ -279,20 +236,16 @@ def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, wher
 
 
 def regional_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure, include_station_points=True):
-    # Standalone regional-zone-maps figure, kept for Figure_5()'s
-    # without-stations reference-map byproduct. The with-stations version is
-    # no longer produced standalone -- it is embedded directly in Figure_1().
-
+    
     the_dates_for_each_zone = dates_for_each_zone()
 
     load_and_save_regional_maps_for_plot(where_are_saved_regional_maps,
-                                                      where_to_save_the_figure,
-                                                      the_dates_for_each_zone)
+                                         where_to_save_the_figure,
+                                         the_dates_for_each_zone)
 
     # Source the R script
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
-    # robjects.r['source']("myRIOMAR_dev/_5_Figures_for_article/utils.R")
 
     r_function = robjects.r['regional_zone_maps']
 
@@ -302,19 +255,7 @@ def regional_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure, 
 
 
 def Figure_2(where_to_save_the_figure):
-    # Manuscript Figure 2: satellite-vs-in-situ validation scatterplots.
-    # Combines the two already-rendered, 3x3 grid-size SEXTANT scatterplots
-    # (spatially averaged over the 3x3 pixel window around each in situ
-    # station -- not the 1x1 single-native-pixel version) from
-    # func/validate.py's match-up pipeline (run during 1_validate.py). This
-    # function does not regenerate the scatterplots themselves, so tweaking
-    # them and re-running 1_validate.py is picked up automatically next time.
-    # Panel b changed 2026-08-01 (per Robert) from the Chl-a scatterplot to
-    # the SPM-vs-turbidity one: REPHY (the larger in situ network) measures
-    # only turbidity, not SPM (only SOMLIT measures SPM directly), so this
-    # panel is what actually makes use of the REPHY match-ups -- see
-    # Section 2.3.1's discussion of Doxaran et al. (2009) for why comparing
-    # satellite SPM against in situ turbidity is a defensible substitution.
+
     spm_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
                                         'SEXTANT_SPM_SPM_Standard_OC5_3x3.png')
     turb_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
@@ -333,20 +274,17 @@ def Figure_2(where_to_save_the_figure):
 
 
 def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
-    # Renamed from Figure_4 (2026-08-01): produces the A-E methodology panels
-    # for manuscript Figure 3, never manuscript Figure 4 (that name was left
-    # over from before the manuscript was renumbered).
+    # Produces the A-E methodology panels
 
     # Static date for each zone to illustrate the plume detection steps
     Zone = 'GULF_OF_LION'
     plume_name = 'Grand Rhone'
-    Date = '2014-01-04'
+    Date = '2025-01-11'
 
     parameters = build_plume_parameters(Zone)
 
     path_to_the_satellite_file_to_use = os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', Zone, 'SEXTANT', 'SPM',
-                                                     'merged',
-                                                     'Standard', 'MAPS', 'DAILY', Date[:4], f'{Date}.pkl')
+                                                     'merged', 'Standard', 'MAPS', 'DAILY', Date[:4], f'{Date}.pkl')
 
     # Open and load the file (binary file assumed to contain data)
     with open(path_to_the_satellite_file_to_use, 'rb') as f:
@@ -371,12 +309,8 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
                                       parameters,
                                       plume_name)
     do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
-             name_of_the_plot='A')
+              name_of_the_plot='A')
 
-    # Real scene-specific dynamic threshold (panache's current
-    # determine_SPM_threshold, incl. its near-mouth-quantile bound
-    # estimation when minimal/maximal_threshold aren't fixed) -- no longer
-    # overridden with a hardcoded placeholder value.
     the_plume.determine_SPM_threshold(dynamic_determination_of_SPM_threshold=True)
     do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
              name_of_the_plot='B')
@@ -426,7 +360,17 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
         the_plume.remove_post_shrink_widening()
 
     do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
-             name_of_the_plot='E')
+              name_of_the_plot='E')
+
+    # Run as a standalone Rscript process rather than via in-process rpy2:
+    # Figure_3_panel() (func/figure.R) now renders a high-res coastline via
+    # sf, which conflicts with the conda geospatial stack already loaded in
+    # this process via panache -- same workaround as Figure_1().
+    subprocess.run(
+        ['Rscript', 'func/run_figure_3_panels.R', where_to_save_the_figure_3],
+        cwd=proj_dir,
+        check=True,
+    )
 
 
 def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
@@ -440,77 +384,41 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
 
     for Zone, Date in the_dates_for_each_zone.items():
 
-        parameters = build_plume_parameters(Zone)
+        parameters = define_parameters(Zone)
 
-        path_to_the_satellite_file_to_use = os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', Zone, 'SEXTANT',
-                                                         'SPM', 'merged',
-                                                         'Standard', 'MAPS', 'DAILY', Date[:4], f'{Date}.pkl')
+        zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
+        with open(zone_config_path) as f:
+            zone_config = json.load(f)
 
-        # Open and load the file (binary file assumed to contain data)
-        with open(path_to_the_satellite_file_to_use, 'rb') as f:
-            ds = pickle.load(f)['Basin_map']['map_data']
+        date = pd.Timestamp(Date)
+        nc_path = glob.glob(os.path.join(zone_config['input_path'], f'{date.year}', f'{date.month:02d}', f'{date.day:02d}', '*.nc'))[0]
 
-        ds_reduced = ds
+        SPM_map_da = load_map_data(nc_path,
+                                   lon_range=tuple(parameters['lon_range_of_plume_area']),
+                                   lat_range=tuple(parameters['lat_range_of_plume_area']),
+                                   variable_name=zone_config['variable_name'])
 
-        bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced, f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
+        plume_masks_path = os.path.join(where_are_saved_regional_maps, 'panache', 'dynamic', Zone, 'PlumeMasks.nc')
+        with xr.open_dataset(plume_masks_path) as mask_ds:
+            plume_mask = (mask_ds['plume_mask']
+                          .sel(time=Date)
+                          .reindex(lat=SPM_map_da.lat, lon=SPM_map_da.lon, method='nearest')
+                          .load())
 
-        (_, land_mask) = derive_masks_from_bathymetry(bathymetry_data_aligned_to_reduced_map, parameters)
-
-        inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
-
-        all_mask_area = []
-        all_river_mouth_to_remove = []
-        thresholds = {key: None for key in parameters['starting_points']}
-        # Loop through each plume starting point to process plume detection.
-        # Always dynamic threshold (matching Figure_3_panels() and every
-        # zone's real metadata/zone_config_dynamic_*.json, all of which set
-        # dynamic_threshold: True)
-        for plume_name, starting_point in parameters['starting_points'].items():
-
-            the_plume = delineate_plume_pipeline(ds_reduced,
-                                                        bathymetry_data_aligned_to_reduced_map,
-                                                        land_mask,
-                                                        parameters,
-                                                        plume_name,
-                                                        inside_polygon_mask,
-                                                        dynamic_thresh=True)
-
-            thresholds[plume_name] = the_plume.SPM_threshold
-            all_mask_area.append(the_plume.plume_mask)
-            if "close_river_mouth_mask" in vars(the_plume):
-                all_river_mouth_to_remove.append(the_plume.close_river_mouth_mask)
-
-        # Combine all detected plume areas using logical OR
-        final_mask_area = reduce(np.logical_or, all_mask_area)
-        final_close_river_mouth_area = reduce(np.logical_or, all_river_mouth_to_remove)
-
-        coordinates_of_the_map = define_parameters(Zone)
-
-        final_mask_area = (final_mask_area
-                           .sel(lat=slice(coordinates_of_the_map['lat_range_of_plume_area'][0],
-                                          coordinates_of_the_map['lat_range_of_plume_area'][1]),
-                                lon=slice(coordinates_of_the_map['lon_range_of_plume_area'][0],
-                                          coordinates_of_the_map['lon_range_of_plume_area'][1])))
-
-        ds_reduced = (ds_reduced
-                      .sel(lat=slice(coordinates_of_the_map['lat_range_of_plume_area'][0],
-                                     coordinates_of_the_map['lat_range_of_plume_area'][1]),
-                           lon=slice(coordinates_of_the_map['lon_range_of_plume_area'][0],
-                                     coordinates_of_the_map['lon_range_of_plume_area'][1])))
-
-        SPM_map = ds_reduced.to_dataframe().reset_index()
-        SPM_map['plume'] = final_mask_area.values.flatten()
+        SPM_map = SPM_map_da.to_dataframe().reset_index()
+        SPM_map['plume'] = plume_mask.values.astype(bool).flatten()
 
         SPM_map.to_csv(where_to_save_the_figure_3 + f"/DATA/{Zone}.csv")
 
-    # Source the R script
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_3_zone_maps']
-
-    # Call the R function
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure_3]))
+    # Run as a standalone Rscript process rather than via in-process rpy2:
+    # Figure_3_zone_maps() (func/figure.R) now renders a high-res coastline
+    # via sf, which conflicts with the conda geospatial stack already loaded
+    # in this process via panache -- same workaround as Figure_1().
+    subprocess.run(
+        ['Rscript', 'func/run_figure_3_zone_maps.R', where_to_save_the_figure_3],
+        cwd=proj_dir,
+        check=True,
+    )
 
     regional_zone_maps(where_are_saved_regional_maps="output",
                        where_to_save_the_figure="figures",
