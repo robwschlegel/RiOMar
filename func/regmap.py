@@ -24,10 +24,11 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (load_file, align_bathymetry, degrees_to_km, find_sat_data_files, expand_grid,
+from util import (degrees_to_km, find_sat_data_files,
                             path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,
-                            date_from_path, define_parameters,
-                            unique_years_in_range, get_all_cases_to_process_for_regional_maps_or_plumes_or_X11)
+                            date_from_path,
+                            get_all_cases_to_process_for_regional_maps_or_plumes_or_X11)
+from panache.utils import load_file, align_bathymetry, years_between_dates
 
 
 # =============================================================================
@@ -1501,7 +1502,7 @@ def create_regional_maps(core_arguments, Zones, overwrite_existing_regional_maps
                          save_map_plots_of_which_time_frequency, nb_of_cores_to_use,
                          where_are_saved_satellite_data, where_to_save_regional_maps) :
             
-    core_arguments.update({'Years' : unique_years_in_range(core_arguments['start_day'], core_arguments['end_day']),
+    core_arguments.update({'Years' : years_between_dates(core_arguments['start_day'], core_arguments['end_day']),
                            'Zones' : Zones})
     
     cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)
@@ -1546,7 +1547,7 @@ def create_regional_maps(core_arguments, Zones, overwrite_existing_regional_maps
         
 def QC_of_regional_maps(core_arguments, Zones, nb_of_cores_to_use, where_are_saved_regional_maps) : 
     
-    core_arguments.update({'Years' : unique_years_in_range(core_arguments['start_day'], core_arguments['end_day']),
+    core_arguments.update({'Years' : years_between_dates(core_arguments['start_day'], core_arguments['end_day']),
                            'Zones' : Zones})
     
     cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)

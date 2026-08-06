@@ -21,7 +21,7 @@ sys.path.append( func_dir )
 
 from util import (get_all_cases_to_process_for_regional_maps_or_plumes_or_X11,
                   path_to_fill_to_where_to_save_satellite_files,
-                  fill_the_sat_paths, load_csv_files, define_parameters)
+                  fill_the_sat_paths, load_csv_files)
 
 
 # =============================================================================

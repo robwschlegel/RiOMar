@@ -26,8 +26,8 @@ sys.path.append( func_dir )
 
 import util
 from util import (find_sat_data_files, km_to_degrees, path_to_fill_to_where_to_save_satellite_files,
-                  fill_the_sat_paths, extract_satellite_time, get_all_cases_to_process,
-                  define_parameters)
+                  fill_the_sat_paths, get_all_cases_to_process)
+from panache.utils import define_parameters, extract_time_from_nc_file
 
 
 # =============================================================================
@@ -428,7 +428,7 @@ def regrid_L2_to_regular_grid(L2_files,
     
     regridded_map_files = {}
     
-    time_value = extract_satellite_time(L2_coordinate_ds)
+    time_value = extract_time_from_nc_file(L2_coordinate_ds)
     
     for L2_map_file in [ x for x in L2_files if x.endswith('geo_coordinates.nc') == False ] : 
                 
@@ -1043,10 +1043,10 @@ def download_cmems_subset(
 
     # Get zone boundaries
     zone_boundaries = define_parameters(zone)
-    minimum_longitude = zone_boundaries['lon_range_of_the_map_to_plot'][0]
-    maximum_longitude = zone_boundaries['lon_range_of_the_map_to_plot'][1]
-    minimum_latitude = zone_boundaries['lat_range_of_the_map_to_plot'][0]
-    maximum_latitude = zone_boundaries['lat_range_of_the_map_to_plot'][1]
+    minimum_longitude = zone_boundaries['lon_range_of_plume_area'][0]
+    maximum_longitude = zone_boundaries['lon_range_of_plume_area'][1]
+    minimum_latitude = zone_boundaries['lat_range_of_plume_area'][0]
+    maximum_latitude = zone_boundaries['lat_range_of_plume_area'][1]
 
     # Set default depth values for specific dataset
     if "cmems_mod_glo_phy" in dataset_id:

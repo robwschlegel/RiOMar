@@ -4,41 +4,25 @@
 
 # Meta-data ---------------------------------------------------------------
 
-# Canonical zone order, north to south, for consistent panel ordering across
-# every multi-zone figure/table (top to bottom, or left to right): Bay of
-# Seine, Southern Brittany, Bay of Biscay, Gulf of Lion. See
-# func/util.py::ZONE_ORDER/order_zones() for the Python equivalent. Use
-# order_zones() to sort any vector/data frame of zone codes -- e.g. replacing
-# a plain sort()/unique() that would otherwise come out alphabetical --
-# rather than hand-ordering zones at each call site.
+# Canonical zone order -- north to south
 ZONE_ORDER <- c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION")
 
 order_zones <- function(zone_vector){
   zone_vector[order(match(zone_vector, ZONE_ORDER))]
 }
 
-# In the future this will be taken from define_parameters() in func/util.py
-river_mouths <- data.frame(row_name = 1:4,
-                           mouth_name = c("Seine", "Gironde", "Loire", "Grand Rhone"),
-                           mouth_lon = c(0.145, -1.05, -2.10, 4.83),
-                           mouth_lat = c(49.43, 45.59, 47.29, 43.41))
+# Generated from panache.utils.define_parameters() -- see
+# func/util.py::export_panache_zone_metadata(). Rerun that function whenever
+# panache's zone parameters change (see ~/panache/NEWS.md); do not hand-edit
+# metadata/panache_zone_metadata.csv.
+panache_zone_metadata <- read_csv("metadata/panache_zone_metadata.csv", show_col_types = FALSE)
 
-# The zones en large
-zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
+river_mouths <- panache_zone_metadata |>
+  dplyr::transmute(row_name = dplyr::row_number(), mouth_name, mouth_lon, mouth_lat)
 
-# Zone bounding boxes -- matched to panache's per-zone plume-detection
-# extents (panache/src/panache/utils.py::define_parameters()) as of
-# 2026-08-04 (per Robert), replacing this data frame's previously
-# independently-hardcoded, slightly wider boxes (diverged by 0.25-0.5 deg
-# per zone). panache is treated as the source of truth since it's the
-# extent plumes are actually detected within; this data frame drives both
-# Figure 1's zone boxes and validation station-to-zone classification in
-# func/validate.R, so both now match what panache actually sees.
-zones_bbox <- data.frame(zone = zones_list,
-                         lon_min = c(3.5, -1.25, -3.5, -4.5),
-                         lon_max = c(5.5, 0.5, -1.0, -1.5),
-                         lat_min  = c(42.5, 49.25, 45.0, 46.5),
-                         lat_max = c(43.6, 50.25, 46.5, 48.0)) |>
+# Zone bounding boxes -- matched to panache library
+zones_bbox <- panache_zone_metadata |>
+  dplyr::select(zone, lon_min, lon_max, lat_min, lat_max) |>
   mutate(zone_pretty = factor(zone,
                               levels = ZONE_ORDER,
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
@@ -46,10 +30,10 @@ zones_bbox <- data.frame(zone = zones_list,
 
 # Create FRANCE bounding box with same structure as zones_bbox
 france_bbox <- data.frame(zone = "FRANCE",
-                         lon_min = c(-7.8),
-                         lon_max = c(10.3),
-                         lat_min  = c(41.2),
-                         lat_max = c(51.5)) 
+                          lon_min = c(-7.8),
+                          lon_max = c(10.3),
+                          lat_min  = c(41.2),
+                          lat_max = c(51.5)) 
 
 
 # Tide gauge sub-daily QC ---------------------------------------------------
@@ -1100,12 +1084,7 @@ sec_axis_adjustement_factors <- function(var_to_scale, var_ref){
                     trans_axis_operation = "var_to_scale = {scaled_var - adjust} / diff)"))
 }
 
-# Consistent theme for project. Gridlines-off variant, matching every
-# current manuscript figure (this copy used to also show gridlines plus a
-# plot.subtitle style that nothing else used; func/figure.R's and
-# func/X11.R's copies already agreed on gridlines-off, so this copy was
-# brought in line with those rather than the reverse -- see the refactor
-# that deduplicated the three near-identical copies of this function).
+# Consistent theme for project
 ggplot_theme <-   function(){
   theme(text = element_text(size = 35, colour = "black"),
         plot.title = element_text(hjust = 0.5, size = 55),

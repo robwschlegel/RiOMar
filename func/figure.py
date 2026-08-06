@@ -19,49 +19,32 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files,
-                  align_bathymetry, define_parameters, order_zones)
-# Create_the_plume_mask/delineate_plume_pipeline/create_polygon_mask
-# used to be imported from this repo's own func/plume.py, which forked the
-# plume-detection algorithm and had drifted out of sync with the version
-# actually used to produce every other result in this project (e.g. it was
-# missing the near-mouth-quantile threshold-bound estimation panache gained
-# on 17 Jul). Now imported directly from the installed panache package so
-# Figure 3/4's methodology panels reflect the real, current algorithm.
-from panache.plume_algorithm import Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask
-# panache.utils.define_parameters is a separately-maintained, cleaned-up
-# fork of this repo's own util.py::define_parameters -- it's authoritative
-# for anything the *algorithm* reads (thresholds, searching_strategies as
-# preset names rather than raw grids, etc; confirmed via diff: RiOMar's
-# copy has zero keys panache lacks, only 6 figure-display-only extras --
-# lat/lon_new_resolution, lat/lon_range_of_the_area_to_check_for_clouds,
-# lat/lon_range_of_the_map_to_plot). build_plume_parameters() below merges
-# panache's authoritative values over RiOMar's, keeping only those 6 extras
-# from the local copy.
-from panache.utils import define_parameters as panache_define_parameters
+from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files, order_zones)
+from panache.plume_algorithm import (Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask,
+                                     derive_masks_from_bathymetry)
+from panache.utils import define_parameters, align_bathymetry
+
+
+# =============================================================================
+#### panache bridging functions
+# =============================================================================
 
 
 def build_plume_parameters(Zone):
     """
-    RiOMar's own figure-display parameters (map-crop extent, resolution
-    reduction), overlaid with panache's authoritative algorithm parameters
-    -- so Figure_3_panels()/Figure_3_zone_maps() detect plumes exactly as the real pipeline
-    does, not as RiOMar's older, now-unmaintained local fork of the
-    algorithm would.
+    panache's authoritative algorithm parameters, overlaid with the
+    zone-tuned near-mouth-quantile settings from
+    metadata/zone_config_dynamic_<Zone>.json -- so Figure_3_panels()/
+    Figure_3_zone_maps() detect plumes exactly as the real pipeline does.
 
     near_mouth_lower_quantile/near_mouth_upper_quantile/gradient_steepness_fraction
-    are set only in metadata/zone_config_dynamic_<Zone>.json, read here and
-    overlaid last -- panache_define_parameters() (panache.utils.define_parameters())
-    does not set them at all, so without this they silently fell back to
-    panache's hardcoded defaults (0.25/0.75/0.9) instead of each zone's
-    tuned values, which only the operational panache CLI path (panache.runner)
-    was reading. Found 2026-08-05: this meant Figure 3's example plume
-    (Gulf of Lion, panels A-D) and the zone-maps panel (E-H) were detected
-    with different threshold parameters than the real output/panache/dynamic/
-    Results.csv the rest of the manuscript reports on.
+    are set only in that JSON, read here and overlaid last -- panache's
+    define_parameters() does not set them at all, so without this they
+    silently fell back to panache's hardcoded defaults (0.25/0.75/0.9)
+    instead of each zone's tuned values, which only the operational panache
+    CLI path (panache.runner) was reading.
     """
     parameters = define_parameters(Zone)
-    parameters.update(panache_define_parameters(Zone))
 
     zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
     with open(zone_config_path) as f:
@@ -71,50 +54,6 @@ def build_plume_parameters(Zone):
             parameters[key] = zone_config[key]
 
     return parameters
-
-
-def preprocess_annual_dataset_and_compute_land_mask(path_to_annual_ds, parameters) :
-
-    """
-    Load the annual map and use it to generate a land mask.
-
-    This function processes an annual dataset by loading it and generating
-    a land mask based on null values, at native resolution (plume detection
-    no longer coarsens the data -- see panache.plume_algorithm.main_process,
-    which sets ds_reduced = ds). RiOMar-specific figure-prep utility with no
-    equivalent in panache.
-
-    Parameters
-    ----------
-    path_to_annual_ds : str
-        the path to the annual (yearly) averaged dataset
-    parameters : dict
-        Configuration parameters for plume detection. It contains the limits of the polygon defining the searching area.
-
-    Returns
-    -------
-    tuple
-        A tuple containing:
-        - xarray.DataArray: Subset of the annual dataset for cloud coverage checks.
-        - xarray.DataArray: Boolean mask where True represents land and False represents water.
-    """
-
-    # Load the annual dataset for plume detection
-    with open(path_to_annual_ds, 'rb') as f:
-
-        multi_annual_ds = pickle.load(f)['Basin_map']['map_data']
-        multi_annual_ds.values[multi_annual_ds.values < 0] = np.nan
-
-    # Select a subset of the annual dataset based on the area to check for cloud coverage
-    multi_annual_ds_subset = multi_annual_ds.sel(lat=slice(parameters['lat_range_of_the_area_to_check_for_clouds'][0],
-                                                           parameters['lat_range_of_the_area_to_check_for_clouds'][1]),
-                                                lon=slice(parameters['lon_range_of_the_area_to_check_for_clouds'][0],
-                                                          parameters['lon_range_of_the_area_to_check_for_clouds'][1]))
-
-    # Create a land mask based on null values (land = True), at native resolution
-    land_mask = multi_annual_ds.isnull()
-
-    return multi_annual_ds_subset, land_mask
 
 
 # =============================================================================
@@ -163,10 +102,10 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     if 'plume_mask' in vars(the_plume) :
         df['plume'] = the_plume.plume_mask.values.flatten()
 
-    index_to_keep = np.where((df.lat >= the_plume.parameters['lat_range_of_the_map_to_plot'][0]) &
-                             (df.lat <= the_plume.parameters['lat_range_of_the_map_to_plot'][1]) &
-                             (df.lon >= the_plume.parameters['lon_range_of_the_map_to_plot'][0]) &
-                             (df.lon <= the_plume.parameters['lon_range_of_the_map_to_plot'][1]) )
+    index_to_keep = np.where((df.lat >= the_plume.parameters['lat_range_of_plume_area'][0]) &
+                             (df.lat <= the_plume.parameters['lat_range_of_plume_area'][1]) &
+                             (df.lon >= the_plume.parameters['lon_range_of_plume_area'][0]) &
+                             (df.lon <= the_plume.parameters['lon_range_of_plume_area'][1]) )
 
     df = df.iloc[index_to_keep]
 
@@ -232,10 +171,10 @@ def load_and_save_regional_maps_for_plot(where_are_saved_regional_maps, where_to
             ds = pickle.load(f)['Basin_map']['map_data']  
             
             SPM_map = (ds
-                       .sel(lat=slice(coordinates_of_the_map['lat_range_of_the_map_to_plot'][0], 
-                                      coordinates_of_the_map['lat_range_of_the_map_to_plot'][1]), 
-                            lon=slice(coordinates_of_the_map['lon_range_of_the_map_to_plot'][0],
-                                      coordinates_of_the_map['lon_range_of_the_map_to_plot'][1])) 
+                       .sel(lat=slice(coordinates_of_the_map['lat_range_of_plume_area'][0],
+                                      coordinates_of_the_map['lat_range_of_plume_area'][1]),
+                            lon=slice(coordinates_of_the_map['lon_range_of_plume_area'][0],
+                                      coordinates_of_the_map['lon_range_of_plume_area'][1]))
                        .to_dataframe()
                        .reset_index())
             
@@ -246,10 +185,10 @@ def load_and_save_regional_maps_for_plot(where_are_saved_regional_maps, where_to
 
 def save_insitu_stations_for_plot(folder_where_to_save_Figure_data) :     
 
-    coordinates_of_the_RIOMARS = { zone_name : {'lat_min' : define_parameters(zone_name)['lat_range_of_the_map_to_plot'][0],
-                                                'lat_max' : define_parameters(zone_name)['lat_range_of_the_map_to_plot'][1],
-                                                'lon_min' : define_parameters(zone_name)['lon_range_of_the_map_to_plot'][0],
-                                                'lon_max' : define_parameters(zone_name)['lon_range_of_the_map_to_plot'][1]}
+    coordinates_of_the_RIOMARS = { zone_name : {'lat_min' : define_parameters(zone_name)['lat_range_of_plume_area'][0],
+                                                'lat_max' : define_parameters(zone_name)['lat_range_of_plume_area'][1],
+                                                'lon_min' : define_parameters(zone_name)['lon_range_of_plume_area'][0],
+                                                'lon_max' : define_parameters(zone_name)['lon_range_of_plume_area'][1]}
                                   for zone_name in order_zones(['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY', 'BAY_OF_SEINE']) }
     
     pd.DataFrame.from_dict(coordinates_of_the_RIOMARS).to_csv(folder_where_to_save_Figure_data + "/RIOMAR_limits.csv")
@@ -417,32 +356,21 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     # coarsens internally), so no resolution reduction happens here either.
     ds_reduced = ds
 
-    bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced,
-                                                                            f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
+    bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced, f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
 
-    (_, land_mask) = preprocess_annual_dataset_and_compute_land_mask(
-        (path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + "/REGIONAL_MAPS/" + Zone)
-         .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
-                  'SEXTANT/SPM/merged/Standard/MAPS/MULTIYEAR')
-         .replace('[YEAR]/[MONTH]/[DAY]', 'Averaged_over_multi-years.pkl')
-         ), parameters)
+    (_, land_mask) = derive_masks_from_bathymetry(bathymetry_data_aligned_to_reduced_map, parameters)
 
     inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
 
-    # Panels A-E feed the Figure 3 composite only (methodology figure); they
-    # are not manuscript Figure 4 (that's Figure_4_timeseries()'s
-    # Figure_4.png, saved into its own FIGURE_4/ folder). Writing straight
-    # into FIGURE_3/ avoids the folder-name/manuscript-number mismatch this
-    # used to have (2026-08-01) -- same fix already applied to
-    # Figure_3_zone_maps()'s zone-maps panel.
-    where_to_save_the_figure_4 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
+    # Panels A-E feed the Figure 3 composite
+    where_to_save_the_figure_3 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
 
     the_plume = Create_the_plume_mask(ds_reduced,
                                       bathymetry_data_aligned_to_reduced_map,
                                       land_mask,
                                       parameters,
                                       plume_name)
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_4,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
              name_of_the_plot='A')
 
     # Real scene-specific dynamic threshold (panache's current
@@ -450,11 +378,11 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     # estimation when minimal/maximal_threshold aren't fixed) -- no longer
     # overridden with a hardcoded placeholder value.
     the_plume.determine_SPM_threshold(dynamic_determination_of_SPM_threshold=True)
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_4,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
              name_of_the_plot='B')
 
     the_plume.do_a_raw_plume_detection()
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_4,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
              name_of_the_plot='C')
 
     the_plume.include_cloudy_regions()
@@ -464,18 +392,18 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
         minimal_distance_from_estuary=parameters['minimal_distance_from_estuary_for_zone_with_resuspension'][
             plume_name])
     ##
-    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_3,
     #                    name_of_the_plot='before_shallow_water_removal')
     ##
 
     the_plume.remove_shallow_waters()
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_4,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
              name_of_the_plot='D')
 
     the_plume.remove_close_river_mouth(the_plume.parameters['pixel_starting_points_close_river_mouth'])
 
     ##
-    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_3,
     #                    name_of_the_plot='before_')
     ##
 
@@ -490,29 +418,25 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     the_plume.remove_shallow_waters()
 
     ##
-    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_4,
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_3,
     #                    name_of_the_plot='before_shrink_widen')
     ##
 
     if not np.isin(plume_name, ['Seine']):
         the_plume.remove_post_shrink_widening()
 
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_4,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
              name_of_the_plot='E')
 
 
 def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
-    # Renamed from Figure_5 (2026-08-01): produces zone_maps_panel.png, an
-    # input to manuscript Figure 3, never manuscript Figure 5 (that's
-    # Figure_5_driver_comparison()'s Figure_5.png).
+
     the_dates_for_each_zone = dates_for_each_zone()
 
-    # Folded into Figure 3 (methodology composite) rather than a standalone
-    # manuscript figure -- this panel is now an input to Figure_3(), not
-    # FIGURE_5 (which is manuscript Figure 5, the plume-vs-flow driver
-    # comparison produced by Figure_5_driver_comparison()).
-    where_to_save_the_figure_5 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
-    os.makedirs(os.path.join(where_to_save_the_figure_5, "DATA"), exist_ok=True)
+    # Folded into Figure 3 (methodology composite)
+
+    where_to_save_the_figure_3 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
+    os.makedirs(os.path.join(where_to_save_the_figure_3, "DATA"), exist_ok=True)
 
     for Zone, Date in the_dates_for_each_zone.items():
 
@@ -526,20 +450,11 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         with open(path_to_the_satellite_file_to_use, 'rb') as f:
             ds = pickle.load(f)['Basin_map']['map_data']
 
-            # Plume detection now runs at native resolution (panache no
-            # longer coarsens internally), so no resolution reduction
-            # happens here either.
         ds_reduced = ds
 
-        bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced,
-                                                                                f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
+        bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced, f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
 
-        (_, land_mask) = preprocess_annual_dataset_and_compute_land_mask(
-            (path_to_fill_to_where_to_save_satellite_files(where_are_saved_regional_maps + "/REGIONAL_MAPS/" + Zone)
-             .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
-                      'SEXTANT/SPM/merged/Standard/MAPS/MULTIYEAR')
-             .replace('[YEAR]/[MONTH]/[DAY]', 'Averaged_over_multi-years.pkl')
-             ), parameters)
+        (_, land_mask) = derive_masks_from_bathymetry(bathymetry_data_aligned_to_reduced_map, parameters)
 
         inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
 
@@ -549,12 +464,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         # Loop through each plume starting point to process plume detection.
         # Always dynamic threshold (matching Figure_3_panels() and every
         # zone's real metadata/zone_config_dynamic_*.json, all of which set
-        # dynamic_threshold: True) -- this used to override several river
-        # mouths (Seine, Grand Rhone, Petit Rhone, Loire, Sevre) with fixed
-        # thresholds hand-tuned for a since-replaced set of dates, which
-        # under-detected the plume on the zones' actual record dynamic-
-        # threshold days (Robert, 2026-08-01: Bay of Seine and Gulf of Lion's
-        # Figure 3 panels looked implausibly small for their record area).
+        # dynamic_threshold: True)
         for plume_name, starting_point in parameters['starting_points'].items():
 
             the_plume = delineate_plume_pipeline(ds_reduced,
@@ -577,31 +487,30 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         coordinates_of_the_map = define_parameters(Zone)
 
         final_mask_area = (final_mask_area
-                           .sel(lat=slice(coordinates_of_the_map['lat_range_of_the_map_to_plot'][0],
-                                          coordinates_of_the_map['lat_range_of_the_map_to_plot'][1]),
-                                lon=slice(coordinates_of_the_map['lon_range_of_the_map_to_plot'][0],
-                                          coordinates_of_the_map['lon_range_of_the_map_to_plot'][1])))
+                           .sel(lat=slice(coordinates_of_the_map['lat_range_of_plume_area'][0],
+                                          coordinates_of_the_map['lat_range_of_plume_area'][1]),
+                                lon=slice(coordinates_of_the_map['lon_range_of_plume_area'][0],
+                                          coordinates_of_the_map['lon_range_of_plume_area'][1])))
 
         ds_reduced = (ds_reduced
-                      .sel(lat=slice(coordinates_of_the_map['lat_range_of_the_map_to_plot'][0],
-                                     coordinates_of_the_map['lat_range_of_the_map_to_plot'][1]),
-                           lon=slice(coordinates_of_the_map['lon_range_of_the_map_to_plot'][0],
-                                     coordinates_of_the_map['lon_range_of_the_map_to_plot'][1])))
+                      .sel(lat=slice(coordinates_of_the_map['lat_range_of_plume_area'][0],
+                                     coordinates_of_the_map['lat_range_of_plume_area'][1]),
+                           lon=slice(coordinates_of_the_map['lon_range_of_plume_area'][0],
+                                     coordinates_of_the_map['lon_range_of_plume_area'][1])))
 
         SPM_map = ds_reduced.to_dataframe().reset_index()
         SPM_map['plume'] = final_mask_area.values.flatten()
 
-        SPM_map.to_csv(where_to_save_the_figure_5 + f"/DATA/{Zone}.csv")
+        SPM_map.to_csv(where_to_save_the_figure_3 + f"/DATA/{Zone}.csv")
 
     # Source the R script
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
-    # robjects.r['source']("myRIOMAR_dev/_5_Figures_for_article/utils.R")
 
     r_function = robjects.r['Figure_3_zone_maps']
 
     # Call the R function
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure_5]))
+    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure_3]))
 
     regional_zone_maps(where_are_saved_regional_maps="output",
                        where_to_save_the_figure="figures",
