@@ -7,7 +7,7 @@
 # =============================================================================
 
 
-import os, sys, pickle, re, glob, subprocess
+import os, sys, pickle, re, glob, subprocess, json
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -48,9 +48,28 @@ def build_plume_parameters(Zone):
     -- so Figure_3_panels()/Figure_3_zone_maps() detect plumes exactly as the real pipeline
     does, not as RiOMar's older, now-unmaintained local fork of the
     algorithm would.
+
+    near_mouth_lower_quantile/near_mouth_upper_quantile/gradient_steepness_fraction
+    are set only in metadata/zone_config_dynamic_<Zone>.json, read here and
+    overlaid last -- panache_define_parameters() (panache.utils.define_parameters())
+    does not set them at all, so without this they silently fell back to
+    panache's hardcoded defaults (0.25/0.75/0.9) instead of each zone's
+    tuned values, which only the operational panache CLI path (panache.runner)
+    was reading. Found 2026-08-05: this meant Figure 3's example plume
+    (Gulf of Lion, panels A-D) and the zone-maps panel (E-H) were detected
+    with different threshold parameters than the real output/panache/dynamic/
+    Results.csv the rest of the manuscript reports on.
     """
     parameters = define_parameters(Zone)
     parameters.update(panache_define_parameters(Zone))
+
+    zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
+    with open(zone_config_path) as f:
+        zone_config = json.load(f)
+    for key in ("near_mouth_lower_quantile", "near_mouth_upper_quantile", "gradient_steepness_fraction"):
+        if key in zone_config:
+            parameters[key] = zone_config[key]
+
     return parameters
 
 
@@ -264,17 +283,19 @@ def dates_for_each_zone() :
     # than alphabetical or ad hoc, so multi-panel figures read consistently
     # top to bottom.
     #
-    # Dates updated 2026-08-01 (per Robert): each zone's date of maximum
-    # dynamic-threshold plume area (output/panache/dynamic/<zone>/Results.csv),
-    # with func/util.R's plume_area_ceiling artefact screen applied first --
-    # the raw per-zone maxima before that screen (Bay of Seine 2014-02-02 at
-    # 9563 km^2; Gulf of Lion 2005-05-12 at 22359 km^2) are known flood-fill
-    # spillover artefacts, both far above their zone's ceiling (2500 and
-    # 10000 km^2 respectively), not real plume days.
-    dates = {'GULF_OF_LION' : '2005-01-27',
-            'BAY_OF_BISCAY' : '2018-01-17',
-            'SOUTHERN_BRITTANY' : '2007-12-09',
-            'BAY_OF_SEINE' : '2001-02-19'}
+    # Dates updated 2026-08-04 (per Robert, after that day's panache re-run
+    # regenerated output/panache/dynamic/<zone>/Results.csv): each zone's
+    # date of maximum dynamic-threshold plume area, with func/util.R's
+    # plume_area_ceiling artefact screen applied first. Superseded the
+    # 2026-08-01 dates below, which were tied to the pre-rerun Results.csv
+    # and had drifted well off the post-rerun maxima (e.g. the old Bay of
+    # Seine date's area fell to 211 km^2 out of a post-rerun max of 2499 km^2).
+    #     GULF_OF_LION : '2005-01-27', BAY_OF_BISCAY : '2018-01-17',
+    #     SOUTHERN_BRITTANY : '2007-12-09', BAY_OF_SEINE : '2001-02-19'
+    dates = {'GULF_OF_LION' : '2025-04-02',
+            'BAY_OF_BISCAY' : '2001-02-10',
+            'SOUTHERN_BRITTANY' : '2001-01-23',
+            'BAY_OF_SEINE' : '2014-12-26'}
     return {zone : dates[zone] for zone in order_zones(dates.keys())}
 
 
@@ -650,7 +671,7 @@ def Figure_5_driver_comparison(where_to_save_the_figure, max_lag_daily=14):
                max_lag_daily=robjects.IntVector([max_lag_daily]))
 
 
-def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=16):
+def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
     """manuscript Figure 7: wind/wave direction-magnitude roses, coloured by
     the flow-controlled plume-area response, one row per zone. Replaces the
     original Figure 7/8 concept (X11-decomposed wind/wave magnitude time
@@ -719,12 +740,25 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
     def _load_results(ts_file):
         df = pd.read_csv(ts_file)
         zone = os.path.basename(os.path.dirname(ts_file))
-        df['Zone'] = zone
         df['date'] = pd.to_datetime(df['date']).dt.date
-        df['Years'] = pd.to_datetime(df['date']).dt.year
-        df['Satellite_sensor'] = 'merged'
         df.loc[df['area_of_the_plume_mask_in_km2'] > plume_area_ceiling[zone],
               'area_of_the_plume_mask_in_km2'] = np.nan
+
+        # Fill gaps in the date range with explicit NaN rows (2026-08-05,
+        # per Robert), so Figure 4 plots real data gaps (cloud cover, etc.)
+        # as breaks rather than geom_path/geom_point silently drawing a
+        # straight line across them. This reads Results.csv directly rather
+        # than going through util.R::load_plume_ts() (which already does
+        # this gap-fill), specifically to keep the ceiling-based spike
+        # removal above -- so the gap-fill needs redoing here too.
+        df = df.set_index(pd.DatetimeIndex(pd.to_datetime(df['date'])))
+        full_range = pd.date_range(df.index.min(), df.index.max(), freq='D')
+        df = df.reindex(full_range)
+        df['date'] = df.index.date
+
+        df['Zone'] = zone
+        df['Years'] = pd.to_datetime(df['date']).dt.year
+        df['Satellite_sensor'] = 'merged'
         return df
 
     ts_data_with_dynamic_threshold = pd.concat(

@@ -133,14 +133,28 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
   # entirely -- mirrors func/validate.py's region_mapping fix for the same
   # station.
   mutate(zone = case_when(site == "Lanvéoc" ~ "SOUTHERN_BRITTANY",
-                          lon >= zones_bbox$lon_min[1] & lon <= zones_bbox$lon_max[1] &
-                            lat >= zones_bbox$lat_min[1] & lat <= zones_bbox$lat_max[1] ~ "GULF_OF_LION",
-                          lon >= zones_bbox$lon_min[2] & lon <= zones_bbox$lon_max[2] &
-                            lat >= zones_bbox$lat_min[2] & lat <= zones_bbox$lat_max[2] ~ "BAY_OF_SEINE",
-                          lon >= zones_bbox$lon_min[3] & lon <= zones_bbox$lon_max[3] &
-                            lat >= zones_bbox$lat_min[3] & lat <= zones_bbox$lat_max[3] ~ "BAY_OF_BISCAY",
-                          lon >= zones_bbox$lon_min[4] & lon <= zones_bbox$lon_max[4] &
-                            lat >= zones_bbox$lat_min[4] & lat <= zones_bbox$lat_max[4] ~ "SOUTHERN_BRITTANY")) |>
+                          # Looked up by zone NAME, not row position: zones_bbox
+                          # (func/util.R) ends with dplyr::arrange(match(zone,
+                          # ZONE_ORDER)), which reorders its rows into ZONE_ORDER
+                          # (BAY_OF_SEINE, SOUTHERN_BRITTANY, BAY_OF_BISCAY,
+                          # GULF_OF_LION) -- a different order from the
+                          # GULF_OF_LION-first sequence this case_when used to
+                          # assume via zones_bbox$...[1..4]. That positional
+                          # indexing silently mislabelled every zone except
+                          # BAY_OF_BISCAY (which happens to land at position 3
+                          # in both orderings): Bay of Seine stations were
+                          # tagged GULF_OF_LION, Gulf of Lion stations were
+                          # tagged SOUTHERN_BRITTANY, and Southern Brittany
+                          # stations were tagged BAY_OF_SEINE. Found 2026-08-04
+                          # verifying Table 4 -- fixed by matching on zone name.
+                          lon >= zones_bbox$lon_min[zones_bbox$zone == "GULF_OF_LION"] & lon <= zones_bbox$lon_max[zones_bbox$zone == "GULF_OF_LION"] &
+                            lat >= zones_bbox$lat_min[zones_bbox$zone == "GULF_OF_LION"] & lat <= zones_bbox$lat_max[zones_bbox$zone == "GULF_OF_LION"] ~ "GULF_OF_LION",
+                          lon >= zones_bbox$lon_min[zones_bbox$zone == "BAY_OF_SEINE"] & lon <= zones_bbox$lon_max[zones_bbox$zone == "BAY_OF_SEINE"] &
+                            lat >= zones_bbox$lat_min[zones_bbox$zone == "BAY_OF_SEINE"] & lat <= zones_bbox$lat_max[zones_bbox$zone == "BAY_OF_SEINE"] ~ "BAY_OF_SEINE",
+                          lon >= zones_bbox$lon_min[zones_bbox$zone == "BAY_OF_BISCAY"] & lon <= zones_bbox$lon_max[zones_bbox$zone == "BAY_OF_BISCAY"] &
+                            lat >= zones_bbox$lat_min[zones_bbox$zone == "BAY_OF_BISCAY"] & lat <= zones_bbox$lat_max[zones_bbox$zone == "BAY_OF_BISCAY"] ~ "BAY_OF_BISCAY",
+                          lon >= zones_bbox$lon_min[zones_bbox$zone == "SOUTHERN_BRITTANY"] & lon <= zones_bbox$lon_max[zones_bbox$zone == "SOUTHERN_BRITTANY"] &
+                            lat >= zones_bbox$lat_min[zones_bbox$zone == "SOUTHERN_BRITTANY"] & lat <= zones_bbox$lat_max[zones_bbox$zone == "SOUTHERN_BRITTANY"] ~ "SOUTHERN_BRITTANY")) |>
   mutate(zone_pretty = factor(zone,
                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>

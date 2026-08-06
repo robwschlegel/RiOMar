@@ -26,12 +26,19 @@ river_mouths <- data.frame(row_name = 1:4,
 # The zones en large
 zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
 
-# Zone bounding boxes
+# Zone bounding boxes -- matched to panache's per-zone plume-detection
+# extents (panache/src/panache/utils.py::define_parameters()) as of
+# 2026-08-04 (per Robert), replacing this data frame's previously
+# independently-hardcoded, slightly wider boxes (diverged by 0.25-0.5 deg
+# per zone). panache is treated as the source of truth since it's the
+# extent plumes are actually detected within; this data frame drives both
+# Figure 1's zone boxes and validation station-to-zone classification in
+# func/validate.R, so both now match what panache actually sees.
 zones_bbox <- data.frame(zone = zones_list,
-                         lon_min = c(3.50, -1.50, -4.00, -5.00),
-                         lon_max = c(6.00, 0.50, -0.50, -1.50),
-                         lat_min  = c(42.25, 49.25, 44.50, 46.5),
-                         lat_max = c(44.00, 50.25, 46.50, 48.00)) |>
+                         lon_min = c(3.5, -1.25, -3.5, -4.5),
+                         lon_max = c(5.5, 0.5, -1.0, -1.5),
+                         lat_min  = c(42.5, 49.25, 45.0, 46.5),
+                         lat_max = c(43.6, 50.25, 46.5, 48.0)) |>
   mutate(zone_pretty = factor(zone,
                               levels = ZONE_ORDER,
                               labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>

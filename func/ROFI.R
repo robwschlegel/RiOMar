@@ -185,16 +185,28 @@ plot_flow_plume_rofi_succession <- function(){
 # lagged_correlation(x, y, lag)'s "lag" is: the shift k (days) at which x
 # from k days earlier best correlates with y today -- e.g. x_col =
 # "plume_area", y_col = "rofi" asks at what k plume_area(t-k) best matches
-# rofi(t). max_lag_daily defaults to 90 (vs. the pipeline's usual 30) to give
-# Maud's hypothesized 1-2 month (~30-60 day) lag headroom on both sides;
-# checked out to 120 days for BAY_OF_SEINE plume-vs-ROFI specifically, whose
-# correlation is weak (r < 0.28 throughout) and multi-modal rather than one
-# clean peak -- so its reported peak lag is less trustworthy than the other
-# pairs/zones, which do show a single clear maximum well inside this window.
+# rofi(t), i.e. x_col leads y_col. max_lag_daily defaults to 90 (vs. the
+# pipeline's usual 30) to give Maud's hypothesized 1-2 month (~30-60 day)
+# lag headroom on both sides; checked out to 120 days for BAY_OF_SEINE
+# plume-vs-ROFI specifically, whose correlation is weak (r < 0.28
+# throughout) and multi-modal rather than one clean peak -- so its reported
+# peak lag is less trustworthy than the other pairs/zones, which do show a
+# single clear maximum well inside this window.
+#
+# FIXED 2026-08-05 (per Robert): driver_plume_correlation() used to lag
+# whatever it received in its `plume_area` argument and hold `value` fixed;
+# this function relied on that, feeding x_col into `plume_area` (the
+# leading slot) and y_col into `value` (the fixed slot) to get "x_col leads
+# y_col." driver_plume_correlation() has since been fixed to lag `value`
+# and hold `plume_area` fixed instead (its own callers had the opposite bug
+# -- see multi.R), so the mapping here is swapped to compensate: x_col now
+# goes into `value` (still the leading slot) and y_col into `plume_area`
+# (still the fixed slot). Net effect: "x_col leads y_col" still holds, and
+# every existing pairs/labels/lag number below is unchanged by this fix.
 rofi_plume_lagged_correlation <- function(zone_name, x_col, y_col, max_lag_daily = 90){
   meta <- get_zone_meta(zone_name = zone_name)
   df_wide <- combine_flow_plume_rofi(meta, exclude_estuary = TRUE)
-  df <- tibble::tibble(date = df_wide$date, plume_area = df_wide[[x_col]], value = df_wide[[y_col]])
+  df <- tibble::tibble(date = df_wide$date, value = df_wide[[x_col]], plume_area = df_wide[[y_col]])
 
   driver_plume_correlation(df, max_lag_daily) |>
     dplyr::mutate(zone = zone_name, x = x_col, y = y_col, .before = "lag")

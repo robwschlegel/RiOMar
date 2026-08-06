@@ -14,8 +14,15 @@ area_stats <- purrr::pmap_dfr(zone_meta, function(...){
   trend <- driver_plume_trend(df, "flow", meta$mouth_name, save_plot = FALSE) |>
     dplyr::filter(variable == "plume", weight_choice == "ar", timestep == "daily")
 
+  # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
+  # matching the same day-of-year adjustment used for the trend itself, and
+  # the SD convention Robert asked Table 5 to use consistently across all
+  # four plume variables (2026-08-05) -- not SD of annual means.
+  area_adj <- deseason_doy(df$plume_area, df$date)
+
   tibble::tibble(zone = meta$zone, mouth_name = meta$mouth_name,
-                 mean_area_km2 = mean(df$plume_area, na.rm = TRUE),
+                 mean_area_km2 = mean(area_adj, na.rm = TRUE),
+                 sd_area_km2 = sd(area_adj, na.rm = TRUE),
                  n = trend$n, intercept = trend$intercept, slope = trend$slope,
                  slope_annualised = trend$slope_annualised, slope_p = trend$slope_p)
 })

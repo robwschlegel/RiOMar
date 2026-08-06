@@ -468,18 +468,35 @@ Figure_3_panel <- function(where_to_save_the_figure, name_of_the_plot) {
   
   SPM_map_data <- read_csv(file.path( where_to_save_the_figure, "DATA", paste(name_of_the_plot, ".csv", sep = "") ))
   
+  # legend_limits matches Figure_3_zone_maps()'s panels E-H (0.1-10 g/m3,
+  # displayed/labelled as "0-10") -- this row's own colour bar was removed
+  # 2026-08-05 (per Robert) since it duplicated across all four panels, so
+  # A-D now rely on the shared E-H legend below; that only works if both
+  # rows are on the same colour scale, hence matching the range here too
+  # (was c(4,10), inconsistent with E-H's 0-10 even before the legend was
+  # hidden). Lower bound is 0.1, not 0: create_the_basic_map()'s fill scale
+  # is log10-transformed, on which log10(0) = -Inf breaks ggplot's break
+  # computation -- 0.1 is the same near-zero floor already used as this
+  # function's own default legend_limits elsewhere in this file.
   if (name_of_the_plot %in% c("A", "B")) {
-    the_map <- create_the_basic_map(SPM_map_data, 'SPM', legend_limits = c(4,10))
+    the_map <- create_the_basic_map(SPM_map_data, 'SPM', legend_limits = c(0.1,10))
   } else {
-    the_map <- create_the_basic_map(SPM_map_data, 'plume', legend_limits = c(4,10))
+    the_map <- create_the_basic_map(SPM_map_data, 'plume', legend_limits = c(0.1,10))
   }
   
-  the_map <- the_map + 
-    guides(fill = guide_colorbar(barwidth = 60, barheight = 2, title.position = "top")) +
-    theme(legend.position = "top",
-          legend.title = element_text(angle = 0, hjust = 0.5),
-          axis.text = element_text(size=25, colour = "black"))
-  
+  # No per-panel colour bar or lon/lat axis text on this top methodology
+  # row (2026-08-05, per Robert): each of A-D previously carried its own
+  # copy of the same SPM legend, which visually duplicated across the row;
+  # the zone maps panel below already carries the shared legend, and the
+  # lon/lat axis ticks are already shown there too.
+  the_map <- the_map +
+    theme(legend.position = "none",
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          plot.tag = element_text(size = 35, face = "bold"),
+          plot.tag.position = c(0.02, 0.98)) +
+    labs(tag = name_of_the_plot)
+
   if (name_of_the_plot == "B") {
     points_used_for_finding_SPM_threshold <- read_csv(file.path( where_to_save_the_figure, "DATA", "B_points_used_for_finding_SPM_threshold.csv" ))
     all_points_used_for_finding_SPM_threshold <- read_csv(file.path( where_to_save_the_figure, "DATA", "B_all_points_used_for_finding_SPM_threshold.csv" ))
@@ -507,15 +524,23 @@ Figure_3_zone_maps <- function(where_to_save_the_figure) {
   # which(map_df$plume) on the first file missing that column.
   SPM_map_data <- where_to_save_the_figure %>% file.path('DATA', paste0(zone_meta$zone, ".csv")) %>%
     llply(read_csv)
-  
-  SPM_maps <- SPM_map_data %>% llply(function(SPM_map) {
-    
-    create_the_basic_map(SPM_map, 'plume', legend_limits = c(4,10)) + 
+
+  # Continues the lettering from Figure_3_panel()'s methodology row (A-D)
+  # -- zone_meta$zone is already arranged by ZONE_ORDER (north to south:
+  # Seine, Southern Brittany, Bay of Biscay, Gulf of Lion), matching the
+  # order these zones are listed in the Figure 3 caption.
+  panel_letters <- c("E", "F", "G", "H")
+  SPM_maps <- purrr::map2(SPM_map_data, panel_letters, function(SPM_map, letter) {
+
+    create_the_basic_map(SPM_map, 'plume', legend_limits = c(0.1,10)) +
       guides(fill = guide_colorbar(barwidth = 60, barheight = 2, title.position = "top")) +
       theme(legend.position = "top",
             legend.title = element_text(angle = 0, hjust = 0.5),
-            axis.text = element_text(size=25, colour = "black"))
-    
+            axis.text = element_text(size=25, colour = "black"),
+            plot.tag = element_text(size = 35, face = "bold"),
+            plot.tag.position = c(0.02, 0.98)) +
+      labs(tag = letter)
+
   })
   
   save_plot_as_png(ggarrange(plotlist = SPM_maps, common.legend = TRUE),
@@ -543,6 +568,11 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   # Plume-area trend line uses the same AR(1)/HAC-weighted fit as Table 5's
   # "Surface area" row -- see func/compute_area_trend.R.
   area_trend <- read_csv("output/STATS/area_trend_summary.csv", show_col_types = FALSE)
+
+  # Panel order follows ZONE_ORDER (north to south), matching every other
+  # multi-zone figure/table in the project -- dlply()'s default grouping
+  # would otherwise sort panels alphabetically.
+  SPM_map_data$Zone <- factor(SPM_map_data$Zone, levels = ZONE_ORDER)
 
   SPM_map_ts <- SPM_map_data %>% filter(Dynamic_threshold == 'Dynamic threshold') %>% dlply(.(Zone), function(df_zone) {
 
@@ -579,7 +609,10 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
                    expand = c(0.01,0.01)) +
 
       coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
-      scale_y_continuous(name = "Plume area (km²)") +
+      # No per-panel y-axis title -- a single shared label is added once via
+      # annotate_figure() on the assembled composite below, rather than
+      # repeating "Plume area (km²)" on all four stacked panels.
+      scale_y_continuous(name = NULL) +
       labs(x = "", title = zone_title(df_zone$Zone[1])) +
       ggplot_theme() +
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
@@ -611,10 +644,14 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
     
   })
   
-  save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+  save_plot_as_png(annotate_figure(
+                     ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                     left = text_grob("Plume area (km²)", rot = 90, size = 30)),
                    'Figure_4', width = 20, height = 16, path = main_folder)
 
-  save_plot_as_png(ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+  save_plot_as_png(annotate_figure(
+                     ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                     left = text_grob("Plume area (km²)", rot = 90, size = 30)),
                    'Figure_7_merged_modis', width = 20, height = 16, path = main_folder)
 }
 
@@ -774,7 +811,7 @@ Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily =
 # (X11-decomposed wind/wave magnitude time series) -- Robert's call, since
 # wind and wave direction matter as much or more than magnitude, which a
 # magnitude-only time series can't show.
-Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 16){
+Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 8){
 
   main_folder_of_Figure_7 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_7")
   if (!dir.exists(main_folder_of_Figure_7)) dir.create(main_folder_of_Figure_7, recursive = TRUE)

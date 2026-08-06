@@ -123,13 +123,19 @@ build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic")
     dplyr::left_join(df_wave, by = "date") |>
     dplyr::mutate(zone = zone_name, .before = "date",
                   # Categorical (8-octant) form of direction, since direction
-                  # matters as much or more than magnitude for wind/wave --
-                  # see multi.R::compass_octant(). Bay of Seine's wave_dir is
-                  # all-NA (load_wave()'s NB 2), so wave_dir_cat is all-NA
-                  # there too; available_drivers() below drops it for that
-                  # zone automatically.
+                  # matters as much or more than magnitude for wind/wave/
+                  # current -- see multi.R::compass_octant(). Bay of Seine's
+                  # wave_dir is all-NA (load_wave()'s NB 2), so wave_dir_cat
+                  # is all-NA there too; available_drivers() below drops it
+                  # for that zone automatically. current_dir_cat added
+                  # 2026-08-05 (per Robert): current_dir was already loaded
+                  # above but never turned into a category or added to
+                  # available_drivers()'s candidates, so current direction
+                  # fed none of the GLM/GAM/RF models -- only current speed
+                  # did.
                   wind_dir_cat = compass_octant(wind_dir),
-                  wave_dir_cat = compass_octant(wave_dir)) |>
+                  wave_dir_cat = compass_octant(wave_dir),
+                  current_dir_cat = compass_octant(current_dir)) |>
     zoo::na.trim()
 }
 
@@ -139,7 +145,7 @@ build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic")
 # per-zone gap-handling already done in util.R::load_wave() and
 # multi.R::plot_driver_rose().
 available_drivers <- function(df){
-  candidates <- c("flow", "wind_spd", "tide_range", "current", "wave_height", "wind_dir_cat", "wave_dir_cat")
+  candidates <- c("flow", "wind_spd", "tide_range", "current", "wave_height", "wind_dir_cat", "wave_dir_cat", "current_dir_cat")
   drivers <- intersect(candidates, names(df))
   Filter(function(d) any(!is.na(df[[d]])), drivers)
 }

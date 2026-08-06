@@ -1,8 +1,9 @@
 # One-off: extract the joint (all-octant) significance of the categorical
-# wind_dir_cat / wave_dir_cat parametric terms from the multi-driver GAM, for
-# manuscript Table 6's "Wind direction" / "Wave direction" rows. fit_gam()'s
-# tensor-product smooths only take numeric driver pairs, so wind_dir_cat and
-# wave_dir_cat enter as flat parametric main-effect terms instead
+# wind_dir_cat / wave_dir_cat / current_dir_cat parametric terms from the
+# multi-driver GAM, for manuscript Table 6's "Wind direction" / "Wave
+# direction" / "Current direction" rows. fit_gam()'s tensor-product smooths
+# only take numeric driver pairs, so the direction categoricals enter as
+# flat parametric main-effect terms instead
 # (func/driver_interactions.R::fit_gam()) -- summary.gam()'s $s.table (what
 # output/STATS/driver_gam_summary.csv already saves) only covers the te()
 # smooth terms, not these parametric ones. summary.gam()'s $pTerms.table is
@@ -31,7 +32,7 @@ extract_direction_terms <- function(plume_dir, stats_dir){
     s <- summary(m)
     pt <- s$pTerms.table
     if(is.null(pt)) return(NULL)
-    pt <- pt[rownames(pt) %in% c("wind_dir_cat", "wave_dir_cat"), , drop = FALSE]
+    pt <- pt[rownames(pt) %in% c("wind_dir_cat", "wave_dir_cat", "current_dir_cat"), , drop = FALSE]
     if(nrow(pt) == 0) return(NULL)
     tibble::tibble(zone = zone_name, term = rownames(pt),
                    df = pt[, "df"], F = pt[, "F"], p = pt[, "p-value"])

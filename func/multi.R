@@ -347,20 +347,33 @@ driver_plume_timesteps <- function(df){
 }
 
 # Daily/monthly/annual (lagged) correlation between plume area and one driver.
-# Uses util.R::lagged_correlation() (x = plume_area gets lagged, y = driver
-# value is the fixed reference) instead of the three near-identical inline
-# tibble(lag = ..., cor = map_dbl(...)) blocks previously in
-# flow.R/wind.R/tide.R, and the daily/monthly/annual structure previously
-# unique to ROFI.R::comp_ROFI_plume().
+# Uses util.R::lagged_correlation() (x = driver value gets lagged, y = plume
+# area is the fixed reference -- so a positive "lag" means the driver leads
+# the plume, i.e. lagged_correlation()'s x[t-lag] vs y[t] convention has the
+# driver's earlier value predicting today's plume) instead of the three
+# near-identical inline tibble(lag = ..., cor = map_dbl(...)) blocks
+# previously in flow.R/wind.R/tide.R, and the daily/monthly/annual structure
+# previously unique to ROFI.R::comp_ROFI_plume().
+#
+# FIXED 2026-08-05 (per Robert): this used to lag plume_area against a fixed
+# driver value, which -- per lagged_correlation()'s x-leads-y convention
+# (confirmed both algebraically and empirically against cor.test(), see
+# session notes) -- actually computed "plume leads driver," the opposite of
+# what every caller's own comments/axis labels claimed ("lag, plume after
+# flow", "lagged correlation (plume lagged behind driver)"). Swapped x/y
+# here to match the documented intent. ROFI.R::rofi_plume_lagged_correlation()
+# reuses this function generically (its own x_col/y_col, not literally
+# "plume"/"driver") and has its column mapping swapped to compensate, so its
+# already-correct pairs (e.g. "plume leads ROFI") are unaffected.
 driver_plume_correlation <- function(df, max_lag_daily = 30){
   ts_list <- driver_plume_timesteps(df)
 
-  cor_daily <- lagged_correlation(x = ts_list$daily$plume_area, y = ts_list$daily$value, max_lag_daily) |>
+  cor_daily <- lagged_correlation(x = ts_list$daily$value, y = ts_list$daily$plume_area, max_lag_daily) |>
     dplyr::mutate(timestep = "daily")
-  cor_monthly <- lagged_correlation(x = ts_list$monthly$plume_area, y = ts_list$monthly$value, 12) |>
+  cor_monthly <- lagged_correlation(x = ts_list$monthly$value, y = ts_list$monthly$plume_area, 12) |>
     dplyr::mutate(timestep = "monthly")
   n_annual_lag <- max(0, min(10, nrow(ts_list$annual) - 1))
-  cor_annual <- lagged_correlation(x = ts_list$annual$plume_area, y = ts_list$annual$value, n_annual_lag) |>
+  cor_annual <- lagged_correlation(x = ts_list$annual$value, y = ts_list$annual$plume_area, n_annual_lag) |>
     dplyr::mutate(timestep = "annual")
 
   dplyr::bind_rows(cor_daily, cor_monthly, cor_annual) |>
@@ -510,7 +523,7 @@ flow_controlled_residual <- function(df){
 # already has it -- e.g. Figure_7_driver_rose(), calling this twice per zone
 # for wind and wave -- pass it in once rather than recomputing the same
 # join/STL for every call; defaults to computing it here for standalone use.
-plot_driver_rose <- function(driver_name, meta, n_sectors = 16, df_flow = NULL){
+plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
   driver_name <- match.arg(driver_name, c("wind", "wave"))
   dir_col <- paste0(driver_name, "_dir")
   disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
@@ -551,18 +564,43 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 16, df_flow = NULL){
 
   df_summary <- df |>
     dplyr::summarise(n_days = dplyr::n(),
-                     mean_area_resid = mean(area_resid, na.rm = TRUE), .by = "sector")
+                     mean_area_resid = mean(area_resid, na.rm = TRUE), .by = "sector") |>
+    dplyr::mutate(pct_days = 100 * n_days / sum(n_days))
+
+  # Sectors with very few days (<5% of the total) give a noisy mean residual
+  # that can be an extreme outlier purely from small-sample luck, which
+  # stretches the fill colour scale and washes out the contrast between the
+  # well-sampled, more meaningful sectors. Winsorize: clamp any <5%-of-days
+  # sector's fill value to the min/max range spanned by the well-sampled
+  # (>=5%) sectors, rather than letting it set the scale's extremes. This
+  # only affects the fill colour, never bar height/radius (n_days/pct_days
+  # are untouched).
+  well_sampled_range <- df_summary |>
+    dplyr::filter(pct_days >= 5) |>
+    dplyr::pull(mean_area_resid) |>
+    range(na.rm = TRUE)
+
+  df_summary <- df_summary |>
+    dplyr::mutate(mean_area_resid_plot = if (all(is.finite(well_sampled_range))) {
+      dplyr::case_when(
+        pct_days < 5 & mean_area_resid > well_sampled_range[2] ~ well_sampled_range[2],
+        pct_days < 5 & mean_area_resid < well_sampled_range[1] ~ well_sampled_range[1],
+        TRUE ~ mean_area_resid
+      )
+    } else {
+      mean_area_resid
+    })
 
   compass_breaks <- seq(0, 360 - sector_width, by = max(sector_width, 45))
   compass_labels <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")[seq_along(compass_breaks)]
 
-  pl <- ggplot(df_summary, aes(x = sector, y = n_days, fill = mean_area_resid)) +
+  pl <- ggplot(df_summary, aes(x = sector, y = pct_days, fill = mean_area_resid_plot)) +
     geom_col(width = sector_width * 0.9, colour = "grey30", linewidth = 0.2) +
     coord_polar(start = -(sector_width / 2) * pi / 180) +
     scale_x_continuous(breaks = compass_breaks, labels = compass_labels, limits = c(0, 360)) +
     scale_fill_gradient2(low = "steelblue", mid = "grey90", high = "firebrick", midpoint = 0,
                         name = "Plume-area\nresidual (km²)") +
-    labs(x = NULL, y = "Days", title = paste0(zone_title(meta$zone), ": ", tolower(disp$driver_label))) +
+    labs(x = NULL, y = "% of days", title = paste0(zone_title(meta$zone), ": ", tolower(disp$driver_label))) +
     theme_minimal() +
     theme(panel.grid.major = element_line(colour = "grey85"), plot.title = element_text(hjust = 0.5))
 
@@ -631,6 +669,26 @@ stl_weights_func <- function(val_col, start_year, time_step){
   stl_var <- as.vector(stl_ts$time.series[, "remainder"])
   1 / (stl_var^2)
 }
+# Day-of-year climatological de-seasoning (Sutton et al. 2022, Section 2.6.1),
+# extracted as a standalone single-series helper so it can be applied to any
+# daily plume-property series (e.g. compactness, along-coast centroid
+# position) that doesn't have a paired driver series to deseason alongside
+# it -- driver_plume_trend() above does the same day-of-year adjustment
+# inline for the paired driver/plume case, but couldn't be reused directly
+# for a single series. Returns the de-seasoned series, same length/order as
+# input.
+deseason_doy <- function(value, date){
+  doy <- yday(date)
+  resid <- residuals(lm(value ~ date, na.action = na.exclude))
+  doy_clim <- tibble::tibble(doy = doy, resid = resid) |>
+    dplyr::summarise(resid_doy = mean(resid, na.rm = TRUE), .by = "doy") |>
+    dplyr::mutate(resid_doy_clim = resid_doy - mean(resid_doy, na.rm = TRUE))
+  tibble::tibble(doy = doy, value = value) |>
+    dplyr::left_join(doy_clim, by = "doy") |>
+    dplyr::mutate(value_adj = value - resid_doy_clim) |>
+    dplyr::pull(value_adj)
+}
+
 fit_wls_hac_trend <- function(weight_choice, val_col, date_col){
   start_year <- year(min(date_col))
   time_step <- if(length(val_col) < 1000) 12 else 365
