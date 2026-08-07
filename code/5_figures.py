@@ -52,8 +52,11 @@ Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold = "o
                        where_are_saved_plume_results_with_fixed_threshold = "output/panache/static",
                        where_to_save_the_figure = "figures")
 
-# manuscript Figure 5: plume-area-vs-flow scatter + lagged correlation
-Figure_5_driver_comparison(where_to_save_the_figure = "figures")
+# Figure 5: Seasonal analysis comprison of plume properties and drivers
+# My current thinking is to provide proportional boxplots of all plume properties and drivers per zone per month
+# Also somehow want to add in the trends per plume propoerty and driver for each monthly group
+
+# Figure_5_driver_comparison(where_to_save_the_figure = "figures") # Deprecated code
 
 # Figure 6 (X11 interannual signal, dynamic threshold) + Figure S3 (X11
 # seasonal + residual, dynamic threshold) + Figure S6/S7 (static-threshold

@@ -472,73 +472,10 @@ def Figure_3(where_to_save_the_figure):
     composite.save(os.path.join(figure_3_dir, "Figure_3.png"))
 
 
-def Figure_5_driver_comparison(where_to_save_the_figure, max_lag_daily=14):
-    """manuscript Figure 5: plume-area-vs-flow scatter + lagged correlation, one row per zone.
-    Distinct from Figure_5() above (regional zone maps feeding the Figure 3
-    composite) -- see func/figure.R::Figure_5_driver_comparison() for the
-    naming-collision note. Only wireable here since the tidync/RNetCDF ->
-    ncdf4 migration (2026-07-31) fixed an rpy2-embedded-R conflict that used
-    to break this call.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_5_driver_comparison']
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
-               max_lag_daily=robjects.IntVector([max_lag_daily]))
-
-
-def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
-    """manuscript Figure 7: wind/wave direction-magnitude roses, coloured by
-    the flow-controlled plume-area response, one row per zone. Replaces the
-    original Figure 7/8 concept (X11-decomposed wind/wave magnitude time
-    series) -- direction matters as much or more than magnitude for both.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_7_driver_rose']
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
-               n_sectors=robjects.IntVector([n_sectors]))
-
-
-def Figure_8_driver_category(where_to_save_the_figure):
-    """manuscript Figure 8: flow-controlled plume-area residual vs. wave
-    height, coloured by on/off-shore wind category, one panel per zone.
-    Generalises the Rhone-only rhone_wind_wave_effect() analysis.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_8_driver_category']
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-
-
-def Figure_9_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
-    """manuscript Figure 9: GAM partial-dependence curves for flow, wind,
-    wave, and current (tide intentionally excluded from the plot -- it stays
-    in the underlying GAM/Table 6 stats, just not visualised), one row per
-    zone. Refits func/driver_interactions.R::fit_gam() from the already-saved
-    daily_driver_matrix_<zone>.csv (Stage 4 output) rather than a separate
-    model or a full pipeline rerun.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_9_gam_partial']
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
-               stats_dir=robjects.StrVector([stats_dir]))
-
-
 def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
                            where_are_saved_plume_results_with_fixed_threshold,
                            where_to_save_the_figure):
-    # Renamed from Figure_6_7 (2026-08-01): that name matched neither of the
-    # two manuscript figures it actually produces (4 and S1) -- left over
-    # from before the manuscript was renumbered. Data prep here is shared
-    # (both dynamic- and fixed-threshold Results.csv, all zones); the R side
-    # is now two separate functions, Figure_4_timeseries() and
-    # Figure_S1_thresholds(), each reading the same ts_data.csv this writes.
+
     figure_4_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
     os.makedirs(figure_4_dir + '/DATA', exist_ok=True)
 
@@ -561,8 +498,8 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
         df.loc[df['area_of_the_plume_mask_in_km2'] > plume_area_ceiling[zone],
               'area_of_the_plume_mask_in_km2'] = np.nan
 
-        # Fill gaps in the date range with explicit NaN rows (2026-08-05,
-        # per Robert), so Figure 4 plots real data gaps (cloud cover, etc.)
+        # Fill gaps in the date range with explicit NaN rows 
+        # so Figure 4 plots real data gaps (cloud cover, etc.)
         # as breaks rather than geom_path/geom_point silently drawing a
         # straight line across them. This reads Results.csv directly rather
         # than going through util.R::load_plume_ts() (which already does
@@ -598,6 +535,63 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
     # ts_data.csv from FIGURE_4/DATA/ that Figure_4_timeseries() just wrote.
     robjects.r['Figure_4_timeseries'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
     robjects.r['Figure_S1_thresholds'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+
+
+# This is now shown in the supplement. 
+# Naming convention should be updates to reflect it's new position in the manuscript.
+def Figure_5_driver_comparison(where_to_save_the_figure, max_lag_daily=14):
+    """
+    Deprecated
+    """
+    figure_R_path = os.path.join(func_dir, 'figure.R')
+    robjects.r['source'](figure_R_path)
+
+    r_function = robjects.r['Figure_5_driver_comparison']
+    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
+               max_lag_daily=robjects.IntVector([max_lag_daily]))
+
+
+def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
+    """manuscript Figure 7: wind/wave direction-magnitude roses, coloured by
+    the flow-controlled plume-area response, one row per zone. Replaces the
+    original Figure 7/8 concept (X11-decomposed wind/wave magnitude time
+    series) -- direction matters as much or more than magnitude for both.
+    """
+    figure_R_path = os.path.join(func_dir, 'figure.R')
+    robjects.r['source'](figure_R_path)
+
+    r_function = robjects.r['Figure_7_driver_rose']
+    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
+               n_sectors=robjects.IntVector([n_sectors]))
+
+
+# This figure has been deprecated. To be moved to a deprecated code section in this script.
+def Figure_8_driver_category(where_to_save_the_figure):
+    """manuscript Figure 8: flow-controlled plume-area residual vs. wave
+    height, coloured by on/off-shore wind category, one panel per zone.
+    Generalises the Rhone-only rhone_wind_wave_effect() analysis.
+    """
+    figure_R_path = os.path.join(func_dir, 'figure.R')
+    robjects.r['source'](figure_R_path)
+
+    r_function = robjects.r['Figure_8_driver_category']
+    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+
+
+def Figure_8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
+    """Figure 8: GAM partial-dependence curves for flow, wind,
+    wave, and current (tide intentionally excluded from the plot -- it stays
+    in the underlying GAM/Table 6 stats, just not visualised), one row per
+    zone. Refits func/driver_interactions.R::fit_gam() from the already-saved
+    daily_driver_matrix_<zone>.csv (Stage 4 output) rather than a separate
+    model or a full pipeline rerun.
+    """
+    figure_R_path = os.path.join(func_dir, 'figure.R')
+    robjects.r['source'](figure_R_path)
+
+    r_function = robjects.r['Figure_8_gam_partial']
+    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
+               stats_dir=robjects.StrVector([stats_dir]))
 
 
 def _prep_x11_weekly_data(where_are_saved_X11_results, data_dir):
@@ -639,15 +633,9 @@ def _prep_x11_weekly_data(where_are_saved_X11_results, data_dir):
 def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static,
                               where_to_save_the_figure):
     """
-    Replaces the deprecated Figure_8_9_10()/Figures_8_9_10(), which produced
-    3 plots (Seasonal/Interannual/Residual) per threshold but only wired the
-    dynamic-threshold ones into the manuscript (Figure 6, Figure S2) --
-    its static-threshold counterpart was computed and saved but never cited
-    anywhere (2026-08-01 audit). This version wires all 4 real manuscript
+    Wires all 4 real manuscript
     figures: Figure 6 + Figure S2 (dynamic), Figure S5 + Figure S6 (static,
-    supplementary robustness check mirroring 6/S2). Renamed 2026-07-31 (S3->S2,
-    S6->S5, S7->S6) when the daily-vs-weekly Figure S2 was removed from the
-    manuscript and every later supplementary figure renumbered down by one.
+    supplementary robustness check mirroring 6/S2).
     """
     figure_6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
     figure_s5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S5")

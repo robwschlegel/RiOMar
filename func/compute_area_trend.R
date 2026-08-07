@@ -2,9 +2,8 @@
 # same Sutton et al. (2022)-style AR(1)/HAC estimator (func/multi.R::
 # driver_plume_trend()/fit_wls_hac_trend()) already used for the SPM mass
 # trend (func/compute_mass_spm_trend.R) and the abstract's plume-area trend
-# claim. Fills manuscript.tex Table 5's still-empty "Surface area" row
-# (mean km^2, trend km^2/yr) and provides the intercept/slope drawn as the
-# trend line on manuscript Figure 4.
+# claim. Fills manuscript.tex Table 5's "Surface area" row (mean km^2, trend km^2/yr) 
+# and provides the intercept/slope drawn as the trend line on manuscript Figure 4.
 # Run from repo root: Rscript func/compute_area_trend.R
 source("func/multi.R")
 
@@ -15,9 +14,7 @@ area_stats <- purrr::pmap_dfr(zone_meta, function(...){
     dplyr::filter(variable == "plume", weight_choice == "ar", timestep == "daily")
 
   # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
-  # matching the same day-of-year adjustment used for the trend itself, and
-  # the SD convention Robert asked Table 5 to use consistently across all
-  # four plume variables (2026-08-05) -- not SD of annual means.
+  # matching the same day-of-year adjustment used for the trend itself
   area_adj <- deseason_doy(df$plume_area, df$date)
 
   tibble::tibble(zone = meta$zone, mouth_name = meta$mouth_name,

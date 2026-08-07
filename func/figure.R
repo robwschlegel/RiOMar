@@ -46,16 +46,16 @@ create_the_basic_map <- function(map_df, var_name,
                                  high_res_coast = FALSE) {
   
   if (str_detect(var_name, 'chl|CHL')) {
-    title = "[Chl-a]"
+    title = "Chl-a"
     unit = "mg m³"
-    if (legend_limits %>% is.null()) {legend_limits <- c(1e-1, 5e0)} 
+    if (legend_limits |> is.null()) {legend_limits <- c(1e-1, 5e0)} 
   }
   
   if (str_detect(var_name, 'tsm|SPM|TSM|plume')) {
-    title = "[SPM]"
+    title = "SPM"
     unit = "g m³"
-    # legend_limits <- map_df$analysed_spim[which(map_df$plume)] %>% quantile(probs = c(0.1, 0.9), na.rm = TRUE)
-    if (legend_limits %>% is.null()) {legend_limits <- c(1e-1, 5e0)} 
+    # legend_limits <- map_df$analysed_spim[which(map_df$plume)] |> quantile(probs = c(0.1, 0.9), na.rm = TRUE)
+    if (legend_limits |> is.null()) {legend_limits <- c(1e-1, 5e0)} 
   }
   
   FRANCE_shapefile <- map_data('world')[map_data('world')$region == "France",]
@@ -105,15 +105,15 @@ create_the_basic_map <- function(map_df, var_name,
 
 plot_x11_river_and_plume <- function(X11_data, type_of_signal) {
   
-  unique_years <- X11_data$dates %>% year() %>% unique()
+  unique_years <- X11_data$dates |> year() |> unique()
   
-  X11_data_for_plot <- X11_data %>% 
+  X11_data_for_plot <- X11_data |> 
     rename(river_flow = !!sym(paste(type_of_signal, "signal_river_flow", sep = "_")),
-           plume_area = !!sym(paste(type_of_signal, "signal_plume_area", sep = "_"))) %>% 
+           plume_area = !!sym(paste(type_of_signal, "signal_plume_area", sep = "_"))) |> 
     select(dates, river_flow, plume_area)
   
   if (type_of_signal %in% c("Seasonal", "Residual")) {
-    X11_data_for_plot <- X11_data_for_plot %>% 
+    X11_data_for_plot <- X11_data_for_plot |> 
       mutate(river_flow = river_flow + mean(X11_data$Raw_signal_river_flow, na.rm = T),
              plume_area = plume_area + mean(X11_data$Raw_signal_plume_area, na.rm = T))
   }
@@ -121,7 +121,7 @@ plot_x11_river_and_plume <- function(X11_data, type_of_signal) {
   scaling_factor <- sec_axis_adjustement_factors(var_to_scale = X11_data_for_plot$river_flow,
                                                  var_ref = X11_data_for_plot$plume_area)
 
-  X11_data_for_plot <- X11_data_for_plot %>% mutate(river_flow_scaled = river_flow * scaling_factor$diff + scaling_factor$adjust)
+  X11_data_for_plot <- X11_data_for_plot |> mutate(river_flow_scaled = river_flow * scaling_factor$diff + scaling_factor$adjust)
 
   r_value <- cor(X11_data_for_plot$plume_area, X11_data_for_plot$river_flow, use = "complete.obs")
   r_label <- paste0("r = ", sprintf("%.2f", r_value))
@@ -138,8 +138,8 @@ plot_x11_river_and_plume <- function(X11_data, type_of_signal) {
             hjust = 0, vjust = 1.5, size = 6, colour = "black") +
 
     scale_x_date(name = "",
-                 breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-                 labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
+                 breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(), 
+                 labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist()) +
     
     scale_y_continuous(name = "Plume area (km²)",
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
@@ -182,10 +182,10 @@ Figure_1 <- function(where_to_save_the_figure) {
 
   main_folder_of_Figure_1 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_1")
 
-  SPM_map <- file.path(main_folder_of_Figure_1, "DATA", "SPM_map.csv") %>% read_csv()
-  insitu_stations <- file.path(main_folder_of_Figure_1, "DATA", "Stations_position.csv") %>% read_csv()
+  SPM_map <- file.path(main_folder_of_Figure_1, "DATA", "SPM_map.csv") |> read_csv()
+  insitu_stations <- file.path(main_folder_of_Figure_1, "DATA", "Stations_position.csv") |> read_csv()
 
-  RIOMAR_limits <- zones_bbox %>% dplyr::rename(Zone = zone)
+  RIOMAR_limits <- zones_bbox |> dplyr::rename(Zone = zone)
 
   basic_map <- create_the_basic_map(map_df = SPM_map, var_name = 'SPM', in_situ_fixed_station = insitu_stations, log_scale = FALSE)
 
@@ -194,10 +194,10 @@ Figure_1 <- function(where_to_save_the_figure) {
                                       latitude = c(0,0))
 
   national_map <- basic_map +
-    geom_point(data = insitu_stations %>% filter(SOURCE == 'REPHY'),
+    geom_point(data = insitu_stations |> filter(SOURCE == 'REPHY'),
                aes(x = LONGITUDE, y = LATITUDE),
                fill = "red", color = "black", size = 4, shape = 24, stroke = 1) +
-    geom_point(data = insitu_stations %>% filter(SOURCE == 'SOMLIT'),
+    geom_point(data = insitu_stations |> filter(SOURCE == 'SOMLIT'),
                aes(x = LONGITUDE, y = LATITUDE),
                fill = "red", color = "black", size = 10, shape = 21, stroke = 2) +
     geom_rect(data = RIOMAR_limits, aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max),
@@ -237,8 +237,8 @@ Figure_1 <- function(where_to_save_the_figure) {
   )
 
   build_zone_inset <- function(zone_name) {
-    zone_SPM <- file.path(main_folder_of_Figure_1, "DATA", paste0(zone_name, ".csv")) %>% read_csv()
-    mouths <- zone_river_mouths %>% dplyr::filter(zone == zone_name)
+    zone_SPM <- file.path(main_folder_of_Figure_1, "DATA", paste0(zone_name, ".csv")) |> read_csv()
+    mouths <- zone_river_mouths |> dplyr::filter(zone == zone_name)
 
     # Nudges are tuned per zone (not per river) -- within a zone the mouths
     # are spaced far enough apart that one offset direction clears the
@@ -298,20 +298,20 @@ Figure_1 <- function(where_to_save_the_figure) {
 # Builds the 4-zone regional SPM map grid
 zone_maps_panels <- function(data_folder, include_station_points) {
 
-  SPM_map_data <- file.path(data_folder, "DATA") %>%
-    list.files(pattern = "*.csv", full.names = TRUE) %>%
-    llply(read_csv) %>%
+  SPM_map_data <- file.path(data_folder, "DATA") |>
+    list.files(pattern = "*.csv", full.names = TRUE) |>
+    llply(read_csv) |>
     keep(~ 'analysed_spim' %in% names(.))
 
-  insitu_stations <- file.path( data_folder, "DATA", "Stations_position.csv" ) %>% read_csv()
+  insitu_stations <- file.path( data_folder, "DATA", "Stations_position.csv" ) |> read_csv()
 
   points_for_the_legend <- data.frame(SOURCE = c('SOMLIT', 'REPHY'), longitude = c(0,0), latitude = c(0,0))
 
-  SPM_map_data %>%
+  SPM_map_data |>
     llply(function(x) {
-      insitu_stations_of_the_map <- insitu_stations %>%
-        filter((LATITUDE %>% between(min(x$lat), max(x$lat))) &
-                 (LONGITUDE %>% between(min(x$lon), max(x$lon))))
+      insitu_stations_of_the_map <- insitu_stations |>
+        filter((LATITUDE |> between(min(x$lat), max(x$lat))) &
+                 (LONGITUDE |> between(min(x$lon), max(x$lon))))
 
       the_map <- create_the_basic_map(x, 'SPM', legend_limits = c(4,10))
 
@@ -319,10 +319,10 @@ zone_maps_panels <- function(data_folder, include_station_points) {
 
         the_map <- the_map +
 
-          geom_point(data = insitu_stations_of_the_map %>% filter(SOURCE == 'REPHY'),
+          geom_point(data = insitu_stations_of_the_map |> filter(SOURCE == 'REPHY'),
                      aes(x = LONGITUDE, y = LATITUDE),
                      fill = "red", color = "black", size = 6, shape = 24, stroke = 1) +
-          geom_point(data = insitu_stations_of_the_map %>% filter(SOURCE == 'SOMLIT'),
+          geom_point(data = insitu_stations_of_the_map |> filter(SOURCE == 'SOMLIT'),
                      aes(x = LONGITUDE, y = LATITUDE),
                      fill = "red", color = "black", size = 14, shape = 21, stroke = 2) +
 
@@ -352,7 +352,7 @@ zone_maps_panels <- function(data_folder, include_station_points) {
               axis.text = element_text(size=25, colour = "black"))
 
       return(the_map)
-    }) %>%
+    }) |>
     ggarrange(plotlist = ., common.legend = TRUE)
 }
 
@@ -476,20 +476,14 @@ Figure_3_zone_maps <- function(where_to_save_the_figure) {
 }
 
 
-# manuscript Figure 4: daily plume area + mean SPM concentration time
+# manuscript Figure 4: daily plume area + SPM mass time
 # series (dynamic threshold, merged sensor), with an AR(1)/HAC-weighted
-# trend line, one panel per zone. Renamed from Figures_6_7 and split from
-# the threshold-comparison plot below (2026-08-01) -- that single function
-# used to produce two different manuscript figures (4 and S1) under one
-# name matching neither cleanly. Both still read the same
-# FIGURE_4/DATA/ts_data.csv (prepped once by figure.py's
-# Figure_4_S1_timeseries(), shared between this function and
-# Figure_S1_thresholds() below).
+# trend line, one panel per zone.
 # where_to_save_the_figure <- 'figures'
 Figure_4_timeseries <- function(where_to_save_the_figure){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
 
-  SPM_map_data <- main_folder %>% file.path('DATA', 'ts_data.csv') %>% read_csv()
+  SPM_map_data <- main_folder |> file.path('DATA', 'ts_data.csv') |> read_csv()
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
 
   # Plume-area trend line uses the same AR(1)/HAC-weighted fit as Table 5's
@@ -501,24 +495,24 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   # would otherwise sort panels alphabetically.
   SPM_map_data$Zone <- factor(SPM_map_data$Zone, levels = ZONE_ORDER)
 
-  SPM_map_ts <- SPM_map_data %>% filter(Dynamic_threshold == 'Dynamic threshold') %>% dlply(.(Zone), function(df_zone) {
+  SPM_map_ts <- SPM_map_data |> filter(Dynamic_threshold == 'Dynamic threshold') |> dlply(.(Zone), function(df_zone) {
 
-    unique_years <- df_zone$Years %>% unique()
+    unique_years <- df_zone$Years |> unique()
 
     points_for_the_legend <- data.frame(Satellite_sensor = c('merged', 'modis'),
-                                        date = c('2020-01-01','2020-01-01') %>% as.Date(),
+                                        date = c('2020-01-01','2020-01-01') |> as.Date(),
                                         area_of_the_plume_mask_in_km2 = c(-9999,-9999))
 
     index_to_remove <- which((df_zone$Satellite_sensor == "modis") &
                                (df_zone$area_of_the_plume_mask_in_km2 > quantile(df_zone$area_of_the_plume_mask_in_km2, probs = 0.999, na.rm = TRUE)))
 
-    if (index_to_remove %>% length() > 0) {df_zone <- df_zone[-index_to_remove,]}
+    if (index_to_remove |> length() > 0) {df_zone <- df_zone[-index_to_remove,]}
 
-    zone_trend <- area_trend %>% filter(zone == df_zone$Zone[1]) %>%
+    zone_trend <- area_trend |> filter(zone == df_zone$Zone[1]) |>
       mutate(trend_label = paste0("Trend: ", sprintf("%+.2f", slope_annualised), " km² yr⁻¹ (",
                                   ifelse(slope_p < 0.001, "p < 0.001", paste0("p = ", signif(slope_p, 2))), ")"))
 
-    df_merged <- df_zone %>% filter(Satellite_sensor == "merged")
+    df_merged <- df_zone |> filter(Satellite_sensor == "merged")
 
     the_ts_plot_wo_modis <- ggplot() +
       geom_point(data = df_merged,
@@ -531,8 +525,8 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
                hjust = -0.03, vjust = 1.5, size = 6, colour = "black") +
 
       scale_x_date(name = "",
-                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(),
-                   labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist(),
+                   breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(),
+                   labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist(),
                    expand = c(0.01,0.01)) +
 
       coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
@@ -554,9 +548,9 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
     
     
     the_ts_plot_with_modis <- the_ts_plot_wo_modis + 
-      geom_point(data = df_zone %>% filter(Satellite_sensor == "modis"), 
+      geom_point(data = df_zone |> filter(Satellite_sensor == "modis"), 
                  aes(x = date, y = area_of_the_plume_mask_in_km2), color = "blue3", alpha = 0.5) + 
-      geom_path(data = df_zone %>% filter(Satellite_sensor == "modis"), 
+      geom_path(data = df_zone |> filter(Satellite_sensor == "modis"), 
                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "blue3", alpha = 0.5) + 
       geom_point(data = points_for_the_legend, aes(x = date, y = area_of_the_plume_mask_in_km2, color = Satellite_sensor), size = 0.1) +
       
@@ -572,101 +566,25 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   })
   
   save_plot_as_png(annotate_figure(
-                     ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                     ggarrange(plotlist = SPM_map_ts |> llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
                      left = text_grob("Plume area (km²)", rot = 90, size = 30)),
                    'Figure_4', width = 20, height = 16, path = main_folder)
 
   save_plot_as_png(annotate_figure(
-                     ggarrange(plotlist = SPM_map_ts %>% llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                     ggarrange(plotlist = SPM_map_ts |> llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
                      left = text_grob("Plume area (km²)", rot = 90, size = 30)),
                    'Figure_7_merged_modis', width = 20, height = 16, path = main_folder)
 }
 
-# manuscript Figure S1: plume-area time series, fixed vs. dynamic threshold
-# comparison, one panel per zone. Reads the same ts_data.csv Figure_4_timeseries()
-# does (both share one Python-side data prep), but writes to its own
-# FIGURE_S1/ folder rather than FIGURE_4/ -- every manuscript figure has its
-# own FIGURE_* folder (2026-08-01).
-# where_to_save_the_figure <- 'figures'
-Figure_S1_thresholds <- function(where_to_save_the_figure){
-  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
-  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S1")
 
-  SPM_map_data <- data_dir %>% file.path('DATA', 'ts_data.csv') %>% read_csv()
-  SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
-
-  SPM_map_ts <- SPM_map_data %>% filter(Satellite_sensor == "merged") %>% dlply(.(Zone), function(df_zone) {
-    
-    unique_years <- df_zone$Years %>% unique()
-    
-    points_for_the_legend <- data.frame(Dynamic_threshold = c('Dynamic threshold', 'Fixed threshold'),
-                                        date = c('2020-01-01','2020-01-01') %>% as.Date(),
-                                        area_of_the_plume_mask_in_km2 = c(-9999,-9999))
-    
-    # index_to_remove <- which((df_zone$Satellite_sensor == "modis") & 
-    #                            (df_zone$area_of_the_plume_mask_in_km2 > quantile(df_zone$area_of_the_plume_mask_in_km2, probs = 0.999, na.rm = TRUE)))
-    # 
-    # if (index_to_remove %>% length() > 0) {df_zone <- df_zone[-index_to_remove,]}
-    
-    the_ts_plot <- ggplot() + 
-      
-      geom_point(data = df_zone %>% filter(Dynamic_threshold == 'Dynamic threshold'), 
-                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") + 
-      geom_path(data = df_zone %>% filter(Dynamic_threshold == 'Dynamic threshold'), 
-                aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") + 
-      
-      scale_x_date(name = "", 
-                   breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
-                   labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist(),
-                   expand = c(0.01,0.01)) +
-      
-      coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
-      labs(y = "Plume area (km²)", x = "", title = zone_title(df_zone$Zone[1])) +
-      ggplot_theme() +
-      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-            plot.subtitle = element_text(hjust = 0.5),
-            legend.position = c(.9,.9),
-            legend.background = element_rect(fill = "transparent"),
-            plot.title = element_text(size=30, colour = "black"),
-            text = element_text(size=25, colour = "black"),
-            axis.text = element_text(size=20, colour = "black"),
-            axis.title = element_text(size=30, colour = "black"))  +
-      
-      geom_point(data = df_zone %>% filter(Dynamic_threshold == 'Fixed threshold'), 
-                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "chartreuse4", alpha = 0.5) + 
-      geom_path(data = df_zone %>% filter(Dynamic_threshold == 'Fixed threshold'), 
-                aes(x = date, y = area_of_the_plume_mask_in_km2), color = "chartreuse4", alpha = 0.5) + 
-      geom_point(data = points_for_the_legend, aes(x = date, y = area_of_the_plume_mask_in_km2, color = Dynamic_threshold), size = 0.1) +
-      
-      scale_color_manual(values = c('Dynamic threshold'= "red3", 'Fixed threshold' = "chartreuse4"), name = "") +
-      
-      guides(
-        color = guide_legend(keyheight = unit(0.3, "cm"), byrow = TRUE,
-                             override.aes = list(size = c(5, 5),
-                                                 alpha = c(1, 0.5)))) 
-    
-    return(the_ts_plot)
-    
-  })
-  
-  save_plot_as_png(ggarrange(plotlist = SPM_map_ts, common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
-                   'Figure_S1', width = 20, height = 16, path = main_folder)
-
-}
-
-
-# manuscript Figure 5: daily plume area vs. river flow, one row per zone --
+# This is now shown in the supplement. 
+# Naming convention should be updates to reflect it's new position in the manuscript.
+# Figure Sxx: daily plume area vs. river flow, one row per zone --
 # a) scatter with a linear trend line, b) lagged correlation (plume lagged
 # behind flow, max_lag_daily days). Reuses func/multi.R's
 # combine_plume_driver()/driver_plume_correlation() (same machinery behind
 # run_driver_suite("flow")'s cor_plot_flow_plume_*.png files), but keeps only
-# the scatter + lag panels -- the raw driver/plume time series (panels a/b of
-# plot_driver_plume_comparison()) would duplicate manuscript Figure 4 -- and
-# caps the lag search at 14 days (vs. that function's default 30) per
-# Robert's request. Distinct from the Figure_5() function above (regional
-# zone maps, now folded into the Figure 3 composite rather than a standalone
-# figure): manuscript.tex's own "Figure 5" caption had no generator at all
-# until now (see [[project_manuscript_pipeline_gaps]] item 4).
+# the scatter + lag panels
 Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily = 14){
 
   # FIGURE_5 (not FIGURE_5_DRIVER): Figure_5() above no longer writes here --
@@ -694,9 +612,9 @@ Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily =
     meta <- tibble::tibble(...)
     df <- combine_plume_driver("flow", meta)
 
-    cor_df <- driver_plume_correlation(df, max_lag_daily = max_lag_daily) %>%
+    cor_df <- driver_plume_correlation(df, max_lag_daily = max_lag_daily) |>
       dplyr::filter(timestep == "daily")
-    peak <- cor_df %>% dplyr::slice_max(cor, n = 1)
+    peak <- cor_df |> dplyr::slice_max(cor, n = 1)
 
     # Panel title is the zone (the flow series compared here is already
     # zone-summed across every contributing river -- see load_river_flow()),
@@ -721,7 +639,7 @@ Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily =
     list(scatter = scatter_plot, lag = lag_plot)
   })
 
-  plotlist <- panels %>% purrr::map(function(p) list(p$scatter, p$lag)) %>% purrr::flatten()
+  plotlist <- panels |> purrr::map(function(p) list(p$scatter, p$lag)) |> purrr::flatten()
 
   panel_labels <- paste0(letters[seq_along(plotlist)], ")")
   full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = length(panels), align = "v",
@@ -732,7 +650,7 @@ Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily =
 }
 
 
-# manuscript Figure 7: wind and wave direction/magnitude roses, one row per
+# Figure 7: wind and wave direction/magnitude roses, one row per
 # zone, coloured by the flow-controlled plume-area response
 # (multi.R::plot_driver_rose()). Replaces the original Figure 7/8 concept
 # (X11-decomposed wind/wave magnitude time series) -- Robert's call, since
@@ -747,9 +665,9 @@ Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 8){
     meta <- tibble::tibble(...)
     # One flow join/STL per zone, shared across the wind and wave roses below
     # (plot_driver_rose() would otherwise recompute the identical df_flow twice).
-    df_flow <- combine_plume_driver("flow", meta) %>% dplyr::select(date, plume_area, flow = value)
+    df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
     list(wind = plot_driver_rose("wind", meta, n_sectors, df_flow), wave = plot_driver_rose("wave", meta, n_sectors, df_flow))
-  }) %>% purrr::map(function(p) list(p$wind, p$wave)) %>% purrr::flatten()
+  }) |> purrr::map(function(p) list(p$wind, p$wave)) |> purrr::flatten()
 
   panel_labels <- paste0(letters[seq_along(plotlist)], ")")
   full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = nrow(zone_meta), align = "v",
@@ -759,11 +677,10 @@ Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 8){
   save_plot_as_png(full_plot, "Figure_7", width = 16, height = 20, path = main_folder_of_Figure_7)
 }
 
-
-# manuscript Figure 8: flow-controlled plume-area residual vs. wave height,
+# The has been deprecated. To be moved to a deprecated code section in this script.
+# Figure XXX: flow-controlled plume-area residual vs. wave height,
 # coloured by on/off-shore wind category, one panel per zone
-# (multi.R::plot_category_scatter()). Replaces the original Figure 8
-# concept (X11-decomposed wave-height magnitude time series).
+# (multi.R::plot_category_scatter()).
 Figure_8_driver_category <- function(where_to_save_the_figure){
 
   main_folder_of_Figure_8 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_8")
@@ -780,18 +697,13 @@ Figure_8_driver_category <- function(where_to_save_the_figure){
 }
 
 
-# manuscript Figure 9: GAM partial-dependence curves for flow, wind, wave,
+# Figure 8: GAM partial-dependence curves for flow, wind, wave,
 # and current, one row per zone (driver_interactions.R::fit_gam()/
 # gam_partial_effect()). Tide is intentionally excluded from the plot --
-# Robert's call, since tidal range is an essentially fixed astronomical
+# since tidal range is an essentially fixed astronomical
 # property of each site rather than something worth a dedicated panel; it
 # stays in the underlying GAM/Table 6 statistics, just not visualised here.
-# Reuses the same corrected (ROFI-free) GAM already needed for Fig. 10/
-# Table 6 rather than fitting a separate model -- refit here from the
-# already-saved daily_driver_matrix_<zone>.csv (Stage 4 output, see
-# func/driver_interactions.R::run_full_analysis()) instead of rerunning the
-# full driver-interactions pipeline (GLM/regime/RF steps not needed here).
-Figure_9_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/STATS"){
+Figure_8_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/STATS"){
 
   # Sourced here rather than at file scope (unlike multi.R above): this pulls
   # in several heavyweight modelling packages (mgcv, gratia, ranger, iml)
@@ -821,7 +733,7 @@ Figure_9_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/S
     # Only the row's first panel gets the zone name as a title.
     zone_plots[[1]] <- zone_plots[[1]] + labs(title = zone_title(zone_name))
     zone_plots
-  }) %>% purrr::flatten()
+  }) |> purrr::flatten()
 
   full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = length(driver_labels), nrow = length(zones), align = "v")
 
@@ -838,17 +750,17 @@ Figure_9_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/S
 # also computed a "Raw" signal plot per zone that was never saved anywhere
 # (dead computation), dropped here.
 compute_x11_zone_plots <- function(data_dir){
-  plume_data <- data_dir %>% file.path('DATA', 'ts_plume_data.csv') %>% read_csv()
-  river_data <- data_dir %>% file.path('DATA', 'ts_river_data.csv') %>% read_csv()
+  plume_data <- data_dir |> file.path('DATA', 'ts_plume_data.csv') |> read_csv()
+  river_data <- data_dir |> file.path('DATA', 'ts_river_data.csv') |> read_csv()
 
-  regions <- unique(plume_data$Zone) %>% order_zones()
+  regions <- unique(plume_data$Zone) |> order_zones()
 
-  regions %>% llply(function(region) {
+  regions |> llply(function(region) {
 
-    plume_data_region <- plume_data %>% filter(Zone == region)
-    river_data_region <- river_data %>% filter(Zone == region)
+    plume_data_region <- plume_data |> filter(Zone == region)
+    river_data_region <- river_data |> filter(Zone == region)
 
-    X11_ts <- plume_data_region %>% inner_join(river_data_region, by = "dates", suffix = c("_plume_area", "_river_flow"))
+    X11_ts <- plume_data_region |> inner_join(river_data_region, by = "dates", suffix = c("_plume_area", "_river_flow"))
 
     zone_label <- zone_title(region)
     list("Interannual" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Interannual') + labs(title = zone_label),
@@ -861,7 +773,7 @@ compute_x11_zone_plots <- function(data_dir){
 # Stacks one X11 component (Interannual/Seasonal/Residual) across all 4
 # zones into a single column -- the layout shared by every figure below.
 stack_x11_component <- function(zone_plots, component){
-  ggarrange(plotlist = zone_plots %>% llply(function(x) x[[component]]), ncol = 1, nrow = 4, align = "v")
+  ggarrange(plotlist = zone_plots |> llply(function(x) x[[component]]), ncol = 1, nrow = 4, align = "v")
 }
 
 # manuscript Figure 6: X11 interannual (long-term) signal of plume area vs.
@@ -886,6 +798,78 @@ save_x11_component_composite <- function(zone_plots, components, name, path){
   })
   composite <- magick::image_append(magick::image_read(panel_files), stack = TRUE)
   magick::image_write(composite, file.path(path, paste0(name, ".png")))
+}
+
+# manuscript Figure S1: plume-area time series, fixed vs. dynamic threshold
+# comparison, one panel per zone. Reads the same ts_data.csv Figure_4_timeseries()
+# does (both share one Python-side data prep), but writes to its own
+# FIGURE_S1/ folder rather than FIGURE_4/ -- every manuscript figure has its
+# own FIGURE_* folder (2026-08-01).
+# where_to_save_the_figure <- 'figures'
+Figure_S1_thresholds <- function(where_to_save_the_figure){
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S1")
+
+  SPM_map_data <- data_dir |> file.path('DATA', 'ts_data.csv') |> read_csv()
+  SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
+
+  SPM_map_ts <- SPM_map_data |> filter(Satellite_sensor == "merged") |> dlply(.(Zone), function(df_zone) {
+    
+    unique_years <- df_zone$Years |> unique()
+    
+    points_for_the_legend <- data.frame(Dynamic_threshold = c('Dynamic threshold', 'Fixed threshold'),
+                                        date = c('2020-01-01','2020-01-01') |> as.Date(),
+                                        area_of_the_plume_mask_in_km2 = c(-9999,-9999))
+    
+    # index_to_remove <- which((df_zone$Satellite_sensor == "modis") & 
+    #                            (df_zone$area_of_the_plume_mask_in_km2 > quantile(df_zone$area_of_the_plume_mask_in_km2, probs = 0.999, na.rm = TRUE)))
+    # 
+    # if (index_to_remove |> length() > 0) {df_zone <- df_zone[-index_to_remove,]}
+    
+    the_ts_plot <- ggplot() + 
+      
+      geom_point(data = df_zone |> filter(Dynamic_threshold == 'Dynamic threshold'), 
+                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") + 
+      geom_path(data = df_zone |> filter(Dynamic_threshold == 'Dynamic threshold'), 
+                aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") + 
+      
+      scale_x_date(name = "", 
+                   breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(), 
+                   labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist(),
+                   expand = c(0.01,0.01)) +
+      
+      coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
+      labs(y = "Plume area (km²)", x = "", title = zone_title(df_zone$Zone[1])) +
+      ggplot_theme() +
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+            plot.subtitle = element_text(hjust = 0.5),
+            legend.position = c(.9,.9),
+            legend.background = element_rect(fill = "transparent"),
+            plot.title = element_text(size=30, colour = "black"),
+            text = element_text(size=25, colour = "black"),
+            axis.text = element_text(size=20, colour = "black"),
+            axis.title = element_text(size=30, colour = "black"))  +
+      
+      geom_point(data = df_zone |> filter(Dynamic_threshold == 'Fixed threshold'), 
+                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "chartreuse4", alpha = 0.5) + 
+      geom_path(data = df_zone |> filter(Dynamic_threshold == 'Fixed threshold'), 
+                aes(x = date, y = area_of_the_plume_mask_in_km2), color = "chartreuse4", alpha = 0.5) + 
+      geom_point(data = points_for_the_legend, aes(x = date, y = area_of_the_plume_mask_in_km2, color = Dynamic_threshold), size = 0.1) +
+      
+      scale_color_manual(values = c('Dynamic threshold'= "red3", 'Fixed threshold' = "chartreuse4"), name = "") +
+      
+      guides(
+        color = guide_legend(keyheight = unit(0.3, "cm"), byrow = TRUE,
+                             override.aes = list(size = c(5, 5),
+                                                 alpha = c(1, 0.5)))) 
+    
+    return(the_ts_plot)
+    
+  })
+  
+  save_plot_as_png(ggarrange(plotlist = SPM_map_ts, common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                   'Figure_S1', width = 20, height = 16, path = main_folder)
+
 }
 
 # manuscript Figure S2: X11 seasonal + residual components, dynamic
@@ -946,7 +930,7 @@ Figure_S3_seasonal_boxplots <- function(where_to_save_the_figure){
         message("Figure S3: skipping (not found): ", csv_path)
         return(NULL)
       }
-      read_csv(csv_path, show_col_types = FALSE) %>%
+      read_csv(csv_path, show_col_types = FALSE) |>
         mutate(date = as.Date(date), month = as.integer(format(date, "%m")), zone = zone, threshold = thresh)
     }))
   }))
@@ -956,14 +940,14 @@ Figure_S3_seasonal_boxplots <- function(where_to_save_the_figure){
     return(invisible(FALSE))
   }
 
-  seasonal_data <- all_data %>%
-    filter(month %in% c(6L, 7L, 8L, 11L, 12L, 1L)) %>%
+  seasonal_data <- all_data |>
+    filter(month %in% c(6L, 7L, 8L, 11L, 12L, 1L)) |>
     mutate(season = case_when(month %in% c(6L, 7L, 8L) ~ "Summer (JJA)",
                               month %in% c(11L, 12L, 1L) ~ "Winter (NDJ)"),
            zone = factor(zone, levels = zones, labels = zone_title(zones)),
-           threshold = factor(threshold, levels = c("dynamic", "static"), labels = c("Dynamic", "Static"))) %>%
-    select(date, zone, threshold, season, all_of(names(metrics))) %>%
-    pivot_longer(cols = names(metrics), names_to = "metric", values_to = "value") %>%
+           threshold = factor(threshold, levels = c("dynamic", "static"), labels = c("Dynamic", "Static"))) |>
+    select(date, zone, threshold, season, all_of(names(metrics))) |>
+    pivot_longer(cols = names(metrics), names_to = "metric", values_to = "value") |>
     mutate(metric = factor(metric, levels = names(metrics), labels = unname(metrics)))
 
   p <- ggplot(seasonal_data, aes(x = season, y = value, fill = threshold)) +

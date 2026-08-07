@@ -54,11 +54,7 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
     zoo::na.trim()
   # De-seasoned before trend fitting (deseason_doy(), func/multi.R), matching
   # the same Sutton et al. (2022) day-of-year adjustment driver_plume_trend()
-  # applies to area/mass -- this metric used to skip that step and fit the
-  # trend on the raw daily series directly, an inconsistency with the other
-  # three Table 5 variables found 2026-08-05 while adding mean/SD here.
-  # Mean/SD are reported on this same de-seasoned series (not the raw one),
-  # per Robert's clarification that these should reflect the treated data.
+  # applies to area/mass
   shape_adj <- deseason_doy(df_shape$compactness, df_shape$date)
   shape_trend <- fit_wls_hac_trend("ar", shape_adj, df_shape$date) |>
     dplyr::mutate(mouth_name = meta$mouth_name, metric = "compactness",

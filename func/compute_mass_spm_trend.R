@@ -1,6 +1,6 @@
 # One-off: compute the long-term linear trend in SPM mass per plume, using
 # the same Sutton et al. (2022)-style AR(1)/HAC estimator (func/multi.R::
-# driver_plume_trend()) already used for the plume-area trend reported in
+# deseason_doy()) already used for the plume-area trend reported in
 # the abstract. Run from repo root: Rscript func/compute_mass_spm_trend.R
 source("func/multi.R")
 
@@ -9,10 +9,9 @@ mass_col <- "mass_SPM_in_the_plume_area_in_g_m"  # despite the name, this column
 mass_trends <- purrr::pmap_dfr(zone_meta, function(...){
   meta <- tibble::tibble(...)
   df <- combine_plume_driver("flow", meta, metric_col = mass_col, outlier_max = NULL)
+  
   # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
   # same convention as compute_area_trend.R/compute_shape_alongcoast_trend.R
-  # -- added 2026-08-05 so Table 5 reports mean/SD/trend consistently across
-  # all four plume variables.
   mass_adj <- deseason_doy(df$plume_area, df$date)
   trend <- driver_plume_trend(df, "flow", meta$mouth_name, save_plot = FALSE) |>
     dplyr::mutate(mean_mass_kg = mean(mass_adj, na.rm = TRUE), sd_mass_kg = sd(mass_adj, na.rm = TRUE))

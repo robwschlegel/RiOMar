@@ -4,9 +4,7 @@
 # plume-area/SPM-mass rows -- func/compute_area_trend.R), for manuscript
 # Table 6's River discharge / Wind / Tide / Wave height rows.
 #
-# Updated 2026-08-05 (per Robert): switched from same-day (lag 0) Pearson
-# correlation to the best-lag search over 0-14 days already used elsewhere
-# for river flow and wave height (func/compute_driver_x11_correlation_table.R
+# Best-lag search over 0-14 days (func/compute_driver_x11_correlation_table.R
 # ::daily_flow_r_best_lag()/category_r_best_lag(), manuscript Figure 5) --
 # applied here to all four drivers for consistency, plus a p-value
 # (cor.test() at the identified best lag) alongside the lag itself.

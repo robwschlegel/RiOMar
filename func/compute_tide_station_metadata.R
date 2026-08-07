@@ -8,9 +8,8 @@
 #
 # NB: the .sml file's own date_prem_obs field is NOT used for the start
 # year -- for Saint-Nazaire it claims 1821, a much earlier historical
-# origin than what SHOM has actually made available (.txt files only go
-# back to 1980, matching manuscript.tex's existing Table 3 value), so the
-# archived .txt file years are the only reliable source for what's usable.
+# origin than what SHOM has actually made available, so the
+# archived .txt file years are the reliable source for what's usable.
 #
 # Run from repo root: Rscript func/compute_tide_station_metadata.R
 library(dplyr)
