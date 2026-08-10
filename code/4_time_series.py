@@ -75,3 +75,15 @@ r_function = robjects.r['run_driver_interactions_analysis']
 # static-threshold supplementary analysis; see func/driver_interactions.R)
 r_function()
 
+
+# =============================================================================
+# ### Monthly multi-driver interaction analysis (sec:seasonal_methods)
+# =============================================================================
+
+# Re-runs the same six-step GLM/GAM/RF sequence above independently within
+# each calendar month's data subset, dynamic threshold only. Feeds the
+# Supplementary monthly driver-dominance table (manuscript.tex); see
+# func/driver_interactions.R::run_monthly_driver_interactions_analysis().
+r_function_monthly = robjects.r['run_monthly_driver_interactions_analysis']
+r_function_monthly()
+

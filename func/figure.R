@@ -585,14 +585,158 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
 # combine_plume_driver()/driver_plume_correlation() (same machinery behind
 # run_driver_suite("flow")'s cor_plot_flow_plume_*.png files), but keeps only
 # the scatter + lag panels
-Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily = 14){
+# manuscript Figure 5 (sec:results_seasonal): monthly boxplots of all four
+# plume properties and five drivers, per zone, dynamic threshold. Closest
+# existing precedent is Figure_S3_seasonal_boxplots() below (same
+# no-Python-data-prep pattern, same Results.csv/PlumeShape.csv sources), but
+# grouped by calendar month rather than JJA/NDJ season, covering both plume
+# properties and drivers rather than plume properties alone, and rescaling
+# each zone's values to 0-100% of that zone's own observed dynamic-threshold
+# range so zones of very different raw magnitude (Table 5) are comparable in
+# one figure; real (unscaled) interquartile values are annotated as text.
+# Also writes the shared long-format data (both thresholds) that the
+# rewritten Figure_S3_seasonal_boxplots() below reads back in, so the
+# static-threshold pass is computed once rather than twice.
+Figure_5_seasonal_analysis <- function(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
+                                       where_are_saved_plume_results_with_static_threshold = "output/panache/static",
+                                       where_to_save_the_figure){
 
-  # FIGURE_5 (not FIGURE_5_DRIVER): Figure_5() above no longer writes here --
-  # its regional-zone-maps panel now feeds the Figure 3 composite directly
-  # (see Figure_3() / figure.py::Figure_5()), freeing this folder for the
-  # actual manuscript Figure 5.
-  main_folder_of_Figure_5_driver <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_5")
-  if (!dir.exists(main_folder_of_Figure_5_driver)) dir.create(main_folder_of_Figure_5_driver, recursive = TRUE)
+  figure_5_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_5")
+  data_dir <- file.path(figure_5_dir, "DATA")
+  if(!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
+
+  mass_col <- "mass_SPM_in_the_plume_area_in_g_m"  # kg, see compute_mass_spm_trend.R
+  drivers <- c("flow", "wind", "tide", "wave", "current")
+  variable_display <- c(
+    plume_area    = "Plume area (km²)",
+    SPM_mass      = "SPM mass (t)",
+    compactness   = "Compactness",
+    alongcoast_km = "Along-coast drift (km)",
+    flow          = "River discharge (m³ s⁻¹)",
+    wind          = "Wind speed (m s⁻¹)",
+    tide          = "Tidal range (m)",
+    wave          = "Wave height (m)",
+    current       = "Current speed (m s⁻¹)"
+  )
+
+  thresholds <- c(dynamic = where_are_saved_plume_results_with_dynamic_threshold,
+                  static = where_are_saved_plume_results_with_static_threshold)
+
+  long_data <- purrr::map_dfr(names(thresholds), function(threshold_label){
+    plume_dir <- thresholds[[threshold_label]]
+
+    purrr::pmap_dfr(zone_meta, function(...){
+      meta <- tibble::tibble(...)
+
+      df_area <- load_plume_ts(meta$zone, plume_dir = plume_dir, outlier_max = 20000) |>
+        dplyr::transmute(date, variable = "plume_area", value = plume_area)
+
+      df_mass <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = mass_col, outlier_max = NULL) |>
+        dplyr::transmute(date, variable = "SPM_mass", value = plume_area / 1000)  # kg -> t
+
+      # func/compute_plume_shape.py now covers both thresholds (2026-08-07),
+      # so this file should always exist -- the guard is kept as defensive
+      # robustness, same as func/compute_seasonal_trend.R.
+      shape_path <- paste0(plume_dir, "/", meta$zone, "/PlumeShape.csv")
+      if(file.exists(shape_path)){
+        df_shape <- read_csv(shape_path, show_col_types = FALSE) |>
+          dplyr::mutate(date = as.Date(date)) |>
+          dplyr::transmute(date, variable = "compactness", value = compactness)
+      } else {
+        message("Figure_5_seasonal_analysis: no PlumeShape.csv for ", threshold_label, "/", meta$zone,
+               " -- skipping compactness for this threshold.")
+        df_shape <- NULL
+      }
+
+      df_coast <- compute_alongcoast_ts(meta$zone, meta, plume_dir) |>
+        dplyr::transmute(date, variable = "alongcoast_km", value = value)
+
+      df_drivers <- purrr::map_dfr(drivers, function(driver_name){
+        load_driver(driver_name, meta) |>
+          dplyr::transmute(date, variable = driver_name, value = value)
+      })
+
+      dplyr::bind_rows(df_area, df_mass, df_shape, df_coast, df_drivers) |>
+        dplyr::mutate(threshold = threshold_label, zone = meta$zone, .before = 1)
+    })
+  }) |>
+    dplyr::mutate(category = ifelse(variable %in% drivers, "driver", "property"),
+                  month = lubridate::month(date))
+
+  readr::write_csv(long_data, file.path(data_dir, "monthly_boxplot_data.csv"))
+
+  # Each zone x variable's 0-100% scale is fixed from the *dynamic*-threshold
+  # values only, then applied to both thresholds when Figure S3 (below)
+  # re-reads this same data -- so a static-threshold box sitting outside
+  # 0-100% there is a real, visible signal that the two thresholds disagree,
+  # not scaling noise.
+  scale_range <- long_data |>
+    dplyr::filter(threshold == "dynamic") |>
+    dplyr::summarise(range_min = min(value, na.rm = TRUE), range_max = max(value, na.rm = TRUE),
+                     .by = c(zone, variable))
+
+  df <- long_data |>
+    dplyr::filter(threshold == "dynamic") |>
+    dplyr::left_join(scale_range, by = c("zone", "variable")) |>
+    dplyr::mutate(pct = 100 * (value - range_min) / (range_max - range_min),
+                  zone = factor(zone, levels = zones, labels = zone_title(zones)),
+                  month = factor(month, levels = 1:12, labels = month.abb),
+                  variable = factor(variable, levels = names(variable_display), labels = unname(variable_display)))
+
+  box_stats <- df |>
+    dplyr::summarise(
+      raw_lower = stats::quantile(value, 0.25, na.rm = TRUE), raw_upper = stats::quantile(value, 0.75, na.rm = TRUE),
+      ymin = min(pct, na.rm = TRUE), lower = stats::quantile(pct, 0.25, na.rm = TRUE),
+      middle = stats::median(pct, na.rm = TRUE), upper = stats::quantile(pct, 0.75, na.rm = TRUE),
+      ymax = max(pct, na.rm = TRUE),
+      .by = c(zone, variable, month, category)
+    ) |>
+    dplyr::mutate(label = sprintf("%.3g–%.3g", raw_lower, raw_upper))
+
+  plot_group <- function(box_data){
+    ggplot(box_data, aes(x = month)) +
+      geom_boxplot(aes(ymin = ymin, lower = lower, middle = middle, upper = upper, ymax = ymax),
+                  stat = "identity", fill = "#2166ac", alpha = 0.6, width = 0.6, linewidth = 0.3) +
+      geom_text(aes(y = pmin(108, ymax + 6), label = label), size = 1.7, angle = 90, hjust = 0) +
+      facet_grid(variable ~ zone, scales = "free_x") +
+      coord_cartesian(ylim = c(0, 118), clip = "off") +
+      labs(x = NULL, y = "% of zone's own observed range (dynamic threshold)") +
+      theme_bw(base_size = 9) +
+      theme(strip.text.y = element_text(angle = 0, size = 7), strip.text.x = element_text(size = 9),
+           axis.text.x = element_text(angle = 45, hjust = 1, size = 6), panel.grid.minor = element_blank())
+  }
+
+  p_properties <- plot_group(dplyr::filter(box_stats, category == "property"))
+  p_drivers    <- plot_group(dplyr::filter(box_stats, category == "driver"))
+
+  save_plot_as_png(p_properties, "Figure_5_properties", width = 12, height = 9, path = figure_5_dir)
+  save_plot_as_png(p_drivers, "Figure_5_drivers", width = 12, height = 10.5, path = figure_5_dir)
+  message("Wrote Figure_5_properties.png and Figure_5_drivers.png")
+  invisible(TRUE)
+}
+
+
+# Figure 7: wind and wave direction/magnitude roses, one row per
+# zone, coloured by the flow-controlled plume-area response
+# (multi.R::plot_driver_rose()). Replaces the original Figure 7/8 concept
+# (X11-decomposed wind/wave magnitude time series) -- Robert's call, since
+# wind and wave direction matter as much or more than magnitude, which a
+# magnitude-only time series can't show.
+# Supplementary "Sx. Lagged daily correlations" figure (fig:daily_flow):
+# daily plume area vs. river flow scatter + lagged correlation, per zone.
+# Restored 2026-08-07 under a new name/folder after the seasonal-analysis
+# change repurposed FIGURE_5/ (this content's old home) for the new main-text
+# Figure 5 -- the two used to collide on the exact same output path
+# (FIGURE_5/Figure_5.png) since this function was previously named
+# Figure_5_driver_comparison() and had been superseded there as the main-text
+# figure, but never actually stopped feeding the Supplementary fig:daily_flow
+# citation ("Deprecated code" in code/5_figures.py was misleading: only its
+# main-text role was deprecated, not the Supplementary figure itself). Same
+# analysis/plotting logic as the original, just renamed and re-homed.
+Figure_S_daily_flow <- function(where_to_save_the_figure, max_lag_daily = 14){
+
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S_daily_flow")
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
 
   # ggplot_theme()'s font sizes are tuned for the single-column, 4-row
   # figures elsewhere (e.g. Figures_6_7); an 8-panel 2x4 grid needs smaller
@@ -646,16 +790,10 @@ Figure_5_driver_comparison <- function(where_to_save_the_figure, max_lag_daily =
                                  labels = panel_labels, font.label = list(size = 18, face = "bold"),
                                  hjust = -0.3, vjust = 1.3)
 
-  save_plot_as_png(full_plot, "Figure_5", width = 16, height = 18, path = main_folder_of_Figure_5_driver)
+  save_plot_as_png(full_plot, "Figure_S_daily_flow", width = 16, height = 18, path = main_folder)
 }
 
 
-# Figure 7: wind and wave direction/magnitude roses, one row per
-# zone, coloured by the flow-controlled plume-area response
-# (multi.R::plot_driver_rose()). Replaces the original Figure 7/8 concept
-# (X11-decomposed wind/wave magnitude time series) -- Robert's call, since
-# wind and wave direction matter as much or more than magnitude, which a
-# magnitude-only time series can't show.
 Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 8){
 
   main_folder_of_Figure_7 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_7")
@@ -886,82 +1024,200 @@ Figure_S2_x11_components <- function(where_to_save_the_figure){
   save_x11_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S2", main_folder)
 }
 
-# manuscript Figure S5: X11 interannual signal, static threshold
-# (supplementary robustness check) -- mirrors Figure 6. Renamed 2026-07-31
-# from Figure_S6_x11_interannual_static(), see Figure_S2_x11_components() note.
-Figure_S5_x11_interannual_static <- function(where_to_save_the_figure){
+# Plots one X11 component of plume area under the dynamic vs. static
+# detection threshold -- unlike plot_x11_river_and_plume() (which pairs two
+# different variables, plume area and river flow, on a dual axis), this
+# pairs the SAME variable under the two thresholds on a single axis (same
+# units, km²). Colour convention matches Figure S1 (dynamic = red3, static =
+# chartreuse4, alpha 0.5) so every threshold-comparison figure reads
+# consistently. See manuscript/TODO.md, "Figure Sx. X11 component time
+# series", 2026-08-07: this replaces Figure_S5_x11_interannual_static()/
+# Figure_S6_x11_components_static(), which paired static-threshold plume
+# area against river flow (the same pairing as Figures 6/S2, just with the
+# static series substituted in) rather than comparing the two thresholds
+# directly as requested.
+plot_x11_dynamic_vs_static <- function(X11_data, type_of_signal) {
+
+  unique_years <- X11_data$dates |> year() |> unique()
+
+  X11_data_for_plot <- X11_data |>
+    rename(dynamic = !!sym(paste(type_of_signal, "signal_dynamic", sep = "_")),
+           static = !!sym(paste(type_of_signal, "signal_static", sep = "_"))) |>
+    select(dates, dynamic, static)
+
+  if (type_of_signal %in% c("Seasonal", "Residual")) {
+    X11_data_for_plot <- X11_data_for_plot |>
+      mutate(dynamic = dynamic + mean(X11_data$Raw_signal_dynamic, na.rm = T),
+             static = static + mean(X11_data$Raw_signal_static, na.rm = T))
+  }
+
+  r_value <- cor(X11_data_for_plot$dynamic, X11_data_for_plot$static, use = "complete.obs")
+  r_label <- paste0("r = ", sprintf("%.2f", r_value))
+
+  ggplot() +
+
+    geom_point(data = X11_data_for_plot, aes(x = dates, y = static), color = "chartreuse4", alpha = 0.5) +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = static), color = "chartreuse4", alpha = 0.5) +
+
+    geom_point(data = X11_data_for_plot, aes(x = dates, y = dynamic), color = "red3") +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = dynamic), color = "red3") +
+
+    annotate("text", x = min(X11_data_for_plot$dates), y = Inf, label = r_label,
+            hjust = 0, vjust = 1.5, size = 6, colour = "black") +
+
+    scale_x_date(name = "",
+                 breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(),
+                 labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist()) +
+
+    scale_y_continuous(name = "Plume area (km²)") +
+
+    labs(title = paste(type_of_signal, "signal")) +
+    ggplot_theme() +
+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+          plot.subtitle = element_text(hjust = 0.5),
+          plot.title = element_text(size=30, colour = "black"),
+          text = element_text(size=25, colour = "black"),
+          axis.text = element_text(size=20, colour = "black"),
+          axis.title = element_text(size=30, colour = "black"),
+          panel.border = element_rect(linetype = "solid", fill = NA))
+}
+
+# Computes the per-zone dynamic-vs-static plume-area comparison plots for
+# one X11 component -- mirrors compute_x11_zone_plots() but joins the
+# dynamic- and static-threshold plume-area series (by date) instead of
+# plume area and river flow.
+compute_x11_dynamic_vs_static_plots <- function(data_dir){
+  ts_data <- data_dir |> file.path('DATA', 'ts_plume_dynamic_vs_static.csv') |> read_csv()
+
+  regions <- unique(ts_data$Zone) |> order_zones()
+
+  regions |> llply(function(region) {
+    ts_dynamic <- ts_data |> filter(Zone == region, threshold == "dynamic") |> select(-Zone, -threshold)
+    ts_static  <- ts_data |> filter(Zone == region, threshold == "static") |> select(-Zone, -threshold)
+
+    X11_ts <- ts_dynamic |> inner_join(ts_static, by = "dates", suffix = c("_dynamic", "_static"))
+
+    zone_label <- zone_title(region)
+    list("Interannual" = plot_x11_dynamic_vs_static(X11_ts, type_of_signal = 'Interannual') + labs(title = zone_label),
+        "Seasonal" = plot_x11_dynamic_vs_static(X11_ts, type_of_signal = 'Seasonal') + labs(title = zone_label),
+        "Residual" = plot_x11_dynamic_vs_static(X11_ts, type_of_signal = 'Residual') + labs(title = zone_label))
+  })
+}
+
+# manuscript Supplementary figure: X11 interannual signal of plume area,
+# dynamic vs. static threshold, all four zones.
+Figure_S5_x11_interannual_dynamic_vs_static <- function(where_to_save_the_figure){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S5")
-  zone_plots <- compute_x11_zone_plots(main_folder)
+  zone_plots <- compute_x11_dynamic_vs_static_plots(main_folder)
   save_plot_as_png(stack_x11_component(zone_plots, "Interannual"), "Figure_S5", width = 20, height = 16, path = main_folder)
 }
 
-# manuscript Figure S6: X11 seasonal + residual components, static threshold
-# -- mirrors Figure S2. Shares Figure S5's DATA/ prep. Renamed 2026-07-31
-# from Figure_S7_x11_components_static(), see Figure_S2_x11_components() note.
-Figure_S6_x11_components_static <- function(where_to_save_the_figure){
+# manuscript Supplementary figure: X11 seasonal signal of plume area,
+# dynamic vs. static threshold. Shares Figure S5's DATA/ prep (data_dir
+# points at FIGURE_S5/, not FIGURE_S6/), matching the Figure 6/S2 pattern.
+# One of three separate figures (interannual/seasonal/residual) requested in
+# manuscript/TODO.md, rather than a seasonal+residual composite.
+Figure_S6_x11_seasonal_dynamic_vs_static <- function(where_to_save_the_figure){
   data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S5")
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S6")
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-  zone_plots <- compute_x11_zone_plots(data_dir)
-  save_x11_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S6", main_folder)
+  zone_plots <- compute_x11_dynamic_vs_static_plots(data_dir)
+  save_plot_as_png(stack_x11_component(zone_plots, "Seasonal"), "Figure_S6", width = 20, height = 16, path = main_folder)
 }
 
-# manuscript Figure S3: seasonal (JJA vs. NDJ) boxplots of plume metrics,
-# dynamic vs. static threshold, all four zones. Migrated 2026-08-01 from
+# manuscript Supplementary figure: X11 residual variance of plume area,
+# dynamic vs. static threshold. Shares Figure S5's DATA/ prep. Third of the
+# three separate figures requested in manuscript/TODO.md.
+Figure_S6_x11_residual_dynamic_vs_static <- function(where_to_save_the_figure){
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S5")
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S6_RESIDUAL")
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+  zone_plots <- compute_x11_dynamic_vs_static_plots(data_dir)
+  save_plot_as_png(stack_x11_component(zone_plots, "Residual"), "Figure_S6_residual", width = 20, height = 16, path = main_folder)
+}
+
+# manuscript Figure S3: monthly (previously JJA vs. NDJ) dynamic-vs-static
+# threshold comparison of the four plume properties, all four zones. Drivers
+# are deliberately not shown here (per Robert, 2026-08-07): driver values
+# don't depend on the plume-detection threshold at all, so their dynamic and
+# static boxes are only ever near-identical up to sampling noise -- not an
+# informative threshold comparison the way the plume properties are.
+# Reads the shared long-format data Figure_5_seasonal_analysis() above
+# already wrote to FIGURE_5/DATA/monthly_boxplot_data.csv, rather than
+# re-reading Results.csv independently, so the two-threshold computation
+# only happens once -- this function must therefore be called after
+# Figure_5_seasonal_analysis() in the code/5_figures.py pipeline. Values are
+# shown on the same 0-100%-of-dynamic-range scale as Figure 5, so a
+# static-threshold box sitting outside 0-100% is a direct visual signal that
+# the two thresholds disagree, not scaling noise. Migrated 2026-08-01 from
 # manuscript/make_figures_tables.R::generate_figure_s4_seasonal_thresholds()
-# into the real pipeline (called from code/5_figures.py) so it writes
-# straight to figures/ARTICLE/FIGURE_S3/ instead of via the
-# manuscript/figures/ copy step. Renamed 2026-07-31 from
-# Figure_S4_seasonal_boxplots(), see Figure_S2_x11_components() note.
+# into the real pipeline; renamed 2026-07-31 from Figure_S4_seasonal_boxplots();
+# rewritten from JJA/NDJ to monthly once the seasonal-analysis section
+# (sec:seasonal_methods) was added, per the corresponding manuscript/TODO.md item.
 Figure_S3_seasonal_boxplots <- function(where_to_save_the_figure){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S3")
+  data_path <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_5", "DATA", "monthly_boxplot_data.csv")
 
-  metrics <- c(
-    area_of_the_plume_mask_in_km2           = "Plume area (km²)",
-    mean_SPM_in_the_plume_area              = "Mean SPM (g m⁻³)",
-    lon_weighted_centroid_of_the_plume_area = "Centroid longitude (°E)",
-    lat_weighted_centroid_of_the_plume_area = "Centroid latitude (°N)"
-  )
-
-  all_data <- bind_rows(lapply(c("dynamic", "static"), function(thresh){
-    bind_rows(lapply(zones, function(zone){
-      csv_path <- file.path("output", "panache", thresh, zone, "Results.csv")
-      if (!file.exists(csv_path)) {
-        message("Figure S3: skipping (not found): ", csv_path)
-        return(NULL)
-      }
-      read_csv(csv_path, show_col_types = FALSE) |>
-        mutate(date = as.Date(date), month = as.integer(format(date, "%m")), zone = zone, threshold = thresh)
-    }))
-  }))
-
-  if (nrow(all_data) == 0) {
-    message("Figure S3: no Results.csv files found -- skipping.")
+  if(!file.exists(data_path)){
+    message("Figure S3: shared data file not found (", data_path,
+           ") -- run Figure_5_seasonal_analysis() first. Skipping.")
     return(invisible(FALSE))
   }
 
-  seasonal_data <- all_data |>
-    filter(month %in% c(6L, 7L, 8L, 11L, 12L, 1L)) |>
-    mutate(season = case_when(month %in% c(6L, 7L, 8L) ~ "Summer (JJA)",
-                              month %in% c(11L, 12L, 1L) ~ "Winter (NDJ)"),
-           zone = factor(zone, levels = zones, labels = zone_title(zones)),
-           threshold = factor(threshold, levels = c("dynamic", "static"), labels = c("Dynamic", "Static"))) |>
-    select(date, zone, threshold, season, all_of(names(metrics))) |>
-    pivot_longer(cols = names(metrics), names_to = "metric", values_to = "value") |>
-    mutate(metric = factor(metric, levels = names(metrics), labels = unname(metrics)))
+  variable_display <- c(
+    plume_area    = "Plume area (km²)",
+    SPM_mass      = "SPM mass (t)",
+    compactness   = "Compactness",
+    alongcoast_km = "Along-coast drift (km)",
+    flow          = "River discharge (m³ s⁻¹)",
+    wind          = "Wind speed (m s⁻¹)",
+    tide          = "Tidal range (m)",
+    wave          = "Wave height (m)",
+    current       = "Current speed (m s⁻¹)"
+  )
 
-  p <- ggplot(seasonal_data, aes(x = season, y = value, fill = threshold)) +
-    geom_boxplot(outlier.size = 0.5, outlier.alpha = 0.4, position = position_dodge(0.75)) +
-    facet_grid(metric ~ zone, scales = "free_y") +
+  long_data <- readr::read_csv(data_path, show_col_types = FALSE)
+
+  # Same dynamic-threshold-only scale as Figure_5_seasonal_analysis(), so the
+  # two figures' y-axes are directly comparable.
+  scale_range <- long_data |>
+    dplyr::filter(threshold == "dynamic") |>
+    dplyr::summarise(range_min = min(value, na.rm = TRUE), range_max = max(value, na.rm = TRUE),
+                     .by = c(zone, variable))
+
+  df <- long_data |>
+    dplyr::left_join(scale_range, by = c("zone", "variable")) |>
+    dplyr::mutate(pct = 100 * (value - range_min) / (range_max - range_min),
+                  zone = factor(zone, levels = zones, labels = zone_title(zones)),
+                  month = factor(month, levels = 1:12, labels = month.abb),
+                  variable = factor(variable, levels = names(variable_display), labels = unname(variable_display)),
+                  threshold = factor(threshold, levels = c("dynamic", "static"), labels = c("Dynamic", "Static")))
+
+  box_stats <- df |>
+    dplyr::filter(category == "property") |>
+    dplyr::summarise(
+      ymin = min(pct, na.rm = TRUE), lower = stats::quantile(pct, 0.25, na.rm = TRUE),
+      middle = stats::median(pct, na.rm = TRUE), upper = stats::quantile(pct, 0.75, na.rm = TRUE),
+      ymax = max(pct, na.rm = TRUE),
+      .by = c(zone, variable, month, threshold)
+    )
+
+  p_properties <- ggplot(box_stats, aes(x = month, ymin = ymin, lower = lower, middle = middle, upper = upper, ymax = ymax,
+                                        fill = threshold)) +
+    geom_boxplot(stat = "identity", position = position_dodge(0.75), width = 0.65, linewidth = 0.3) +
+    facet_grid(variable ~ zone, scales = "free_x") +
     scale_fill_manual(values = c("Dynamic" = "#2166ac", "Static" = "#d6604d"), name = "Threshold") +
-    labs(x = NULL, y = NULL) +
-    theme_bw(base_size = 10) +
-    theme(strip.text = element_text(size = 8), legend.position = "bottom",
-         axis.text.x = element_text(angle = 20, hjust = 1), panel.grid.minor = element_blank())
+    labs(x = NULL, y = "% of zone's own observed dynamic-threshold range") +
+    theme_bw(base_size = 9) +
+    theme(strip.text.y = element_text(angle = 0, size = 7), strip.text.x = element_text(size = 9),
+         axis.text.x = element_text(angle = 45, hjust = 1, size = 6), legend.position = "bottom",
+         panel.grid.minor = element_blank())
 
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-  ggsave(file.path(main_folder, "Figure_S3.png"), p, width = 14, height = 12, dpi = 150)
-  message("Wrote Figure_S3.png (", nrow(seasonal_data), " observations across available zones and thresholds)")
+  save_plot_as_png(p_properties, "Figure_S3", width = 12, height = 9, path = main_folder)
+
+  message("Wrote Figure_S3.png (plume properties only, monthly dynamic-vs-static comparison)")
   invisible(TRUE)
 }
 

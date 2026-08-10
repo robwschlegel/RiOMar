@@ -1,7 +1,8 @@
 # func/compute_wave_category_lagged_correlation.R
 #
-# Manuscript Figure 5 (func/figure.R::Figure_5_driver_comparison()) shows,
-# per zone: (left) a scatter of daily plume area vs. river flow with an OLS
+# Supplementary Fig. daily_flow (func/figure.R::Figure_S_daily_flow(), formerly
+# manuscript Figure 5 before the seasonal-analysis section repurposed that
+# slot) shows, per zone: (left) a scatter of daily plume area vs. river flow with an OLS
 # fit; (right) the lagged correlation between the two daily series (plume
 # lagged 0-14 days behind flow), with the lag of maximum correlation marked.
 # Robert asked for the same analysis for wave height, restricted separately

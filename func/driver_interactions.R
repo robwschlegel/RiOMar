@@ -103,8 +103,13 @@ source("func/multi.R")
 # plume_dir: path to the panache output root (e.g. "output/panache/dynamic").
 #            Passed to util.R::load_plume_ts() so the correct threshold run
 #            is used.
+# month_filter: NULL (default) keeps every day of the year, as for the
+#            annual analysis. An integer 1-12 restricts the matrix to that
+#            calendar month only, across all years -- used by
+#            run_monthly_driver_interactions_analysis() below to refit the
+#            same six-step sequence within each month's data subset.
 
-build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic"){
+build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic", month_filter = NULL){
 
   meta <- get_zone_meta(zone_name = zone_name)
 
@@ -115,12 +120,16 @@ build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic")
   df_current <- load_driver("current", meta) |> dplyr::select(date, current = value, current_dir)
   df_wave    <- load_driver("wave", meta) |> dplyr::select(date, wave_height = value, wave_dir)
 
-  df_plume |>
+  df <- df_plume |>
     dplyr::left_join(df_flow, by = "date") |>
     dplyr::left_join(df_tide, by = "date") |>
     dplyr::left_join(df_wind, by = "date") |>
     dplyr::left_join(df_current, by = "date") |>
-    dplyr::left_join(df_wave, by = "date") |>
+    dplyr::left_join(df_wave, by = "date")
+
+  if(!is.null(month_filter)) df <- dplyr::filter(df, lubridate::month(date) == month_filter)
+
+  df |>
     dplyr::mutate(zone = zone_name, .before = "date",
                   # Categorical (8-octant) form of direction, since direction
                   # matters as much or more than magnitude for wind/wave/
@@ -357,14 +366,15 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
 
 # Runner: execute all steps for one set of plume results ---------------------
 
-run_full_analysis <- function(plume_dir, stats_dir, fig_path){
+run_full_analysis <- function(plume_dir, stats_dir, fig_path, month_filter = NULL){
 
   if(!dir.exists(stats_dir)) dir.create(stats_dir, recursive = TRUE)
 
-  message("[", Sys.time(), "] Step 0/6: building daily driver matrices for ", length(zones), " zones (", plume_dir, ")...")
+  message("[", Sys.time(), "] Step 0/6: building daily driver matrices for ", length(zones), " zones (", plume_dir,
+          if(!is.null(month_filter)) paste0(", month ", month_filter) else "", ")...")
 
   # Step 0: build driver matrices
-  driver_matrices <- purrr::map(zones, ~ build_driver_matrix(.x, plume_dir = plume_dir)) |>
+  driver_matrices <- purrr::map(zones, ~ build_driver_matrix(.x, plume_dir = plume_dir, month_filter = month_filter)) |>
     purrr::set_names(zones)
 
   # Save daily combined tables
@@ -481,4 +491,66 @@ run_driver_interactions_analysis <- function(){
 
   message("func/driver_interactions.R::run_driver_interactions_analysis() complete.")
   invisible(TRUE)
+}
+
+
+# Monthly entry point (sec:seasonal_methods) ---------------------------------
+# Re-runs the same six-step sequence independently within each calendar
+# month's data subset, dynamic threshold only (the static-threshold pass is
+# not repeated here -- Figure S3's dynamic-vs-static comparison only needs
+# the boxplot-distribution data prepared in func/figure.py, not these
+# driver-interaction results). Each month's full run_full_analysis() output
+# (GLM comparison, GAM summary + figure, regime stats, per-metric models, RF
+# importance/H-statistic) is kept on disk under output/STATS/monthly/<MM>/
+# for anyone who wants the detail; summarise_monthly_driver_dominance() below
+# then distils just the dominant driver per zone per month into the compact
+# Supplementary table manuscript.tex actually shows.
+
+run_monthly_driver_interactions_analysis <- function(){
+  purrr::walk(1:12, function(m){
+    mm <- sprintf("%02d", m)
+    message("== Driver interactions: month ", mm, " (dynamic threshold) ==")
+    run_full_analysis(
+      plume_dir    = "output/panache/dynamic",
+      stats_dir    = file.path("output/STATS/monthly", mm),
+      fig_path     = file.path("figures/ARTICLE/FIGURE_S7/monthly", paste0("Figure_S7_month_", mm, ".png")),
+      month_filter = m
+    )
+  })
+
+  dominance <- summarise_monthly_driver_dominance()
+  readr::write_csv(dominance, "output/STATS/monthly_driver_dominance_summary.csv")
+
+  message("func/driver_interactions.R::run_monthly_driver_interactions_analysis() complete.")
+  invisible(TRUE)
+}
+
+# Aggregates the 12 output/STATS/monthly/<MM>/ directories written above into
+# a single per-zone-per-month "which driver dominates" summary: the term with
+# the largest GAM F-statistic (driver_gam_summary.csv) and the driver with
+# the largest random-forest permutation importance (driver_rf_importance.csv),
+# cross-checked against each other the same way the annual analysis treats
+# GAM and RF as a cross-check pair. This is deliberately not the full
+# GLM/GAM/RF coefficient dump each month's run_full_analysis() already
+# writes -- that detail stays on disk, unsummarised, for anyone who wants it.
+summarise_monthly_driver_dominance <- function(monthly_stats_root = "output/STATS/monthly"){
+  months <- sprintf("%02d", 1:12)
+
+  purrr::map_dfr(months, function(mm){
+    stats_dir <- file.path(monthly_stats_root, mm)
+    gam_file <- file.path(stats_dir, "driver_gam_summary.csv")
+    rf_file  <- file.path(stats_dir, "driver_rf_importance.csv")
+    if(!file.exists(gam_file) || !file.exists(rf_file)) return(NULL)
+
+    gam_top <- readr::read_csv(gam_file, show_col_types = FALSE) |>
+      dplyr::slice_max(F, n = 1, by = "zone") |>
+      dplyr::select(zone, gam_top_term = term, gam_top_F = F, gam_top_p = p)
+
+    rf_top <- readr::read_csv(rf_file, show_col_types = FALSE) |>
+      dplyr::slice_max(importance, n = 1, by = "zone") |>
+      dplyr::select(zone, rf_top_driver = driver, rf_top_importance = importance)
+
+    dplyr::full_join(gam_top, rf_top, by = "zone") |>
+      dplyr::mutate(month = as.integer(mm), .before = 1)
+  })
 }

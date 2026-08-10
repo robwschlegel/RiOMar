@@ -7,7 +7,7 @@
 # =============================================================================
 
 
-import os, sys, pickle, re, glob, subprocess, json
+import os, sys, re, glob, subprocess, json
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -19,7 +19,7 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (load_csv_files, path_to_fill_to_where_to_save_satellite_files, order_zones)
+from util import (load_csv_files, order_zones)
 from panache.plume_algorithm import (Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask,
                                      derive_masks_from_bathymetry)
 from panache.utils import define_parameters, align_bathymetry
@@ -133,34 +133,31 @@ def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_fi
     save_insitu_stations_for_plot(folder_where_to_save_Figure_1_data)
     
     
-def load_and_save_regional_maps_for_plot(where_are_saved_regional_maps, where_to_save_the_figure, dates_for_each_zone) :
+def load_and_save_regional_maps_for_plot(where_to_save_the_figure, dates_for_each_zone) :
 
     folder_where_to_save_regional_zone_maps_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
     os.makedirs(folder_where_to_save_regional_zone_maps_data, exist_ok = True)
-    
-    path_to_regional_maps = {key : (path_to_fill_to_where_to_save_satellite_files( os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', key) )
-                                       .replace('[DATA_SOURCE]/[PARAMETER]/[SENSOR]/[ATMOSPHERIC_CORRECTION]/[TIME_FREQUENCY]',
-                                                'SEXTANT/SPM/merged/Standard/MAPS/DAILY')
-                                       .replace('[YEAR]/[MONTH]/[DAY]', f'{date[:4]}/{date}.pkl')) 
-                               for key, date in dates_for_each_zone.items()}
-    
-    for key, path_to_map in path_to_regional_maps.items() : 
-    
-        coordinates_of_the_map = define_parameters(key)    
-    
-        with open(path_to_map, 'rb') as f:
-            ds = pickle.load(f)['Basin_map']['map_data']  
-            
-            SPM_map = (ds
-                       .sel(lat=slice(coordinates_of_the_map['lat_range_of_plume_area'][0],
-                                      coordinates_of_the_map['lat_range_of_plume_area'][1]),
-                            lon=slice(coordinates_of_the_map['lon_range_of_plume_area'][0],
-                                      coordinates_of_the_map['lon_range_of_plume_area'][1]))
-                       .to_dataframe()
-                       .reset_index())
-            
-            SPM_map.to_csv(folder_where_to_save_regional_zone_maps_data + f"/{key}.csv")
-            
+
+    for key, date in dates_for_each_zone.items() :
+
+        coordinates_of_the_map = define_parameters(key)
+
+        zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{key}.json")
+        with open(zone_config_path) as f:
+            zone_config = json.load(f)
+
+        date_ts = pd.Timestamp(date)
+        nc_path = glob.glob(os.path.join(zone_config['input_path'], f'{date_ts.year}', f'{date_ts.month:02d}', f'{date_ts.day:02d}', '*.nc'))[0]
+
+        SPM_map_da = load_map_data(nc_path,
+                                   lon_range=tuple(coordinates_of_the_map['lon_range_of_plume_area']),
+                                   lat_range=tuple(coordinates_of_the_map['lat_range_of_plume_area']),
+                                   variable_name=zone_config['variable_name'])
+
+        SPM_map = SPM_map_da.to_dataframe().reset_index()
+
+        SPM_map.to_csv(folder_where_to_save_regional_zone_maps_data + f"/{key}.csv")
+
     save_insitu_stations_for_plot(folder_where_to_save_regional_zone_maps_data)
 
 
@@ -209,15 +206,14 @@ def dates_for_each_zone() :
 # =============================================================================
 
 
-def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, where_to_save_the_figure):
+def Figure_1(where_are_saved_satellite_data, where_to_save_the_figure):
     save_files_for_Figure_1(where_are_saved_satellite_data,
                             where_to_save_the_figure,
                             mean_spm_path=os.path.join(proj_dir, "output", "STATS", "mean_spm_national.nc"),
                             coordinates_of_the_map={"lat_min": 42, "lat_max": 51.5, "lon_min": -6, "lon_max": 8})
 
     # The four regional zoomed insets are built inside Figure_1() in figure.R.
-    load_and_save_regional_maps_for_plot(where_are_saved_regional_maps,
-                                         where_to_save_the_figure,
+    load_and_save_regional_maps_for_plot(where_to_save_the_figure,
                                          dates_for_each_zone())
 
     # Run as a standalone Rscript process rather than via in-process rpy2
@@ -235,12 +231,11 @@ def Figure_1(where_are_saved_satellite_data, where_are_saved_regional_maps, wher
     )
 
 
-def regional_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure, include_station_points=True):
-    
+def regional_zone_maps(where_to_save_the_figure, include_station_points=True):
+
     the_dates_for_each_zone = dates_for_each_zone()
 
-    load_and_save_regional_maps_for_plot(where_are_saved_regional_maps,
-                                         where_to_save_the_figure,
+    load_and_save_regional_maps_for_plot(where_to_save_the_figure,
                                          the_dates_for_each_zone)
 
     # Source the R script
@@ -283,12 +278,21 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
 
     parameters = build_plume_parameters(Zone)
 
-    path_to_the_satellite_file_to_use = os.path.join(where_are_saved_regional_maps, 'REGIONAL_MAPS', Zone, 'SEXTANT', 'SPM',
-                                                     'merged', 'Standard', 'MAPS', 'DAILY', Date[:4], f'{Date}.pkl')
+    zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
+    with open(zone_config_path) as f:
+        zone_config = json.load(f)
 
-    # Open and load the file (binary file assumed to contain data)
-    with open(path_to_the_satellite_file_to_use, 'rb') as f:
-        ds = pickle.load(f)['Basin_map']['map_data']
+    date_ts = pd.Timestamp(Date)
+    nc_path = glob.glob(os.path.join(zone_config['input_path'], f'{date_ts.year}', f'{date_ts.month:02d}', f'{date_ts.day:02d}', '*.nc'))[0]
+
+    # Crop to panache's own plume-area bbox (not regmap.py's wider
+    # Basin_limits) -- every bbox used anywhere in this pipeline comes from
+    # panache, no exceptions (per Robert, 2026-08-07). This narrows these
+    # panels' extent relative to the old REGIONAL_MAPS-pickle-based crop.
+    ds = load_map_data(nc_path,
+                       lon_range=tuple(parameters['lon_range_of_plume_area']),
+                       lat_range=tuple(parameters['lat_range_of_plume_area']),
+                       variable_name=zone_config['variable_name'])
 
     # Plume detection now runs at native resolution (panache no longer
     # coarsens internally), so no resolution reduction happens here either.
@@ -420,8 +424,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         check=True,
     )
 
-    regional_zone_maps(where_are_saved_regional_maps="output",
-                       where_to_save_the_figure="figures",
+    regional_zone_maps(where_to_save_the_figure="figures",
                        include_station_points=False)
 
 
@@ -537,16 +540,63 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
     robjects.r['Figure_S1_thresholds'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-# This is now shown in the supplement. 
-# Naming convention should be updates to reflect it's new position in the manuscript.
-def Figure_5_driver_comparison(where_to_save_the_figure, max_lag_daily=14):
+def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold,
+                               where_are_saved_plume_results_with_static_threshold,
+                               where_to_save_the_figure):
+    """manuscript Figure 5 (sec:results_seasonal): monthly boxplots of all
+    four plume properties and five drivers, per zone, dynamic threshold.
+    Each zone's values are rescaled to 0-100% of that zone's own observed
+    range so zones of very different raw magnitude (Table 5) are visually
+    comparable; real (unscaled) interquartile values are annotated as text
+    labels. All data loading (incl. the along-coast PCA projection, which
+    needs func/multi.R) and plotting happens in R -- see
+    func/figure.R::Figure_5_seasonal_analysis() -- following the same
+    no-Python-prep pattern already used by Figure_S3_seasonal_boxplots()
+    below. Writes a shared figures/ARTICLE/FIGURE_5/DATA/monthly_boxplot_data.csv
+    (both thresholds) that the updated Figure_S3_seasonal_boxplots() reads
+    back in, so the dynamic/static computation is only done once.
     """
-    Deprecated
+    figure_R_path = os.path.join(func_dir, 'figure.R')
+    robjects.r['source'](figure_R_path)
+    robjects.r['Figure_5_seasonal_analysis'](
+        where_are_saved_plume_results_with_dynamic_threshold=robjects.StrVector([where_are_saved_plume_results_with_dynamic_threshold]),
+        where_are_saved_plume_results_with_static_threshold=robjects.StrVector([where_are_saved_plume_results_with_static_threshold]),
+        where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+
+    # Composite the properties + drivers panel blocks into one Figure_5.png,
+    # same PIL vertical-stack pattern as Figure_3() -- keeps "one figure" as
+    # the deliverable while giving each panel block (4 zones x 4 properties,
+    # 4 zones x 5 drivers) room to stay readable rather than cramming a
+    # single 4x9 facet grid.
+    figure_5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_5")
+    properties_path = os.path.join(figure_5_dir, "Figure_5_properties.png")
+    drivers_path = os.path.join(figure_5_dir, "Figure_5_drivers.png")
+    if not (os.path.exists(properties_path) and os.path.exists(drivers_path)):
+        print("Figure_5_seasonal_analysis: R panel(s) missing, skipping composite.")
+        return
+
+    top = Image.open(properties_path)
+    bottom = Image.open(drivers_path)
+    width = max(top.width, bottom.width)
+    composite = Image.new("RGB", (width, top.height + bottom.height), "white")
+    composite.paste(top, (0, 0))
+    composite.paste(bottom, (0, top.height))
+    composite.save(os.path.join(figure_5_dir, "Figure_5.png"))
+
+
+def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):
+    """Supplementary "Sx. Lagged daily correlations" figure (fig:daily_flow):
+    daily plume area vs. river flow scatter + lagged correlation, per zone.
+    Restored 2026-08-07 under a new name/folder (FIGURE_S_daily_flow) after
+    Figure_5_seasonal_analysis() repurposed FIGURE_5/ -- this used to be
+    named Figure_5_driver_comparison() and write to the same path, which
+    would have silently swapped this Supplementary figure's content for the
+    new main-text Figure 5's.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    r_function = robjects.r['Figure_5_driver_comparison']
+    r_function = robjects.r['Figure_S_daily_flow']
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
                max_lag_daily=robjects.IntVector([max_lag_daily]))
 
@@ -630,23 +680,57 @@ def _prep_x11_weekly_data(where_are_saved_X11_results, data_dir):
     pd.concat(ts_river_data).to_csv(os.path.join(data_dir, 'DATA', 'ts_river_data.csv'))
 
 
+def _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static, data_dir):
+    """
+    Reads the weekly X11-decomposed plume-area time series for all 4 zones
+    under both detection thresholds and writes the combined
+    ts_plume_dynamic_vs_static.csv that figure.R's
+    compute_x11_dynamic_vs_static_plots() reads -- pairs the SAME variable
+    (plume area) under the two thresholds, rather than plume area against
+    river flow (which _prep_x11_weekly_data() above does for Figures 6/S2).
+    """
+    os.makedirs(os.path.join(data_dir, 'DATA'), exist_ok=True)
+    regions = ["BAY_OF_BISCAY", "GULF_OF_LION", "BAY_OF_SEINE", "SOUTHERN_BRITTANY"]
+
+    def _load_plume(where_are_saved_X11_results, threshold_label):
+        ts_plume_files = glob.glob(
+            os.path.join(where_are_saved_X11_results, '*', 'X11_ANALYSIS', 'area_of_the_plume_mask_in_km2',
+                         'SEXTANT_merged_Standard_WEEKLY.csv'))
+        dfs = []
+        for ts_file in ts_plume_files:
+            region_found = next((region for region in regions if region in ts_file), None)
+            ts_data = pd.read_csv(ts_file)
+            ts_data['Zone'] = region_found
+            ts_data['threshold'] = threshold_label
+            dfs.append(ts_data)
+        return pd.concat(dfs)
+
+    dynamic_df = _load_plume(where_are_saved_X11_results_dynamic, 'dynamic')
+    static_df = _load_plume(where_are_saved_X11_results_static, 'static')
+
+    pd.concat([dynamic_df, static_df]).to_csv(os.path.join(data_dir, 'DATA', 'ts_plume_dynamic_vs_static.csv'))
+
+
 def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static,
                               where_to_save_the_figure):
     """
-    Wires all 4 real manuscript
-    figures: Figure 6 + Figure S2 (dynamic), Figure S5 + Figure S6 (static,
-    supplementary robustness check mirroring 6/S2).
+    Wires all 5 real manuscript figures: Figure 6 + Figure S2 (dynamic
+    threshold, plume area vs. river flow), Figure S5 + Figure S6 +
+    Figure S6_residual (interannual/seasonal/residual, dynamic vs. static
+    threshold comparison of plume area itself).
     """
     figure_6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
     figure_s5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S5")
     _prep_x11_weekly_data(where_are_saved_X11_results_dynamic, figure_6_dir)
-    _prep_x11_weekly_data(where_are_saved_X11_results_static, figure_s5_dir)
+    _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static, figure_s5_dir)
 
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
     for r_func_name in ['Figure_6_x11_interannual', 'Figure_S2_x11_components',
-                       'Figure_S5_x11_interannual_static', 'Figure_S6_x11_components_static']:
+                       'Figure_S5_x11_interannual_dynamic_vs_static',
+                       'Figure_S6_x11_seasonal_dynamic_vs_static',
+                       'Figure_S6_x11_residual_dynamic_vs_static']:
         try:
             robjects.r[r_func_name](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
         except Exception as e:

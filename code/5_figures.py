@@ -17,8 +17,8 @@ func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
 import util, figure
-from figure import (Figure_1, Figure_2, Figure_3, Figure_3_panels, Figure_3_zone_maps, Figure_5_driver_comparison,
-                    Figure_7_driver_rose, Figure_9_gam_partial,
+from figure import (Figure_1, Figure_2, Figure_3, Figure_3_panels, Figure_3_zone_maps, Figure_5_seasonal_analysis,
+                    Figure_7_driver_rose, Figure_9_gam_partial, Figure_S_daily_flow,
                     Figure_4_S1_timeseries, Figure_X11_weekly_results, Figure_S3_seasonal_boxplots)
 
 # Set matplotlib backend to prevent plots from displaying
@@ -30,7 +30,6 @@ mpl.use('agg')
 # =============================================================================
 
 Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
-         where_are_saved_regional_maps = "output",
          where_to_save_the_figure = "figures")
 
 Figure_2(where_to_save_the_figure = "figures")
@@ -52,15 +51,20 @@ Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold = "o
                        where_are_saved_plume_results_with_fixed_threshold = "output/panache/static",
                        where_to_save_the_figure = "figures")
 
-# Figure 5: Seasonal analysis comprison of plume properties and drivers
-# My current thinking is to provide proportional boxplots of all plume properties and drivers per zone per month
-# Also somehow want to add in the trends per plume propoerty and driver for each monthly group
+# Figure 5 (sec:results_seasonal): monthly boxplots of all plume properties
+# and drivers, per zone, dynamic threshold; also writes the shared
+# dynamic+static data that Figure_S3_seasonal_boxplots() below re-reads, so
+# it must run before that call. Per-month trends themselves are computed
+# separately by func/compute_seasonal_trend.R (feeds manuscript Table 7),
+# not by this figure.
+Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
+                           where_are_saved_plume_results_with_static_threshold = "output/panache/static",
+                           where_to_save_the_figure = "figures")
 
-# Figure_5_driver_comparison(where_to_save_the_figure = "figures") # Deprecated code
-
-# Figure 6 (X11 interannual signal, dynamic threshold) + Figure S3 (X11
-# seasonal + residual, dynamic threshold) + Figure S6/S7 (static-threshold
-# equivalents, supplementary)
+# Figure 6 (X11 interannual signal, dynamic threshold, vs. river flow) +
+# Figure S2 (X11 seasonal + residual, dynamic threshold, vs. river flow) +
+# Figure S5/S6/S6_residual (X11 interannual/seasonal/residual, dynamic vs.
+# static threshold comparison of plume area itself)
 Figure_X11_weekly_results(where_are_saved_X11_results_dynamic = "output/panache/dynamic",
                           where_are_saved_X11_results_static = "output/panache/static",
                           where_to_save_the_figure = "figures")
@@ -76,9 +80,15 @@ Figure_9_gam_partial(where_to_save_the_figure = "figures")
 # ### Supplementary figures
 # =============================================================================
 
-# Figure S3: seasonal (JJA vs. NDJ) boxplots of plume metrics, dynamic vs.
+# Figure S3: monthly boxplots of plume properties and drivers, dynamic vs.
 # static threshold
 Figure_S3_seasonal_boxplots(where_to_save_the_figure = "figures")
+
+# Fig. daily_flow ("Sx. Lagged daily correlations"): daily plume area vs.
+# river flow scatter + lagged correlation, per zone. Restored 2026-08-07
+# under a new name/folder (previously Figure_5_driver_comparison(), writing
+# to FIGURE_5/ -- now repurposed for the new main-text Figure 5 above).
+Figure_S_daily_flow(where_to_save_the_figure = "figures")
 
 # Figure S4a/b: flow/plume/ROFI succession + lagged correlation. Previously
 # run by hand -- see func/ROFI.R::run_rofi_plume_succession().

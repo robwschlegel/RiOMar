@@ -307,9 +307,10 @@ load_driver <- function(driver_name, meta){
 # function below operates on.
 # combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"))
 # combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"), metric_col = "mass_SPM_in_the_plume_area_in_g_m", outlier_max = NULL)
-combine_plume_driver <- function(driver_name, meta, metric_col = "area_of_the_plume_mask_in_km2", outlier_max = 20000){
+combine_plume_driver <- function(driver_name, meta, metric_col = "area_of_the_plume_mask_in_km2", outlier_max = 20000,
+                                 plume_dir = "output/panache/dynamic"){
 
-  df_plume  <- load_plume_ts(meta$zone, metric_col = metric_col, outlier_max = outlier_max)  # util.R -- already handles gap-filling + outlier removal
+  df_plume  <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = metric_col, outlier_max = outlier_max)  # util.R -- already handles gap-filling + outlier removal
   df_driver <- load_driver(driver_name, meta)
 
   df <- dplyr::left_join(df_plume, df_driver, by = "date") |>
@@ -702,6 +703,71 @@ fit_wls_hac_trend <- function(weight_choice, val_col, date_col){
                  weight_choice = weight_choice, intercept = lm_model_HAC[1, 1],
                  slope = lm_model_HAC[2, 1], slope_se = lm_model_HAC[2, 2],
                  slope_t = lm_model_HAC[2, 3], slope_p = lm_model_HAC[2, 4])
+}
+
+# Per-calendar-month linear trend (sec:seasonal_methods), reusing the same
+# de-seasoning (deseason_doy()) and AR(1)/HAC estimator (fit_wls_hac_trend())
+# as the annual trend analysis (sec:linear_trends), refit separately within
+# each of the 12 calendar months rather than once across the full year.
+# De-seasoning is applied to the *complete* daily series before splitting by
+# month, not independently within each month's subset -- the day-of-year
+# climatological adjustment still varies systematically within a single
+# calendar month (e.g. early vs. late April), so skipping it per-month would
+# understate the trend's standard error the same way skipping it would for
+# the annual analysis. min_n is a floor on the number of valid days in a
+# given month across the whole record below which a trend is not attempted.
+# compute_monthly_trend(df$value, df$date)
+compute_monthly_trend <- function(value, date, min_n = 30){
+  value_adj <- deseason_doy(value, date)
+  month_vec <- month(date)
+  purrr::map_dfr(1:12, function(m){
+    idx <- which(month_vec == m & !is.na(value_adj))
+    if(length(idx) < min_n){
+      return(tibble::tibble(month = m, n = length(idx), time_step = NA_real_, start_year = NA_real_,
+                            weight_choice = "ar", intercept = NA_real_, slope = NA_real_,
+                            slope_se = NA_real_, slope_t = NA_real_, slope_p = NA_real_))
+    }
+    fit_wls_hac_trend("ar", value_adj[idx], date[idx]) |>
+      dplyr::mutate(month = m, .before = 1)
+  })
+}
+
+# Along-coast projection of the SPM-weighted plume centroid (sec:plume_analysis
+# Table 5 "Centroid" row): the along-coast direction is estimated per zone as
+# the first principal component of the centroid's own long-term scatter (in
+# local km, relative to the river mouth), then each day's centroid is
+# projected onto that axis. Shared by func/compute_seasonal_trend.R and
+# func/figure.R::Figure_5_seasonal_analysis(). NB: func/compute_shape_alongcoast_trend.R
+# has its own near-identical local compute_alongcoast() (slightly different
+# output shape: alongcoast_km/zone columns, a diagnostic message) predating
+# this shared version -- left as-is rather than refactored onto this helper,
+# since that script already feeds a validated, published Table 5 number and
+# isn't otherwise part of this change.
+# compute_alongcoast_ts("GULF_OF_LION", get_zone_meta(zone_name = "GULF_OF_LION"), "output/panache/dynamic")
+compute_alongcoast_ts <- function(zone, meta, plume_dir){
+  df <- read_csv(paste0(plume_dir, "/", zone, "/Results.csv"), show_col_types = FALSE) |>
+    dplyr::mutate(date = as.Date(date)) |>
+    dplyr::filter(!is.na(lon_weighted_centroid_of_the_plume_area), !is.na(lat_weighted_centroid_of_the_plume_area))
+
+  lat0 <- meta$mouth_lat; lon0 <- meta$mouth_lon
+  x_km <- (df$lon_weighted_centroid_of_the_plume_area - lon0) * 111.32 * cos(pi / 180 * lat0)
+  y_km <- (df$lat_weighted_centroid_of_the_plume_area - lat0) * 111.32
+
+  pc <- prcomp(cbind(x_km, y_km))
+  axis1 <- pc$rotation[, 1]
+  # Fix an arbitrary PCA sign convention: orient axis1 so its dominant
+  # component (whichever of east-west/north-south carries more of the
+  # loading) is positive, so "positive slope"/"positive value" has a stable,
+  # reportable geographic meaning (east or north) instead of flipping
+  # arbitrarily between calls.
+  dominant_is_x <- abs(axis1[1]) >= abs(axis1[2])
+  if((dominant_is_x && axis1[1] < 0) || (!dominant_is_x && axis1[2] < 0)) axis1 <- -axis1
+
+  alongcoast_km <- as.numeric(cbind(x_km, y_km) %*% axis1)
+
+  tibble::tibble(date = df$date, value = alongcoast_km) |>
+    complete(date = seq(min(date), max(date), by = "day")) |>
+    zoo::na.trim()
 }
 
 # Generalises flow.R::flow_plume_trend_plus(), which implemented this for

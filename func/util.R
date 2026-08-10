@@ -731,7 +731,12 @@ load_tide_gauge <- function(dir_name){
   m <- regmatches(units_str, regexec("^(seconds|hours|days) since (.+)$", units_str))[[1]]
   if(length(m) != 3) stop("Unrecognised time units string: ", units_str)
   multiplier <- switch(m[2], seconds = 1, hours = 3600, days = 86400)
-  raw <- ncvar_get(nc, time_var)
+  # as.vector() drops the dim attribute ncvar_get() leaves on a 1-D time
+  # variable (it returns a length-N array, not a bare vector) -- that dim
+  # attribute otherwise survives the as.POSIXct()/as.Date() conversion below
+  # and lands on every date column derived from it (load_wind_sub(),
+  # load_wave(), load_surface_current(), load_ROFI()).
+  raw <- as.vector(ncvar_get(nc, time_var))
   as.Date(as.POSIXct(raw * multiplier, origin = m[3], tz = "UTC"))
 }
 

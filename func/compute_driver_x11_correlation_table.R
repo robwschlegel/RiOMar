@@ -84,8 +84,10 @@ category_r_best_lag <- function(driver_name, meta, category, max_lag = MAX_LAG_D
 }
 
 # River flow reference column: the same whole-series best-lag search
-# manuscript Figure 5 itself reports (func/figure.R::Figure_5_driver_comparison(),
-# driver_plume_correlation() + slice_max()), not restricted to any category.
+# Supplementary Fig. daily_flow itself reports (func/figure.R::Figure_S_daily_flow(),
+# formerly manuscript Figure 5 before the seasonal-analysis section
+# repurposed that slot; driver_plume_correlation() + slice_max()), not
+# restricted to any category.
 daily_flow_r_best_lag <- function(meta, max_lag = MAX_LAG_DAILY){
   df <- combine_plume_driver("flow", meta)
   cor_df <- driver_plume_correlation(df, max_lag_daily = max_lag) |> dplyr::filter(timestep == "daily")

@@ -3,10 +3,8 @@
 
 source("func/multi.R")
 
-
-# NEW (2026-07-30) -----------------------------------------------------------
 # Flow / plume / ROFI succession analysis, implementing the points raised by
-# Maud (email, Dec 2025) about why the SPM turbid plume and the ROFI differ in
+# Maud about why the SPM turbid plume and the ROFI differ in
 # size and in the timing of their annual maximum:
 #   1. She measures the ROFI only from the estuary mouth seaward, so ~600 km^2
 #      of the Gironde estuary that our panache plume area *does* include is
@@ -21,21 +19,13 @@ source("func/multi.R")
 #      the succession flow peak -> plume peak -> ROFI peak to be visible if
 #      flow is added to the same time series. plot_flow_plume_rofi_succession()
 #      and rofi_plume_peak_lag() below do exactly that.
-# Two of her points are NOT addressed here because we lack the data for them:
-#   - Testing a lower ROFI threshold (e.g. 30 psu) to see the peak shift
-#     closer to the plume: data/ROFI/*.nc only stores ROFI_surface at
-#     whichever single threshold she already used to build it; recomputing at
-#     a different threshold needs new output from her salinity model, not
-#     something derivable from what we have.
-#   - Her river sediment-concentration-seasonality hypothesis (more sediment
-#     load in early winter after the dry season, letting the plume travel
-#     further before dropping below the SPM threshold): RiOMar has no
-#     in-river SPM concentration time series, only discharge.
+#   3. Her river sediment-concentration-seasonality hypothesis (more sediment
+#      load in early winter after the dry season, letting the plume travel
+#      further before dropping below the SPM threshold) is not tested because 
+#      this project has no in-river SPM concentration time series, only discharge.
 
 # Estuary bounding boxes, transcribed as-is from the mask_estuary Python code
-# Maud sent (email, Dec 2025) -- she keeps data on one side of these lat/lon
-# boxes and masks (excludes) the other side. Applied here to our own
-# lon/lat grid so the exclusion matches what she does to build her ROFI.
+# Maud sent. Applied here to the panache lon/lat grid so the exclusion matches.
 in_estuary <- function(lon, lat, zone_name){
   if(zone_name == "BAY_OF_BISCAY"){            # Gironde
     lat < 45.75 & lon > -1.06
@@ -120,8 +110,8 @@ combine_flow_plume_rofi <- function(meta, exclude_estuary = TRUE){
 # Single-zone dual-axis panel: plume area and ROFI extent share the left axis
 # (same units, km^2, so no rescaling between them), river flow gets the right
 # axis (rescaled onto the left axis's range, same convention as
-# plot_driver_plume_dual_axis()). Raw daily values only -- no STL smoothing --
-# so the flow -> plume -> ROFI succession Maud described is visible exactly
+# plot_driver_plume_dual_axis()). Raw daily values only so the 
+# flow -> plume -> ROFI succession Maud described is visible exactly
 # as observed, not as the interannual signal.
 plot_flow_plume_rofi_panel <- function(zone_name){
   meta <- get_zone_meta(zone_name = zone_name)
@@ -157,31 +147,14 @@ plot_flow_plume_rofi_succession <- function(){
     patchwork::plot_layout(guides = "collect") &
     theme(legend.position = "bottom")
 
-  # manuscript Figure S4a (renamed 2026-07-31 from S5a when the daily-vs-
-  # weekly Figure S2 was removed and every later supplementary figure
-  # renumbered down by one). Fixed 2026-08-01: manuscript.tex's
-  # \figplaceholder expected this at figures/flow_plume_rofi_succession.png
-  # (flat), but it was actually saved to figures/driver_comparison/ -- the
-  # figure was never actually rendering (silent \figplaceholder fallback).
-  # Now in its own FIGURE_S4/ folder, matching every other manuscript figure.
+  # manuscript Figure Sxxx (TODO: Update to match position in the manuscript supplement)
   if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
   ggsave(filename = "figures/ARTICLE/FIGURE_S4/flow_plume_rofi_succession.png", plot = full_plot, width = 12, height = 10, dpi = 300)
   invisible(full_plot)
 }
 
 # Lagged correlation between two of {plume_area, flow, rofi} at daily/
-# monthly/annual timesteps, for one zone. Replaces the annual-peak-date
-# method previously here: that method picked one calendar-max per variable
-# per hydro-year, which silently breaks whenever a hydro-year has more than
-# one flood pulse (each variable's max can then come from a *different*
-# pulse, so the resulting "lag" is just the gap between two unrelated
-# events -- not a real succession), and it only ever reported the 15th of
-# whichever month won, since it worked on monthly means. This instead reuses
-# the same driver_plume_timesteps()/lagged_correlation() machinery already
-# used for every other driver-vs-plume comparison in this pipeline (see
-# combine_plume_driver()/driver_plume_correlation()/run_driver_suite() in
-# func/multi.R) applied directly to the full daily series, so there's no
-# month-level binning and no cross-event mismatch risk.
+# monthly/annual timesteps, for one zone.
 # lagged_correlation(x, y, lag)'s "lag" is: the shift k (days) at which x
 # from k days earlier best correlates with y today -- e.g. x_col =
 # "plume_area", y_col = "rofi" asks at what k plume_area(t-k) best matches
@@ -192,17 +165,6 @@ plot_flow_plume_rofi_succession <- function(){
 # throughout) and multi-modal rather than one clean peak -- so its reported
 # peak lag is less trustworthy than the other pairs/zones, which do show a
 # single clear maximum well inside this window.
-#
-# FIXED 2026-08-05 (per Robert): driver_plume_correlation() used to lag
-# whatever it received in its `plume_area` argument and hold `value` fixed;
-# this function relied on that, feeding x_col into `plume_area` (the
-# leading slot) and y_col into `value` (the fixed slot) to get "x_col leads
-# y_col." driver_plume_correlation() has since been fixed to lag `value`
-# and hold `plume_area` fixed instead (its own callers had the opposite bug
-# -- see multi.R), so the mapping here is swapped to compensate: x_col now
-# goes into `value` (still the leading slot) and y_col into `plume_area`
-# (still the fixed slot). Net effect: "x_col leads y_col" still holds, and
-# every existing pairs/labels/lag number below is unchanged by this fix.
 rofi_plume_lagged_correlation <- function(zone_name, x_col, y_col, max_lag_daily = 90){
   meta <- get_zone_meta(zone_name = zone_name)
   df_wide <- combine_flow_plume_rofi(meta, exclude_estuary = TRUE)
@@ -212,12 +174,10 @@ rofi_plume_lagged_correlation <- function(zone_name, x_col, y_col, max_lag_daily
     dplyr::mutate(zone = zone_name, x = x_col, y = y_col, .before = "lag")
 }
 
+# TODO: Run this for each calendar month in order to show how the lagged correlations
+# change by month (i.e. season). Use different coloured lines to denote the months.
 # Visualise the daily-timestep lagged correlations across zones and variable
-# pairs: correlation-vs-lag curve per panel, with the lag of maximum r marked
-# in red -- monthly/annual timesteps are in the CSV but not plotted here,
-# since Maud's hypothesis is about within-season timing, which the 0-60 day
-# daily view already covers directly (monthly/annual use different lag
-# units and would need separate axes to compare properly).
+# pairs: correlation-vs-lag curve per panel, with the lag of maximum r marked in red
 plot_rofi_plume_lagged_correlation <- function(cor_stats){
   df_daily <- dplyr::filter(cor_stats, timestep == "daily")
   df_peak <- df_daily |> dplyr::slice_max(cor, n = 1, by = c(zone, pair_label))
@@ -232,8 +192,7 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
          subtitle = "Daily resolution; estuary excluded from plume area; red = lag of maximum r") +
     theme_bw()
 
-  # manuscript Figure S4b (renamed 2026-07-31, see Figure S4a above) -- same
-  # broken-path fix as Figure S4a above.
+  # manuscript Figure Sxxx (TODo: Fix numbering to match manuscript)
   if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
   ggsave(filename = "figures/ARTICLE/FIGURE_S4/rofi_plume_lagged_correlation.png", plot = pl, width = 12, height = 9, dpi = 300)
   invisible(pl)
