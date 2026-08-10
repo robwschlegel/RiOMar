@@ -11,10 +11,10 @@ order_zones <- function(zone_vector){
   zone_vector[order(match(zone_vector, ZONE_ORDER))]
 }
 
-# Generated from panache.utils.define_parameters() -- see
-# func/util.py::export_panache_zone_metadata(). Rerun that function whenever
-# panache's zone parameters change (see ~/panache/NEWS.md); do not hand-edit
-# metadata/panache_zone_metadata.csv.
+# Generated from panache.utils.define_parameters()
+# func/util.py::export_panache_zone_metadata()
+# Rerun that function whenever panache's zone parameters change
+# do not hand-edit: metadata/panache_zone_metadata.csv.
 panache_zone_metadata <- read_csv("metadata/panache_zone_metadata.csv", show_col_types = FALSE)
 
 river_mouths <- panache_zone_metadata |>
@@ -25,7 +25,8 @@ zones_bbox <- panache_zone_metadata |>
   dplyr::select(zone, lon_min, lon_max, lat_min, lat_max) |>
   mutate(zone_pretty = factor(zone,
                               levels = ZONE_ORDER,
-                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
+                              labels = c("Bay of Seine", "S. Brittany", 
+                                         "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
   dplyr::arrange(match(zone, ZONE_ORDER))
 
 # Create FRANCE bounding box with same structure as zones_bbox
@@ -33,7 +34,7 @@ france_bbox <- data.frame(zone = "FRANCE",
                           lon_min = c(-7.8),
                           lon_max = c(10.3),
                           lat_min  = c(41.2),
-                          lat_max = c(51.5)) 
+                          lat_max = c(51.5))
 
 
 # Tide gauge sub-daily QC ---------------------------------------------------
@@ -596,16 +597,7 @@ extract_pixels_all <- function(sat_name, zone_name = NULL){#, overwrite = FALSE)
 
 # Zone-specific hard ceiling on classified plume area (km^2), applied
 # unconditionally in load_plume_ts() below regardless of which metric_col is
-# requested. Replaces a single flat 20000 km^2 guard with one ceiling per
-# zone, chosen by hand (2026-07) from func/surface.R's suspicious-plume-day
-# scan against the daily plume-shape grids -- each zone's plausible maximum
-# extent differs by an order of magnitude (e.g. the Gulf of Lion's shelf vs.
-# the Seine's), so a single global cutoff was either too loose for the Seine
-# or too tight for the Gulf of Lion. BAY_OF_SEINE's ceiling in particular is
-# deliberately tight (2500 km^2): this zone is the most turbid, so its
-# dynamic threshold is the most prone to spilling into open-ocean pixels,
-# and it's better to lose several real high-area days than keep the
-# spillover ones.
+# requested.
 plume_area_ceiling <- c(BAY_OF_BISCAY = 12000, BAY_OF_SEINE = 2500,
                         GULF_OF_LION = 10000, SOUTHERN_BRITTANY = 6000)
 
@@ -615,12 +607,7 @@ plume_area_ceiling <- c(BAY_OF_BISCAY = 12000, BAY_OF_SEINE = 2500,
 # so this is the one place a different plume metric -- e.g. mass_SPM_in_the_
 # plume_area_in_g_m -- needs to be wired in). `outlier_max` is only a
 # sensible guard for the area column (20000 km^2 is physically implausible
-# for these zones); pass NULL to skip it for other metrics. The
-# plume_area_ceiling cap above is applied to area_of_the_plume_mask_in_km2
-# first and unconditionally, before metric_col is even selected -- so it
-# takes effect no matter which metric is ultimately requested, while every
-# other Results.csv column (mean_SPM, mass, centroids, confidence, n_pixel)
-# is left exactly as read, even on a day whose area gets nulled here.
+# for these zones); pass NULL to skip it for other metrics.
 load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic",
                           metric_col = "area_of_the_plume_mask_in_km2", outlier_max = 20000){
   file_name <- paste0(plume_dir, "/", zone, "/Results.csv")
@@ -629,8 +616,10 @@ load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic",
       dplyr::mutate(date = as.Date(date)) |>
       dplyr::select(date:confidence_index_in_perc) |>
       complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
-      dplyr::mutate(area_of_the_plume_mask_in_km2 = ifelse(area_of_the_plume_mask_in_km2 > plume_area_ceiling[[zone]],
-                                                            NA, area_of_the_plume_mask_in_km2)) |>
+      dplyr::mutate(plume_area_ceiling_exceeded = area_of_the_plume_mask_in_km2 > plume_area_ceiling[[zone]],
+                    dplyr::across(-c(date, plume_area_ceiling_exceeded),
+                                  ~ ifelse(plume_area_ceiling_exceeded, NA, .))) |>
+      dplyr::select(-plume_area_ceiling_exceeded) |>
       dplyr::rename(plume_area = !!rlang::sym(metric_col))
     if(!is.null(outlier_max)) df_plume <- dplyr::mutate(df_plume, plume_area = ifelse(plume_area > outlier_max, NA, plume_area))
     df_plume <- df_plume |>
@@ -640,11 +629,7 @@ load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic",
   return(df_plume)
 }
 
-# Get the (lon, lat) footprint of the daily plume mask for a zone. Panache's
-# 2026-07-17 rewrite replaced the old per-day CSV output (one file per date,
-# lon/lat columns) with a single PlumeMasks.nc cube per zone/threshold
-# (plume_mask(time, lat, lon), 0/1) -- read that instead, keeping only pixels
-# flagged as plume. plume_dir mirrors load_plume_ts()'s static/dynamic switch.
+# Get the (lon, lat) footprint of the daily plume mask for a zone
 load_plume_surface <- function(zone, plume_dir = "output/panache/dynamic"){
   file_name <- paste0(plume_dir, "/", zone, "/PlumeMasks.nc")
   nc_dat <- nc_open(file_name)
@@ -724,39 +709,18 @@ load_tide_gauge <- function(dir_name){
 
 # Decode a NetCDF file's numeric time variable into Date, following the CF
 # "<seconds|hours|days> since <origin>" units convention used by every
-# NetCDF source read below. Replaces tidync's automatic CF time decoding
-# (see .nc_read_box() below for why tidync was dropped).
+# NetCDF source read below.
 .nc_time_to_date <- function(nc, time_var = "time"){
   units_str <- ncatt_get(nc, time_var, "units")$value
   m <- regmatches(units_str, regexec("^(seconds|hours|days) since (.+)$", units_str))[[1]]
   if(length(m) != 3) stop("Unrecognised time units string: ", units_str)
   multiplier <- switch(m[2], seconds = 1, hours = 3600, days = 86400)
-  # as.vector() drops the dim attribute ncvar_get() leaves on a 1-D time
-  # variable (it returns a length-N array, not a bare vector) -- that dim
-  # attribute otherwise survives the as.POSIXct()/as.Date() conversion below
-  # and lands on every date column derived from it (load_wind_sub(),
-  # load_wave(), load_surface_current(), load_ROFI()).
   raw <- as.vector(ncvar_get(nc, time_var))
   as.Date(as.POSIXct(raw * multiplier, origin = m[3], tz = "UTC"))
 }
 
 # Read one or more variables from a NetCDF file, cropped to a lon/lat box, as
-# a long (lon, lat, date, <var>...) tibble -- replaces
-# tidync::tidync() |> hyper_filter() |> hyper_tibble(). Switched from tidync
-# to ncdf4 throughout this repo (2026-07-31) because tidync's RNetCDF
-# dependency fails to load under rpy2's embedded R in this environment
-# ("RNetCDF.so: undefined symbol: nc_reclaim_data"), even though it loads
-# fine under a plain Rscript session; ncdf4 has no such conflict.
-# ncdf4::ncvar_get() returns arrays ordered (lon, lat, [depth,] time) for
-# every product read here. start/count reads only the lon/lat box directly
-# off disk -- a contiguous hyperslab, since lon_idx/lat_idx come from a
-# monotonic coordinate range -- instead of pulling the full spatial/time
-# extent into memory first and subsetting in R; tidync's hyper_filter() used
-# to push this same filter down to the read. Any dimension between lat and
-# time (e.g. GLORYS current files' single-level depth) is read as a bare
-# size-1 slice, which ncvar_get()'s default collapse_degen = TRUE then drops
-# automatically, leaving the same (lon, lat, time) shape regardless of
-# whether the file has that extra dimension.
+# a long (lon, lat, date, <var>...) tibble
 .nc_read_box <- function(file_name, var_names, lon_range, lat_range,
                          lon_var = "longitude", lat_var = "latitude", time_var = "time"){
   nc <- nc_open(file_name)
@@ -802,25 +766,7 @@ load_wind_sub <- function(file_name, lon_range, lat_range){
   return(wind_df)
 }
 
-# Load wave data (significant wave height + mean direction).
-# NB: unlike wind/current, VMDR (mean wave direction) is a raw angle, not
-# derived from vector components -- the pixel-box mean below is a plain
-# circular (unit-vector) mean over the lon/lat box, which avoids the 0/360
-# wrap-around problem a naive arithmetic mean would have *within this
-# function*. The same problem still exists one step upstream: the "_daily_"
-# source files are produced by cdo daymean directly on hourly VMDR, which
-# is an arithmetic (not circular) mean, so any day where wave direction
-# crosses the 0/360 wrap can already carry a biased wave_dir before it
-# reaches this function.
-# NB 2 (found 2026-07-31, pre-dates the tidync->ncdf4 migration; RESOLVED
-# 2026-07-31 by the WAVE data re-download): the Bay of Seine's wave file
-# (IBI_daily_199801_202601.nc) used to have no VMDR variable at all (VHM0 +
-# VTM02 only, unlike the other three zones' VHM0 + VMDR), an upstream
-# download gap. The re-download confirmed in that day's driver-interactions
-# rerun added VMDR for the Bay of Seine too, so wave_dir is no longer
-# expected to be all-NA for that zone -- the has_wave_dir fallback below
-# (and plot_driver_rose()'s all-NA handling) is kept as defensive code in
-# case a future re-download regresses, not because the gap is current.
+# Load wave data (significant wave height + mean direction)
 load_wave <- function(file_name, lon_range, lat_range){
   nc <- nc_open(file_name)
   has_wave_dir <- "VMDR" %in% names(nc$var)
@@ -855,11 +801,7 @@ load_wave <- function(file_name, lon_range, lat_range){
     dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
 }
 
-# Load GLORYS surface current (eastward/northward velocity) data for a zone.
-# NB: current data through 2024-12-31 lives in the combined historical file
-# ("glorys_199301_202412.nc"); 2025 onward is a separate uo/vo-only file
-# ("glorys_uo_vo_202501_202512.nc") -- both live under
-# ~/pCloudDrive/data/GLORYS/<zone_name>/ and are combined here.
+# Load GLORYS surface current (eastward/northward velocity) data for a zone
 load_surface_current <- function(zone_name, lon_range, lat_range){
   dir_name <- path.expand(paste0("~/pCloudDrive/data/GLORYS/", zone_name))
   current_df <- dplyr::bind_rows(
@@ -896,24 +838,6 @@ load_ROFI <- function(file_name){
   df_ROFI <- tibble::tibble(zone = zone, date = date, ROFI_surface = rofi_surface) |>
     dplyr::summarise(ROFI_surface = mean(ROFI_surface, na.rm = TRUE), .by = c("zone", "date"))
   return(df_ROFI)
-}
-
-# Load X11 results
-load_X11 <- function(zone_name, plume = TRUE){
-  if(plume){
-    file_name <- paste0("output/FIXED_THRESHOLD/GULF_OF_LION/X11_ANALYSIS/area_of_the_plume_mask_in_km2/SEXTANT_merged_Standard_WEEKLY.csv")
-  } else {
-    file_name <- paste0("output/FIXED_THRESHOLD/GULF_OF_LION/X11_ANALYSIS/river_flow/River_flow___WEEKLY.csv")
-  }
-  suppressMessages(
-    df_X11 <- read_csv(file_name) |> 
-      dplyr::rename(date = dates) |> 
-      complete(date = seq(min(date), max(date), by = "day")) |> 
-      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area)) |> 
-      zoo::na.trim() |> 
-      mutate(zone = zone, .before = "date")
-  )
-  return(df_X11)
 }
 
 
@@ -971,23 +895,6 @@ stl_single <- function(x_col, out_col, start_date, ts_freq = 365.25){
   } else {
     stop("'out_col' not recognised")
   }
-}
-
-# Load panache time series based on river mouth name
-plume_clim_calc <- function(zone){
-  file_name <- paste0("output/FIXED_THRESHOLD/",zone,"/PLUME_DETECTION/Time_series_of_DAILY_plume_area_and_SPM_threshold.csv")
-  suppressMessages(
-    df_plume <- read_csv(file_name) |> 
-      dplyr::select(date:confidence_index_in_perc) |>
-      complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |> 
-      dplyr::rename(plume_area = area_of_the_plume_mask_in_km2) |> 
-      mutate(plume_area = ifelse(plume_area > 20000, NA, plume_area),) |> 
-      zoo::na.trim() |> 
-      mutate(zone = zone, .before = "date")
-  )
-  df_clim <- heatwaveR::ts2clm(df_plume, x = date, y = plume_area, climatologyPeriod = c(min(df_plume$date), max(df_plume$date))) |> 
-    dplyr::select(zone, date, doy, plume_area, seas, thresh) |> 
-    dplyr::rename(plume_seas = seas, plume_thresh = thresh)
 }
 
 # The full suite of stats to calculate
@@ -1056,7 +963,8 @@ make_pretty_title <- function(df){
                                   zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
                                   zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
                                   zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
-    mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany", "Bay of Biscay", "Gulf of Lion")))
+    mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany", 
+                                                      "Bay of Biscay", "Gulf of Lion")))
   return(df)
 }
 
@@ -1104,14 +1012,14 @@ save_plot_as_png <- function(plot, name = c(), width = 14, height = 8.27, path, 
   
   graphics.off()
   
-  if (name %>% length() == 1) {
+  if (name |> length() == 1) {
     if (dir.exists(path) == FALSE) {dir.create(path, recursive = TRUE)}
     path <- file.path(path, paste(name, ".png", sep = ""))
   } else {
     path <- paste(path, ".png", sep = "")
   }
   
-  if (grepl(pattern = ".png.png", path)) {path <- path %>% gsub(pattern = ".png.png", replacement = ".png", x = .)}
+  if (grepl(pattern = ".png.png", path)) {path <- path |> gsub(pattern = ".png.png", replacement = ".png", x = .)}
   
   png(path, width = width, height = height, units = "in", res = res)
   print(plot)
@@ -1120,9 +1028,6 @@ save_plot_as_png <- function(plot, name = c(), width = 14, height = 8.27, path, 
 }
 
 # Comparison plots
-# df <- df_pretty; var_1 <- "plume_inter"; var_2 <- "flow_inter"
-# df <- df_seas; var_1 <- "plume_seas"; var_2 <- "flow_seas"
-# colour_1 <- "brown"; colour_2 <- "blue"; label_1 <- "Plume area (km^2)"; label_2 <- "River flow (m^3 s-1)"; file_stub <- "comparison_plume_flow_inter"
 comparison_plot <- function(df, var_1, var_2, colour_1, colour_2, label_1, label_2){
   
   if(grepl("seas", var_1)){
@@ -1341,7 +1246,7 @@ validation_lm_plots <- function(var_combi, sat_name, median_base, df, df_stats){
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
                                 labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")))
   
-    # Get y-axis label and units
+  # Get y-axis label and units
   if(df_var_sub$variable[1] == "TEMP"){
     y_lab <- "Temperature (°C)"
     y_lim <- c(4, 32)
@@ -1414,8 +1319,6 @@ validation_lm_plots <- function(var_combi, sat_name, median_base, df, df_stats){
 }
 
 # The figure code wrapper
-# var_name = "SPM"; match_up_df = zone_in_situ_SEXTANT; match_up_stats = stats_SEXTANT; sat_name = "SEXTANT"
-# sat_name = sat_name; match_up_df = zone_all_in_situ; match_up_stats = zone_all_in_situ_stats; var_combi = unique(zone_all_in_situ_stats$variable_combi)[1]
 validation_plots <- function(var_combi, sat_name, median_base, match_up_df, match_up_stats){
 
   # Subset datasets for chosen variable
@@ -1806,7 +1709,6 @@ validate_sensor <- function(sat_name, median_base){
 
 # Create pretty tables
 # file_path = "output/MATCH_UP_DATA/FRANCE/STATISTICS/"; sat_name = "SEXTANT"
-# TODO: This will need to be modified to work with other satellite products
 validation_tables <- function(file_path, sat_name) {
   
   # Load all output stats
