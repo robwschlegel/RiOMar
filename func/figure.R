@@ -18,13 +18,35 @@ source("func/util.R")
 # For zone_meta/get_zone_meta/combine_plume_driver/plot_driver_rose/etc
 source("func/multi.R")
 
+# util.R::load_tide_gauge() calls tide.R::.load_tide_raw()
+source("func/tide.R")
+
 
 # Utils -------------------------------------------------------------------
 
 # High-resolution France coastline (GADM level-0 boundary, ~216,000 vertices)
-# for Figure 1's zoomed insets
-#
+# for Figure 1's zoomed insets.
 # Loaded lazily (library(sf) is NOT called at file scope
+
+# Four evenly spaced y-axis ticks from 0 up to a "nice" round number at or
+# above max(x) (2026-08-10, manuscript TODO for Figure 4). Unlike base
+# pretty()/scales::breaks_pretty(), which restrict the step to a 1/2/5 x
+# 10^k multiple, a step of 2.5 x 10^k is allowed too -- needed so 3 equal
+# steps can land close to max(x) (e.g. max ~7500 -> steps of 2500, giving
+# 0, 2500, 5000, 7500) rather than overshooting it by a lot. Picks the
+# *smallest* nice step whose 3 steps still reach max(x) -- picking whichever
+# nice step is merely closest to max(x)/3 (tried first) can round down and
+# clip real data above the top tick, found via the Gulf of Lion's actual
+# max area (8987 km^2) rounding down to a 7500 top tick.
+four_ticks_from_zero <- function(x){
+  max_val <- max(x, na.rm = TRUE)
+  raw_step <- max_val / 3
+  magnitude <- 10 ^ floor(log10(raw_step))
+  candidate_steps <- c(1, 2, 2.5, 5, 10) * magnitude
+  step <- min(candidate_steps[candidate_steps * 3 >= max_val])
+  seq(0, step * 3, by = step)
+}
+
 .high_res_france_coastline_cache <- NULL
 high_res_coastline <- function(){
   if(is.null(.high_res_france_coastline_cache)){
@@ -74,10 +96,17 @@ create_the_basic_map <- function(map_df, var_name,
   the_map <- the_base_map +
 
     (if(high_res_coast){
-      ## High-resolution France coastline (GADM), for zoomed insets where
-      ## the crude "world" database coastline is visibly blocky -- other
-      ## countries aren't relevant at inset zoom levels, so no world layer.
-      geom_polygon(data = high_res_coastline(), aes(x = long, y = lat, group = group), color = 'grey60', fill = 'black')
+      ## High-resolution France coastline (GADM) layered over the crude
+      ## "world" database coastline -- other countries stay at world
+      ## resolution (irrelevant at inset zoom levels, and not worth the
+      ## GADM detail on the national map either), but France's own coast
+      ## gets the same GADM detail whether this is a zoomed inset or the
+      ## main national panel (2026-08-10: previously main-panel-only used
+      ## the crude coastline for France too).
+      list(
+        geom_polygon(data = map_data("world"), aes(x=long, y=lat, group = group), color = 'grey60', fill = 'black'),
+        geom_polygon(data = high_res_coastline(), aes(x = long, y = lat, group = group), color = 'grey60', fill = 'black')
+      )
     } else {
       list(
         ## First layer: worldwide map
@@ -103,21 +132,21 @@ create_the_basic_map <- function(map_df, var_name,
   
 }
 
-plot_x11_river_and_plume <- function(X11_data, type_of_signal) {
-  
+plot_x11_river_and_plume <- function(X11_data, type_of_signal, show_axis_titles = TRUE) {
+
   unique_years <- X11_data$dates |> year() |> unique()
-  
-  X11_data_for_plot <- X11_data |> 
+
+  X11_data_for_plot <- X11_data |>
     rename(river_flow = !!sym(paste(type_of_signal, "signal_river_flow", sep = "_")),
-           plume_area = !!sym(paste(type_of_signal, "signal_plume_area", sep = "_"))) |> 
+           plume_area = !!sym(paste(type_of_signal, "signal_plume_area", sep = "_"))) |>
     select(dates, river_flow, plume_area)
-  
+
   if (type_of_signal %in% c("Seasonal", "Residual")) {
-    X11_data_for_plot <- X11_data_for_plot |> 
+    X11_data_for_plot <- X11_data_for_plot |>
       mutate(river_flow = river_flow + mean(X11_data$Raw_signal_river_flow, na.rm = T),
              plume_area = plume_area + mean(X11_data$Raw_signal_plume_area, na.rm = T))
   }
-  
+
   scaling_factor <- sec_axis_adjustement_factors(var_to_scale = X11_data_for_plot$river_flow,
                                                  var_ref = X11_data_for_plot$plume_area)
 
@@ -128,23 +157,23 @@ plot_x11_river_and_plume <- function(X11_data, type_of_signal) {
 
   the_plot <- ggplot() +
 
-    geom_point(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") +
-    geom_path(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown", linewidth = 1) +
 
-    geom_point(data = X11_data_for_plot, aes(x = dates, y = river_flow_scaled), color = "blue") +
-    geom_path(data = X11_data_for_plot, aes(x = dates, y = river_flow_scaled), color = "blue") +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = river_flow_scaled), color = "blue", linewidth = 1) +
 
     annotate("text", x = min(X11_data_for_plot$dates), y = Inf, label = r_label,
             hjust = 0, vjust = 1.5, size = 6, colour = "black") +
 
     scale_x_date(name = "",
-                 breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(), 
+                 breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(),
                  labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist()) +
-    
-    scale_y_continuous(name = "Plume area (km²)",
-                       sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
-                                           name = "River flow (m³/s)")) +
-    
+
+    scale_y_continuous(name = if(show_axis_titles) "Plume area (km²)" else NULL,
+                       breaks = scales::breaks_pretty(n = 3),
+                       sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
+                                           name = if(show_axis_titles) "River flow (m³/s)" else NULL,
+                                           breaks = scales::breaks_pretty(n = 3))) +
+
     labs(title = paste(type_of_signal, "signal")) +
     ggplot_theme() +
     
@@ -187,7 +216,8 @@ Figure_1 <- function(where_to_save_the_figure) {
 
   RIOMAR_limits <- zones_bbox |> dplyr::rename(Zone = zone)
 
-  basic_map <- create_the_basic_map(map_df = SPM_map, var_name = 'SPM', in_situ_fixed_station = insitu_stations, log_scale = FALSE)
+  basic_map <- create_the_basic_map(map_df = SPM_map, var_name = 'SPM', in_situ_fixed_station = insitu_stations,
+                                    log_scale = FALSE, legend_limits = c(0.1, 10), high_res_coast = TRUE)
 
   points_for_the_legend <- data.frame(SOURCE = c('SOMLIT', 'REPHY'),
                                       longitude = c(0,0),
@@ -224,40 +254,65 @@ Figure_1 <- function(where_to_save_the_figure) {
           legend.spacing.x = unit(5, "cm"))
 
   # Zoomed regional insets, floating near each river mouth -------------------
+  # `primary` marks the river carrying the bulk of each zone's discharge
+  # (Seine: only river in its zone; Loire vs. Vilaine and Gironde vs.
+  # Charente/Sevre: the named river the manuscript treats as the zone's main
+  # discharge series throughout; Grand vs. Petit Rhone: Grand Rhone carries
+  # ~90% of the Rhone's combined discharge, see the Rhone-apportionment note
+  # in CLAUDE.md) -- used below to bold/enlarge the primary river's label
+  # and de-emphasise the others.
   zone_river_mouths <- tibble::tribble(
-    ~zone,               ~river,         ~lat,   ~lon,
-    "BAY_OF_SEINE",       "Seine",        49.43,  0.145,
-    "SOUTHERN_BRITTANY",  "Loire",        47.24, -2.2,
-    "SOUTHERN_BRITTANY",  "Vilaine",      47.48, -2.55,
-    "BAY_OF_BISCAY",      "Gironde",      45.61, -1.14,
-    "BAY_OF_BISCAY",      "Charente",     45.98, -1.15,
-    "BAY_OF_BISCAY",      "Sevre",        46.26, -1.2,
-    "GULF_OF_LION",       "Grand\nRhône",  43.32,  4.85,
-    "GULF_OF_LION",       "Petit\nRhône",  43.45,  4.39
+    ~zone,               ~river,         ~lat,   ~lon,    ~primary,
+    "BAY_OF_SEINE",       "Seine",        49.43,  0.145,  TRUE,
+    "SOUTHERN_BRITTANY",  "Loire",        47.24, -2.2,    TRUE,
+    "SOUTHERN_BRITTANY",  "Vilaine",      47.48, -2.55,   FALSE,
+    "BAY_OF_BISCAY",      "Gironde",      45.61, -1.14,   TRUE,
+    "BAY_OF_BISCAY",      "Charente",     45.98, -1.15,   FALSE,
+    "BAY_OF_BISCAY",      "Sevre",        46.26, -1.2,    FALSE,
+    "GULF_OF_LION",       "Grand\nRhône",  43.32,  4.85,  TRUE,
+    "GULF_OF_LION",       "Petit\nRhône",  43.45,  4.39,  FALSE
+  )
+
+  # One geom_label() call per river (not vectorised per zone) so each
+  # label's position can be tuned individually against the actual coastline
+  # geometry, rather than sharing a single per-zone offset (2026-08-10; the
+  # old shared-offset approach clipped the Seine label against its inset's
+  # right edge and crowded the two Rhone labels together).
+  mouth <- function(river_name) dplyr::filter(zone_river_mouths, river == river_name)
+  river_label_style <- function(river_name, primary, ...){
+    geom_label(data = mouth(river_name), aes(x = lon, y = lat, label = river),
+              fontface = if(primary) "bold" else "plain", size = if(primary) 8 else 6, ...)
+  }
+
+  river_labels_by_zone <- list(
+    BAY_OF_SEINE = list(
+      river_label_style("Seine", primary = TRUE, colour = "white", hjust = 1, nudge_x = -0.05, nudge_y = 0.08)
+    ),
+    SOUTHERN_BRITTANY = list(
+      river_label_style("Loire", primary = TRUE, colour = "white", hjust = 0, nudge_x = 0.08, nudge_y = 0.00),
+      river_label_style("Vilaine", primary = FALSE, colour = "white", hjust = 0, nudge_x = 0.08, nudge_y = 0.05)
+    ),
+    BAY_OF_BISCAY = list(
+      river_label_style("Gironde", primary = TRUE, colour = "black", hjust = 1, nudge_x = -0.30, nudge_y = 0.05),
+      river_label_style("Charente", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.30, nudge_y = 0.05),
+      river_label_style("Sevre", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.30, nudge_y = 0.05)
+    ),
+    GULF_OF_LION = list(
+      river_label_style("Grand\nRhône", primary = TRUE, colour = "black", hjust = 0, nudge_x = -0.08, nudge_y = -0.22),
+      # Nudged down/left rather than up: the Gulf of Lion inset's data only
+      # extends to lat 43.6 (0.15 above this river's own mouth), so an
+      # upward nudge clips the label against the panel's top edge.
+      river_label_style("Petit\nRhône", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.05, nudge_y = -0.10)
+    )
   )
 
   build_zone_inset <- function(zone_name) {
     zone_SPM <- file.path(main_folder_of_Figure_1, "DATA", paste0(zone_name, ".csv")) |> read_csv()
     mouths <- zone_river_mouths |> dplyr::filter(zone == zone_name)
 
-    # Nudges are tuned per zone (not per river) -- within a zone the mouths
-    # are spaced far enough apart that one offset direction clears the
-    # coastline/other mouths for every river in that zone; see the lat/lon
-    # spread in zone_river_mouths above.
-    river_label <- switch(zone_name,
-      "BAY_OF_SEINE" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "white",
-                                  fontface = "bold", size = 8, hjust = 0, nudge_x = 0.03, nudge_y = 0.08),
-      "SOUTHERN_BRITTANY" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "white",
-                                       fontface = "bold", size = 8, hjust = 0, nudge_x = 0.08, nudge_y = 0.00),
-      "BAY_OF_BISCAY" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "black",
-                                   fontface = "bold", size = 8, hjust = 1, nudge_x = -0.30, nudge_y = 0.05),
-      "GULF_OF_LION" = geom_label(data = mouths, aes(x = lon, y = lat, label = river), colour = "black",
-                                  fontface = "bold", size = 8, hjust = 0, nudge_x = -0.10, nudge_y = -0.15)
-    )
-
-    create_the_basic_map(zone_SPM, 'SPM', log_scale = FALSE, high_res_coast = TRUE) +
+    create_the_basic_map(zone_SPM, 'SPM', log_scale = FALSE, legend_limits = c(0.1, 10), high_res_coast = TRUE) +
       geom_point(data = mouths, aes(x = lon, y = lat), shape = 4, colour = "red", size = 4, stroke = 2) +
-      river_label +
+      river_labels_by_zone[[zone_name]] +
       ggtitle(zone_title(zone_name)) +
       theme_void() +
       theme(legend.position = "none",
@@ -425,17 +480,67 @@ Figure_3_panel <- function(where_to_save_the_figure, name_of_the_plot) {
           plot.tag.position = c(0.02, 0.98))
 
   if (name_of_the_plot == "B") {
-    points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure, 
+    points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure,
                                                                 "DATA", "B_points_used_for_finding_SPM_threshold.csv"))
-    all_points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure, 
+    all_points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure,
                                                                     "DATA", "B_all_points_used_for_finding_SPM_threshold.csv"))
     the_map <- the_map +
       geom_point(data = all_points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "grey50", size = 3) +
       geom_point(data = points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "red", size = 3)
   }
-  
+
+  # 20 m bathymetric exclusion boundary (2026-08-10, manuscript TODO):
+  # `shallow` is all-False outside the Gulf of Lion (the only zone using
+  # this general exclusion), so geom_contour() draws nothing there.
+  if (any(SPM_map_data$shallow)) {
+    the_map <- the_map +
+      geom_contour(data = SPM_map_data, aes(x = lon, y = lat, z = as.numeric(shallow)),
+                  breaks = 0.5, colour = "white", linewidth = 1, linetype = "dashed")
+  }
+
   save_plot_as_png(the_map, name_of_the_plot, width = 12, height = 8, path = where_to_save_the_figure)
-  
+
+}
+
+
+# New methodology panel (2026-08-10, manuscript TODO), inserted between the
+# A-D worked-example row and the per-zone f)-i) grid: shows the actual SPM
+# value found at every point tested along panel B's transects, plotted
+# against distance from the river mouth, coloured by whether the point
+# survived the gradient-cutoff filter (an edge candidate) or was rejected,
+# together with the near-mouth minimal/maximal_threshold bounds and the
+# final derived SPM_threshold. Makes explicit what panel B's grey/red points
+# only show spatially: how the gradient cutoff and quantile bounds actually
+# combine to pick the scene-specific plume-edge threshold.
+Figure_3_transect_panel <- function(where_to_save_the_figure) {
+
+  transect_values <- read_csv(file.path(where_to_save_the_figure, "DATA", "B_transect_values.csv"))
+  threshold_values <- read_csv(file.path(where_to_save_the_figure, "DATA", "B_threshold_values.csv"))
+
+  ref_lines <- tibble::tribble(
+    ~label,               ~value,
+    "maximal_threshold",  threshold_values$maximal_threshold[1],
+    "minimal_threshold",  threshold_values$minimal_threshold[1],
+    "SPM_threshold",      threshold_values$SPM_threshold[1]
+  )
+  ref_line_styles <- c(maximal_threshold = "dotted", minimal_threshold = "dashed", SPM_threshold = "solid")
+  ref_line_labels <- c(maximal_threshold = "maximal_threshold", minimal_threshold = "minimal_threshold",
+                       SPM_threshold = "SPM_threshold (final)")
+
+  the_plot <- ggplot(transect_values, aes(x = distance_km, y = analysed_spim)) +
+    geom_point(aes(colour = kept), size = 2, alpha = 0.7) +
+    scale_colour_manual(values = c(`TRUE` = "red", `FALSE` = "grey60"),
+                        labels = c(`TRUE` = "kept (edge candidate)", `FALSE` = "rejected"), name = NULL) +
+    geom_hline(data = ref_lines, aes(yintercept = value, linetype = label), colour = "black", linewidth = 1) +
+    scale_linetype_manual(values = ref_line_styles, labels = ref_line_labels, name = NULL) +
+    labs(x = "Distance from river mouth (km)", y = "SPM (g m⁻³)", tag = "e)") +
+    ggplot_theme() +
+    theme(plot.tag = element_text(size = 35, face = "bold"), plot.tag.position = c(0.01, 0.98),
+          legend.position = "right", text = element_text(size = 20, colour = "black"),
+          axis.text = element_text(size = 18, colour = "black"))
+
+  save_plot_as_png(the_plot, "transect_panel", width = 24, height = 8, path = where_to_save_the_figure)
+
 }
 
 
@@ -453,13 +558,14 @@ Figure_3_zone_maps <- function(where_to_save_the_figure) {
     llply(read_csv)
 
   # Continues the lettering from Figure_3_panel()'s methodology row (A-D)
+  # and Figure_3_transect_panel()'s e) (2026-08-10)
   # -- zone_meta$zone is already arranged by ZONE_ORDER (north to south:
   # Seine, Southern Brittany, Bay of Biscay, Gulf of Lion), matching the
   # order these zones are listed in the Figure 3 caption.
-  panel_letters <- c("e)", "f)", "g)", "h)")
+  panel_letters <- c("f)", "g)", "h)", "i)")
   SPM_maps <- purrr::map2(SPM_map_data, panel_letters, function(SPM_map, letter) {
 
-    create_the_basic_map(SPM_map, 'plume', legend_limits = c(0.1,10), high_res_coast = TRUE) +
+    the_map <- create_the_basic_map(SPM_map, 'plume', legend_limits = c(0.1,10), high_res_coast = TRUE) +
       guides(fill = guide_colorbar(barwidth = 60, barheight = 2, title.position = "top")) +
       theme(legend.position = "top",
             legend.title = element_text(angle = 0, hjust = 0.5),
@@ -467,6 +573,17 @@ Figure_3_zone_maps <- function(where_to_save_the_figure) {
             plot.tag = element_text(size = 35, face = "bold"),
             plot.tag.position = c(0.02, 0.98)) +
       labs(tag = letter)
+
+    # 20 m bathymetric exclusion boundary (2026-08-10, manuscript TODO):
+    # `shallow` is all-False outside the Gulf of Lion (the only zone using
+    # this general exclusion), so geom_contour() draws nothing at e)-g).
+    if (any(SPM_map$shallow)) {
+      the_map <- the_map +
+        geom_contour(data = SPM_map, aes(x = lon, y = lat, z = as.numeric(shallow)),
+                    breaks = 0.5, colour = "white", linewidth = 1, linetype = "dashed")
+    }
+
+    the_map
 
   })
   
@@ -487,8 +604,13 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
 
   # Plume-area trend line uses the same AR(1)/HAC-weighted fit as Table 5's
-  # "Surface area" row -- see func/compute_area_trend.R.
+  # "Surface area" row -- see func/compute_area_trend.R. SPM mass trend line
+  # (2026-08-10, manuscript TODO) uses the same estimator via
+  # func/compute_mass_spm_trend.R -- "daily" timestep row only, since that
+  # file also has a "monthly" row per zone.
   area_trend <- read_csv("output/STATS/area_trend_summary.csv", show_col_types = FALSE)
+  mass_trend <- read_csv("output/STATS/mass_SPM_trend_summary.csv", show_col_types = FALSE) |>
+    filter(timestep == "daily")
 
   # Panel order follows ZONE_ORDER (north to south), matching every other
   # multi-zone figure/table in the project -- dlply()'s default grouping
@@ -509,10 +631,35 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
     if (index_to_remove |> length() > 0) {df_zone <- df_zone[-index_to_remove,]}
 
     zone_trend <- area_trend |> filter(zone == df_zone$Zone[1]) |>
-      mutate(trend_label = paste0("Trend: ", sprintf("%+.2f", slope_annualised), " km² yr⁻¹ (",
+      mutate(trend_label = paste0("Area trend: ", sprintf("%+.2f", slope_annualised), " km² yr⁻¹ (",
                                   ifelse(slope_p < 0.001, "p < 0.001", paste0("p = ", signif(slope_p, 2))), ")"))
 
-    df_merged <- df_zone |> filter(Satellite_sensor == "merged")
+    zone_mass_trend <- mass_trend |> filter(zone == df_zone$Zone[1]) |>
+      mutate(trend_label = paste0("Mass trend: ", sprintf("%+.1f", slope_annualised_t_yr), " t yr⁻¹ (",
+                                  ifelse(slope_p < 0.001, "p < 0.001", paste0("p = ", signif(slope_p, 2))), ")"))
+
+    df_merged <- df_zone |> filter(Satellite_sensor == "merged") |>
+      mutate(mass_t = mass_SPM_in_the_plume_area_in_g_m / 1000)  # despite the column name, source values are kg
+
+    # Mass plotted on a secondary axis, scaled into area's own range --
+    # same dual-axis pattern as multi.R::plot_x11_river_and_plume().
+    scaling_factor <- sec_axis_adjustement_factors(var_to_scale = df_merged$mass_t,
+                                                    var_ref = df_merged$area_of_the_plume_mask_in_km2)
+    df_merged <- df_merged |> mutate(mass_scaled = mass_t * scaling_factor$diff + scaling_factor$adjust)
+    zone_mass_trend <- zone_mass_trend |>
+      mutate(intercept_scaled = intercept_t * scaling_factor$diff + scaling_factor$adjust,
+             slope_scaled = slope_t * scaling_factor$diff)
+
+    r_value <- cor(df_merged$area_of_the_plume_mask_in_km2, df_merged$mass_t, use = "complete.obs")
+    r_label <- paste0("r (area, mass) = ", sprintf("%.2f", r_value))
+
+    area_breaks <- four_ticks_from_zero(df_merged$area_of_the_plume_mask_in_km2)
+    mass_breaks <- four_ticks_from_zero(df_merged$mass_t)
+    # mass_breaks' own top tick, transformed into area's scale -- the ylim
+    # below must clear whichever axis' rounded-up top tick is higher, or
+    # that axis' last tick/label gets clipped off the top of the panel.
+    mass_breaks_top_scaled <- max(mass_breaks) * scaling_factor$diff + scaling_factor$adjust
+    ylim_top <- max(max(area_breaks), mass_breaks_top_scaled)
 
     the_ts_plot_wo_modis <- ggplot() +
       geom_point(data = df_merged,
@@ -520,20 +667,36 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
       geom_path(data = df_merged,
                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") +
       geom_abline(data = zone_trend, aes(intercept = intercept, slope = slope),
-                  colour = "black", linewidth = 1.2, linetype = "dashed") +
-      geom_text(data = zone_trend, aes(x = -Inf, y = Inf, label = trend_label), inherit.aes = FALSE,
-               hjust = -0.03, vjust = 1.5, size = 6, colour = "black") +
+                  colour = "red3", linewidth = 1.2, linetype = "dashed") +
+
+      geom_point(data = df_merged, aes(x = date, y = mass_scaled), color = "steelblue4") +
+      geom_path(data = df_merged, aes(x = date, y = mass_scaled), color = "steelblue4") +
+      geom_abline(data = zone_mass_trend, aes(intercept = intercept_scaled, slope = slope_scaled),
+                  colour = "steelblue4", linewidth = 1.2, linetype = "dashed") +
+
+      # Trend labels stacked in the upper-right corner (area above mass);
+      # the area/mass correlation sits top-centre.
+      geom_text(data = zone_trend, aes(x = Inf, y = Inf, label = trend_label), inherit.aes = FALSE,
+               hjust = 1.03, vjust = 1.5, size = 6, colour = "red3") +
+      geom_text(data = zone_mass_trend, aes(x = Inf, y = Inf, label = trend_label), inherit.aes = FALSE,
+               hjust = 1.03, vjust = 3.2, size = 6, colour = "steelblue4") +
+      annotate("text", x = mean(range(df_merged$date, na.rm = TRUE)), y = Inf, label = r_label,
+              hjust = 0.5, vjust = 1.5, size = 6, colour = "black") +
 
       scale_x_date(name = "",
                    breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(),
                    labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist(),
                    expand = c(0.01,0.01)) +
 
-      coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
+      coord_cartesian(ylim = c(0, ylim_top)) +
       # No per-panel y-axis title -- a single shared label is added once via
       # annotate_figure() on the assembled composite below, rather than
-      # repeating "Plume area (km²)" on all four stacked panels.
-      scale_y_continuous(name = NULL) +
+      # repeating "Plume area (km²)"/"SPM mass (t)" on all four stacked
+      # panels. 4 ticks per axis, always starting at 0 (2026-08-10,
+      # manuscript TODO) -- four_ticks_from_zero() above.
+      scale_y_continuous(name = NULL, breaks = area_breaks,
+                         sec.axis = sec_axis(transform = ~ (. - scaling_factor$adjust) / scaling_factor$diff,
+                                             name = NULL, breaks = mass_breaks)) +
       labs(x = "", title = zone_title(df_zone$Zone[1])) +
       ggplot_theme() +
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
@@ -544,7 +707,11 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
             plot.title = element_text(size=30, colour = "black"),
             text = element_text(size=25, colour = "black"),
             axis.text = element_text(size=20, colour = "black"),
-            axis.title = element_text(size=30, colour = "black"))
+            axis.title = element_text(size=30, colour = "black"),
+            axis.text.y.left = element_text(color = "red3"),
+            axis.ticks.y.left = element_line(color = "red3"),
+            axis.text.y.right = element_text(color = "steelblue4"),
+            axis.ticks.y.right = element_line(color = "steelblue4"))
     
     
     the_ts_plot_with_modis <- the_ts_plot_wo_modis + 
@@ -567,13 +734,9 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   
   save_plot_as_png(annotate_figure(
                      ggarrange(plotlist = SPM_map_ts |> llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
-                     left = text_grob("Plume area (km²)", rot = 90, size = 30)),
+                     left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "red3"),
+                     right = text_grob("SPM mass (t)", rot = -90, size = 30, color = "steelblue4")),
                    'Figure_4', width = 20, height = 16, path = main_folder)
-
-  save_plot_as_png(annotate_figure(
-                     ggarrange(plotlist = SPM_map_ts |> llply(function(x) {x$w_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
-                     left = text_grob("Plume area (km²)", rot = 90, size = 30)),
-                   'Figure_7_merged_modis', width = 20, height = 16, path = main_folder)
 }
 
 
@@ -683,35 +846,29 @@ Figure_5_seasonal_analysis <- function(where_are_saved_plume_results_with_dynami
                   month = factor(month, levels = 1:12, labels = month.abb),
                   variable = factor(variable, levels = names(variable_display), labels = unname(variable_display)))
 
-  box_stats <- df |>
-    dplyr::summarise(
-      raw_lower = stats::quantile(value, 0.25, na.rm = TRUE), raw_upper = stats::quantile(value, 0.75, na.rm = TRUE),
-      ymin = min(pct, na.rm = TRUE), lower = stats::quantile(pct, 0.25, na.rm = TRUE),
-      middle = stats::median(pct, na.rm = TRUE), upper = stats::quantile(pct, 0.75, na.rm = TRUE),
-      ymax = max(pct, na.rm = TRUE),
-      .by = c(zone, variable, month, category)
-    ) |>
-    dplyr::mutate(label = sprintf("%.3g–%.3g", raw_lower, raw_upper))
+  # Heatmap of monthly medians (2026-08-10, replacing a 9-row-tall boxplot
+  # grid that was far too large to publish -- see manuscript/TODO.md and
+  # three rendered alternatives Robert chose between). One small zone x
+  # month heatmap per variable, all 9 (4 properties + 5 drivers) in a single
+  # 3x3 panel grid -- trades the boxplots' IQR/range detail for a figure
+  # that fits on one page; the full distributional detail (this exact
+  # median plus IQR/range) is still in monthly_boxplot_data.csv (written
+  # above) and, per month/zone/property/driver, in Table 7
+  # (output/STATS/monthly_trend_compact_summary.csv) for anyone who needs it.
+  heat_stats <- df |>
+    dplyr::summarise(median_pct = stats::median(pct, na.rm = TRUE), .by = c(zone, variable, month))
 
-  plot_group <- function(box_data){
-    ggplot(box_data, aes(x = month)) +
-      geom_boxplot(aes(ymin = ymin, lower = lower, middle = middle, upper = upper, ymax = ymax),
-                  stat = "identity", fill = "#2166ac", alpha = 0.6, width = 0.6, linewidth = 0.3) +
-      geom_text(aes(y = pmin(108, ymax + 6), label = label), size = 1.7, angle = 90, hjust = 0) +
-      facet_grid(variable ~ zone, scales = "free_x") +
-      coord_cartesian(ylim = c(0, 118), clip = "off") +
-      labs(x = NULL, y = "% of zone's own observed range (dynamic threshold)") +
-      theme_bw(base_size = 9) +
-      theme(strip.text.y = element_text(angle = 0, size = 7), strip.text.x = element_text(size = 9),
-           axis.text.x = element_text(angle = 45, hjust = 1, size = 6), panel.grid.minor = element_blank())
-  }
+  p_heatmap <- ggplot(heat_stats, aes(x = month, y = zone, fill = median_pct)) +
+    geom_tile(colour = "white", linewidth = 0.4) +
+    facet_wrap(~variable, ncol = 3) +
+    scale_fill_viridis_c(name = "Median\n% of range") +
+    labs(x = NULL, y = NULL) +
+    theme_bw(base_size = 13) +
+    theme(strip.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
+         axis.text.y = element_text(size = 10), panel.grid = element_blank())
 
-  p_properties <- plot_group(dplyr::filter(box_stats, category == "property"))
-  p_drivers    <- plot_group(dplyr::filter(box_stats, category == "driver"))
-
-  save_plot_as_png(p_properties, "Figure_5_properties", width = 12, height = 9, path = figure_5_dir)
-  save_plot_as_png(p_drivers, "Figure_5_drivers", width = 12, height = 10.5, path = figure_5_dir)
-  message("Wrote Figure_5_properties.png and Figure_5_drivers.png")
+  save_plot_as_png(p_heatmap, "Figure_5", width = 12, height = 10, path = figure_5_dir)
+  message("Wrote Figure_5.png")
   invisible(TRUE)
 }
 
@@ -849,33 +1006,59 @@ Figure_8_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/S
   # other figure in this file.
   source("func/driver_interactions.R")
 
-  main_folder_of_Figure_9 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_9")
-  if (!dir.exists(main_folder_of_Figure_9)) dir.create(main_folder_of_Figure_9, recursive = TRUE)
+  main_folder_of_Figure_8 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_*")
+  if (!dir.exists(main_folder_of_Figure_8)) dir.create(main_folder_of_Figure_8, recursive = TRUE)
 
   driver_labels <- c(flow = "River flow (m³ s⁻¹)", wind_spd = "Wind speed (m s⁻¹)",
                      wave_height = "Wave height (m)", current = "Current speed (m s⁻¹)")
+  n_drivers <- length(driver_labels)
 
-  plotlist <- purrr::map(zones, function(zone_name){
+  # No per-panel titles/axis titles here -- a title on only the first column
+  # of each row (the old approach) gives that panel a shorter plot area than
+  # its title-less row-mates, so the panels no longer line up vertically
+  # despite ggarrange's align = "v". Row/column labelling is added once,
+  # externally, after the grid is built (zone name per row below; x-axis
+  # title on the bottom row only, since every row in a column shares that
+  # driver's x-axis; single shared y-axis title via annotate_figure()).
+  zone_rows <- purrr::map(zones, function(zone_name){
     df <- readr::read_csv(file.path(stats_dir, paste0("daily_driver_matrix_", zone_name, ".csv")), show_col_types = FALSE)
     gam_model <- fit_gam(df)
     drivers_to_show <- intersect(names(driver_labels), available_drivers(df))
+    if(!setequal(drivers_to_show, names(driver_labels))) stop("Figure_8_gam_partial(): zone ", zone_name,
+      " does not have the full driver set (", paste(names(driver_labels), collapse = ", "),
+      "); the fixed 4-column grid assumes every zone does.")
 
-    zone_plots <- purrr::map(drivers_to_show, function(d){
+    purrr::map(drivers_to_show, function(d){
       curve <- gam_partial_effect(gam_model, d, df)
       ggplot(curve, aes(x = x, y = fit)) +
         geom_ribbon(aes(ymin = fit - 2 * se, ymax = fit + 2 * se), fill = "grey80", alpha = 0.5) +
         geom_line(colour = "black", linewidth = 1) +
-        labs(x = driver_labels[[d]], y = "Partial effect on plume area (km²)") +
+        labs(x = NULL, y = NULL) +
         theme(panel.border = element_rect(fill = NA, colour = "black"))
     })
-    # Only the row's first panel gets the zone name as a title.
-    zone_plots[[1]] <- zone_plots[[1]] + labs(title = zone_title(zone_name))
-    zone_plots
-  }) |> purrr::flatten()
+  })
 
-  full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = length(driver_labels), nrow = length(zones), align = "v")
+  # Bottom row only: one x-axis title per column.
+  zone_rows[[length(zones)]] <- purrr::map2(zone_rows[[length(zones)]], names(driver_labels),
+    function(p, d) p + labs(x = driver_labels[[d]]))
 
-  save_plot_as_png(full_plot, "Figure_9", width = 20, height = 16, path = main_folder_of_Figure_9)
+  panel_labels <- paste0(letters[seq_len(length(zones) * n_drivers)], ")")
+  # hjust/vjust pushed further in than Figure 7/S_daily_flow's convention
+  # (hjust=-0.3, vjust=1.3): this grid's panels are much smaller (4x4 vs.
+  # 2-column), so the same absolute offset landed the tag on top of the
+  # topmost y-axis tick label instead of clear of it (found 2026-08-10).
+  panel_grid <- ggpubr::ggarrange(plotlist = purrr::flatten(zone_rows), ncol = n_drivers, nrow = length(zones),
+                                  align = "hv", labels = panel_labels, font.label = list(size = 14, face = "bold"),
+                                  hjust = -0.8, vjust = 1.8)
+
+  row_labels <- ggpubr::ggarrange(plotlist = purrr::map(zones, ~ ggpubr::text_grob(zone_title(.x), face = "bold", size = 16, rot = 90)),
+                                  ncol = 1, nrow = length(zones))
+
+  full_plot <- ggpubr::annotate_figure(
+    ggpubr::ggarrange(row_labels, panel_grid, ncol = 2, widths = c(0.05, 1)),
+    left = ggpubr::text_grob("Partial effect on plume area (km²)", rot = 90, size = 20))
+
+  save_plot_as_png(full_plot, "Figure_8", width = 20, height = 16, path = main_folder_of_Figure_8)
 }
 
 
@@ -887,7 +1070,7 @@ Figure_8_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/S
 # Replaces the old Figures_8_9_10() (2026-08-01, deprecated): that function
 # also computed a "Raw" signal plot per zone that was never saved anywhere
 # (dead computation), dropped here.
-compute_x11_zone_plots <- function(data_dir){
+compute_x11_zone_plots <- function(data_dir, show_axis_titles = TRUE){
   plume_data <- data_dir |> file.path('DATA', 'ts_plume_data.csv') |> read_csv()
   river_data <- data_dir |> file.path('DATA', 'ts_river_data.csv') |> read_csv()
 
@@ -901,9 +1084,9 @@ compute_x11_zone_plots <- function(data_dir){
     X11_ts <- plume_data_region |> inner_join(river_data_region, by = "dates", suffix = c("_plume_area", "_river_flow"))
 
     zone_label <- zone_title(region)
-    list("Interannual" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Interannual') + labs(title = zone_label),
-        "Seasonal" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Seasonal') + labs(title = zone_label),
-        "Residual" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Residual') + labs(title = zone_label))
+    list("Interannual" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Interannual', show_axis_titles = show_axis_titles) + labs(title = zone_label),
+        "Seasonal" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Seasonal', show_axis_titles = show_axis_titles) + labs(title = zone_label),
+        "Residual" = plot_x11_river_and_plume(X11_ts, type_of_signal = 'Residual', show_axis_titles = show_axis_titles) + labs(title = zone_label))
 
   })
 }
@@ -915,11 +1098,18 @@ stack_x11_component <- function(zone_plots, component){
 }
 
 # manuscript Figure 6: X11 interannual (long-term) signal of plume area vs.
-# river flow, dynamic threshold (main results), all four zones.
+# river flow, dynamic threshold (main results), all four zones. Per-panel
+# axis titles are suppressed (show_axis_titles = FALSE) in favour of one
+# shared left/right label on the assembled composite, matching Figure 4's
+# convention (annotate_figure(), not a title repeated on all four panels).
 Figure_6_x11_interannual <- function(where_to_save_the_figure){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
-  zone_plots <- compute_x11_zone_plots(main_folder)
-  save_plot_as_png(stack_x11_component(zone_plots, "Interannual"), "Figure_6", width = 20, height = 16, path = main_folder)
+  zone_plots <- compute_x11_zone_plots(main_folder, show_axis_titles = FALSE)
+  save_plot_as_png(annotate_figure(
+                     stack_x11_component(zone_plots, "Interannual"),
+                     left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "brown"),
+                     right = text_grob("River flow (m³ s⁻¹)", rot = -90, size = 30, color = "blue")),
+                   "Figure_6", width = 20, height = 16, path = main_folder)
 }
 
 # Renders each of two X11-component stacks (e.g. Seasonal + Residual) to its
@@ -951,6 +1141,11 @@ Figure_S1_thresholds <- function(where_to_save_the_figure){
   SPM_map_data <- data_dir |> file.path('DATA', 'ts_data.csv') |> read_csv()
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
 
+  # Panel order follows ZONE_ORDER (north to south), matching Figure 4 and
+  # every other multi-zone figure/table -- dlply()'s default grouping would
+  # otherwise sort panels alphabetically.
+  SPM_map_data$Zone <- factor(SPM_map_data$Zone, levels = ZONE_ORDER)
+
   SPM_map_ts <- SPM_map_data |> filter(Satellite_sensor == "merged") |> dlply(.(Zone), function(df_zone) {
     
     unique_years <- df_zone$Years |> unique()
@@ -977,7 +1172,9 @@ Figure_S1_thresholds <- function(where_to_save_the_figure){
                    expand = c(0.01,0.01)) +
       
       coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
-      labs(y = "Plume area (km²)", x = "", title = zone_title(df_zone$Zone[1])) +
+      # No per-panel y-axis title -- a single shared label is added once via
+      # annotate_figure() on the assembled composite below, matching Figure 4.
+      labs(y = NULL, x = "", title = zone_title(df_zone$Zone[1])) +
       ggplot_theme() +
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
             plot.subtitle = element_text(hjust = 0.5),
@@ -1005,37 +1202,14 @@ Figure_S1_thresholds <- function(where_to_save_the_figure){
     
   })
   
-  save_plot_as_png(ggarrange(plotlist = SPM_map_ts, common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+  save_plot_as_png(annotate_figure(
+                     ggarrange(plotlist = SPM_map_ts, common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                     left = text_grob("Plume area (km²)", rot = 90, size = 30)),
                    'Figure_S1', width = 20, height = 16, path = main_folder)
 
 }
 
-# manuscript Figure S2: X11 seasonal + residual components, dynamic
-# threshold, all four zones -- the two components not shown in main Figure 6.
-# Shares Figure 6's DATA/ prep (data_dir points at FIGURE_6/, not FIGURE_S2/).
-# Renamed 2026-07-31 from Figure_S3_x11_components() when the daily-vs-weekly
-# Figure S2 was removed from the manuscript and every later supplementary
-# figure renumbered down by one (S3->S2, S4->S3, S5->S4, S6->S5, S7->S6).
-Figure_S2_x11_components <- function(where_to_save_the_figure){
-  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
-  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S2")
-  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-  zone_plots <- compute_x11_zone_plots(data_dir)
-  save_x11_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S2", main_folder)
-}
-
-# Plots one X11 component of plume area under the dynamic vs. static
-# detection threshold -- unlike plot_x11_river_and_plume() (which pairs two
-# different variables, plume area and river flow, on a dual axis), this
-# pairs the SAME variable under the two thresholds on a single axis (same
-# units, km²). Colour convention matches Figure S1 (dynamic = red3, static =
-# chartreuse4, alpha 0.5) so every threshold-comparison figure reads
-# consistently. See manuscript/TODO.md, "Figure Sx. X11 component time
-# series", 2026-08-07: this replaces Figure_S5_x11_interannual_static()/
-# Figure_S6_x11_components_static(), which paired static-threshold plume
-# area against river flow (the same pairing as Figures 6/S2, just with the
-# static series substituted in) rather than comparing the two thresholds
-# directly as requested.
+# Plots one X11 component of plume area under the dynamic vs. static thresholds
 plot_x11_dynamic_vs_static <- function(X11_data, type_of_signal) {
 
   unique_years <- X11_data$dates |> year() |> unique()

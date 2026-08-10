@@ -14,3 +14,5 @@ source("func/figure.R")
 for (letter in c("A", "B", "C", "D", "E")) {
   Figure_3_panel(where_to_save_the_figure = where_to_save_the_figure, name_of_the_plot = letter)
 }
+
+Figure_3_transect_panel(where_to_save_the_figure = where_to_save_the_figure)

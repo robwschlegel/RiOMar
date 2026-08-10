@@ -12,6 +12,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import geopandas as gpd
+import netCDF4 as nc
 from itertools import chain
 from functools import reduce
 from collections.abc import Mapping, Iterable
@@ -428,7 +429,16 @@ def load_csv_files(SOMLIT = False, REPHY = False,
             the_df['date'] = pd.to_datetime(the_df['date'], format = "%Y-%m-%d")
             data_dict[key] = the_df.loc[:,['date', 'debit']]
     
-        final_df = pd.concat(data_dict.values()).groupby("date", as_index=False).agg(Values=('debit', 'sum'), n_rivers=('debit', 'count'))
+        # n_rivers must count ROWS per date ('size'), not non-NaN values
+        # ('count') -- 'count' silently dropped the whole zone's flow on any
+        # date where even one tributary's debit was NaN (fixed 2026-08-10,
+        # found via the Bay of Seine: the Orne is 44.8% NaN, which was
+        # discarding valid Seine flow on the same dates and showing up as
+        # large gaps in Figure 6's river-flow line). 'sum' already skips NaN
+        # by default, so this now matches func/multi.R::load_river_flow()'s
+        # dplyr::n()/sum(na.rm=TRUE) semantics: a zone's flow is the sum of
+        # whichever of its rivers reported a numeric value that day.
+        final_df = pd.concat(data_dict.values()).groupby("date", as_index=False).agg(Values=('debit', 'sum'), n_rivers=('debit', 'size'))
         final_df = final_df[final_df.n_rivers == len(files_to_read)]
         
         bin_centers = [4, 12, 20, 28]
@@ -586,10 +596,33 @@ def daily_integral(file_dir, overwrite=False):
 
     # Process each file to create daily integral versions
     for hourly_file in hourly_files_check:
-            
-        daily_file = hourly_file.split('_')[0] + '_daily_' + hourly_file.split('_')[1] + '_' + hourly_file.split('_')[2]
 
-        # Calculate daily means
-        subprocess.run(['cdo', 'daymean', os.path.join(file_dir, hourly_file), 
-                        os.path.join(file_dir, daily_file)], check=True)
+        daily_file = hourly_file.split('_')[0] + '_daily_' + hourly_file.split('_')[1] + '_' + hourly_file.split('_')[2]
+        hourly_path = os.path.join(file_dir, hourly_file)
+        daily_path = os.path.join(file_dir, daily_file)
+
+        with nc.Dataset(hourly_path) as ds:
+            has_wave_dir = 'VMDR' in ds.variables
+
+        if not has_wave_dir:
+            # Calculate daily means
+            subprocess.run(['cdo', 'daymean', hourly_path, daily_path], check=True)
+            continue
+
+        # VMDR (mean wave direction) is a raw angle, not a vector component --
+        # a plain daymean is biased on any day where the true mean direction
+        # crosses the 0/360 wrap. Daymean every other variable as usual, but
+        # average VMDR as a circular mean via its sin/cos components, then
+        # merge the reconstructed angle back in.
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            other_vars_file = os.path.join(tmp_dir, 'other_vars.nc')
+            components_file = os.path.join(tmp_dir, 'dir_components.nc')
+            vmdr_file = os.path.join(tmp_dir, 'vmdr.nc')
+
+            subprocess.run(['cdo', 'daymean', '-delname,VMDR', hourly_path, other_vars_file], check=True)
+            subprocess.run(['cdo', 'daymean', '-expr,wave_dir_sin=sin(rad(VMDR));wave_dir_cos=cos(rad(VMDR))',
+                            hourly_path, components_file], check=True)
+            subprocess.run(['cdo', 'expr,VMDR=mod(deg(atan2(wave_dir_sin,wave_dir_cos))+360,360)',
+                            components_file, vmdr_file], check=True)
+            subprocess.run(['cdo', 'merge', other_vars_file, vmdr_file, daily_path], check=True)
 

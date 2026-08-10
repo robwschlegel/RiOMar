@@ -18,7 +18,7 @@ sys.path.append( func_dir )
 
 import util, figure
 from figure import (Figure_1, Figure_2, Figure_3, Figure_3_panels, Figure_3_zone_maps, Figure_5_seasonal_analysis,
-                    Figure_7_driver_rose, Figure_9_gam_partial, Figure_S_daily_flow,
+                    Figure_7_driver_rose, Figure_8_gam_partial, Figure_S_daily_flow,
                     Figure_4_S1_timeseries, Figure_X11_weekly_results, Figure_S3_seasonal_boxplots)
 
 # Set matplotlib backend to prevent plots from displaying
@@ -73,7 +73,7 @@ Figure_X11_weekly_results(where_are_saved_X11_results_dynamic = "output/panache/
 # curves. Figure 8 (flow-controlled wave/wind-category scatter) removed
 # 2026-08-05 (per Robert): its information is now covered by Figure 7.
 Figure_7_driver_rose(where_to_save_the_figure = "figures")
-Figure_9_gam_partial(where_to_save_the_figure = "figures")
+Figure_8_gam_partial(where_to_save_the_figure = "figures")
 
 
 # =============================================================================

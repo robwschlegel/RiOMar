@@ -13,6 +13,8 @@
 #
 # Run from repo root: Rscript func/compute_seasonal_trend.R
 source("func/multi.R")
+# util.R::load_tide_gauge() needs tide.R::.load_tide_raw() -- see func/figure.R's identical comment.
+source("func/tide.R")
 
 thresholds <- c(dynamic = "output/panache/dynamic", static = "output/panache/static")
 mass_col <- "mass_SPM_in_the_plume_area_in_g_m"  # kg, see compute_mass_spm_trend.R

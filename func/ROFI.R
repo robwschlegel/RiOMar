@@ -113,7 +113,7 @@ combine_flow_plume_rofi <- function(meta, exclude_estuary = TRUE){
 # plot_driver_plume_dual_axis()). Raw daily values only so the 
 # flow -> plume -> ROFI succession Maud described is visible exactly
 # as observed, not as the interannual signal.
-plot_flow_plume_rofi_panel <- function(zone_name){
+plot_flow_plume_rofi_panel <- function(zone_name, show_axis_titles = TRUE){
   meta <- get_zone_meta(zone_name = zone_name)
   df <- combine_flow_plume_rofi(meta, exclude_estuary = TRUE)
 
@@ -125,10 +125,10 @@ plot_flow_plume_rofi_panel <- function(zone_name){
     geom_line(aes(y = rofi, colour = "ROFI extent"), alpha = 0.8) +
     geom_line(aes(y = flow_scaled, colour = "River flow"), alpha = 0.8) +
     scale_colour_manual(name = NULL, values = c("Plume area" = "sienna", "ROFI extent" = "goldenrod", "River flow" = "blue")) +
-    scale_y_continuous(name = "Plume area / ROFI extent (km^2)",
+    scale_y_continuous(name = if(show_axis_titles) "Plume area / ROFI extent (km^2)" else NULL,
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
-                                           name = "River flow (m^3 s-1)")) +
-    labs(x = NULL, title = zone_name) +
+                                           name = if(show_axis_titles) "River flow (m^3 s-1)" else NULL)) +
+    labs(x = NULL, title = zone_title(zone_name)) +
     theme(panel.border = element_rect(fill = NA, colour = "black"),
           axis.title.y.right = element_text(color = "blue"),
           axis.text.y.right = element_text(color = "blue"),
@@ -141,13 +141,19 @@ plot_flow_plume_rofi_panel <- function(zone_name){
 # compared across all three rivers at a glance.
 plot_flow_plume_rofi_succession <- function(){
   rofi_zones <- order_zones(c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY"))
-  panels <- purrr::map(rofi_zones, plot_flow_plume_rofi_panel)
+  panels <- purrr::map(rofi_zones, plot_flow_plume_rofi_panel, show_axis_titles = FALSE)
 
-  full_plot <- patchwork::wrap_plots(panels, ncol = 1) +
-    patchwork::plot_layout(guides = "collect") &
-    theme(legend.position = "bottom")
+  # Per-panel axis titles suppressed in favour of one shared left/right label
+  # on the assembled composite (Figure 4/6 convention), via
+  # ggpubr::annotate_figure() -- ggarrange()'s common.legend achieves the
+  # same shared-legend effect patchwork::plot_layout(guides = "collect") did.
+  full_plot <- ggpubr::annotate_figure(
+    ggpubr::ggarrange(plotlist = panels, ncol = 1, nrow = length(panels),
+                      common.legend = TRUE, legend = "bottom", align = "v"),
+    left = ggpubr::text_grob("Plume area / ROFI extent (km²)", rot = 90, size = 14),
+    right = ggpubr::text_grob("River flow (m³ s⁻¹)", rot = -90, size = 14, color = "blue"))
 
-  # manuscript Figure Sxxx (TODO: Update to match position in the manuscript supplement)
+  # manuscript Figure S8 (flow -> plume -> ROFI succession)
   if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
   ggsave(filename = "figures/ARTICLE/FIGURE_S4/flow_plume_rofi_succession.png", plot = full_plot, width = 12, height = 10, dpi = 300)
   invisible(full_plot)
@@ -179,7 +185,8 @@ rofi_plume_lagged_correlation <- function(zone_name, x_col, y_col, max_lag_daily
 # Visualise the daily-timestep lagged correlations across zones and variable
 # pairs: correlation-vs-lag curve per panel, with the lag of maximum r marked in red
 plot_rofi_plume_lagged_correlation <- function(cor_stats){
-  df_daily <- dplyr::filter(cor_stats, timestep == "daily")
+  df_daily <- dplyr::filter(cor_stats, timestep == "daily") |>
+    dplyr::mutate(zone = factor(zone_title(zone), levels = zone_title(order_zones(unique(zone)))))
   df_peak <- df_daily |> dplyr::slice_max(cor, n = 1, by = c(zone, pair_label))
 
   pl <- ggplot(df_daily, aes(x = lag, y = cor)) +
@@ -192,7 +199,7 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
          subtitle = "Daily resolution; estuary excluded from plume area; red = lag of maximum r") +
     theme_bw()
 
-  # manuscript Figure Sxxx (TODo: Fix numbering to match manuscript)
+  # manuscript Figure S9
   if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
   ggsave(filename = "figures/ARTICLE/FIGURE_S4/rofi_plume_lagged_correlation.png", plot = pl, width = 12, height = 9, dpi = 300)
   invisible(pl)

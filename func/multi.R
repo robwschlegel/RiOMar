@@ -446,8 +446,17 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
     dplyr::pull(mean_area_resid) |>
     range(na.rm = TRUE)
 
+  # A single well-sampled sector (found 2026-08-10: Southern Brittany's wave
+  # direction is 80% from due west, leaving only one sector at/above
+  # uniform_share) collapses well_sampled_range to one repeated value, and
+  # every under-sampled sector then gets clamped TO that value -- every
+  # sector's plotted fill becomes identical, rendering as a single-colour
+  # legend instead of a gradient. Skip clamping in that case too (not just
+  # the non-finite case) and fall back to each sector's own raw value.
+  well_sampled_range_valid <- all(is.finite(well_sampled_range)) && diff(well_sampled_range) > 0
+
   df_summary <- df_summary |>
-    dplyr::mutate(mean_area_resid_plot = if (all(is.finite(well_sampled_range))) {
+    dplyr::mutate(mean_area_resid_plot = if (well_sampled_range_valid) {
       dplyr::case_when(
         pct_days < uniform_share & mean_area_resid > well_sampled_range[2] ~ well_sampled_range[2],
         pct_days < uniform_share & mean_area_resid < well_sampled_range[1] ~ well_sampled_range[1],
@@ -462,7 +471,14 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
 
   pl <- ggplot(df_summary, aes(x = sector, y = pct_days, fill = mean_area_resid_plot)) +
     geom_col(width = sector_width * 0.9, colour = "grey30", linewidth = 0.2) +
-    coord_polar(start = -(sector_width / 2) * pi / 180) +
+    # geom_col() already centres each bar on its own x value (sector's
+    # midpoint, e.g. 0 degrees for N), so no extra rotation is needed to
+    # align bars with the compass labels below -- the half-sector `start`
+    # offset previously here was based on the opposite (wrong) assumption
+    # that `sector` was a bin's left edge, and rotated the whole rose one
+    # half-sector counter-clockwise, putting N to the left of 12 o'clock
+    # instead of at it (found 2026-08-10, visible in every panel of Fig. 7).
+    coord_polar(start = 0) +
     scale_x_continuous(breaks = compass_breaks, labels = compass_labels, limits = c(0, 360)) +
     scale_fill_gradient2(low = "steelblue", mid = "grey90", high = "firebrick", midpoint = 0,
                         name = "Plume-area\nresidual (km²)") +
@@ -1456,3 +1472,4 @@ rhone_wind_wave_effect <- function(){
 # rhone_detrend_test()
 # rhone_flood_timing_shift()
 # rhone_wind_wave_effect()
+

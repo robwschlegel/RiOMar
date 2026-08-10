@@ -1,21 +1,7 @@
 # func/tide.R
 # Tide-gauge sub-daily QC diagnostics
-#
-# DEPRECATED (2026-07) -- the driver-vs-plume comparison workflow this file
-# used to hold (tide_calc(), etc.) was merged into func/multi.R as part of
-# consolidating flow.R/wind.R/tide.R/ROFI.R/surface.R -- see the
-# "REFACTOR (2026-07)" comment block at the top of func/multi.R. That
-# workflow now lives at:
-#   tide_calc(mouth_row) -> combine_plume_driver("tide", meta) + plot_driver_plume_comparison(df, "tide", meta$mouth_name) + plot_driver_plume_dual_axis(df, "tide", meta$zone)
-# The pre-refactor version of this file is preserved in git history
-# (`git log -- func/tide.R`).
-#
-# This file is now repurposed (2026-07) for a second, unrelated job: the
-# actual per-day tidal QC *logic* (harmonic fit, spike/extrema/sparse
-# checks, per-station thresholds) lives in qc_tide_days() / .tide_day_qc()
-# in func/util.R, because that is what load_tide_gauge() -- and therefore
-# every downstream driver comparison in multi.R -- consumes. This file is
-# the diagnostic companion: it re-derives the tidal regime of each gauge
+
+# It re-derives the tidal regime of each gauge
 # (form number), plots concrete good/bad day examples per station, and
 # tabulates how many days were flagged and why. Nothing here feeds back into
 # the pipeline; it exists purely to document/justify the thresholds in

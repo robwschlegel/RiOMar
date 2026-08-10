@@ -21,7 +21,7 @@ sys.path.append( func_dir )
 
 from util import (load_csv_files, order_zones)
 from panache.plume_algorithm import (Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask,
-                                     derive_masks_from_bathymetry)
+                                     derive_masks_from_bathymetry, estimate_near_mouth_bounds)
 from panache.utils import define_parameters, align_bathymetry
 from panache.io import load_map_data
 
@@ -86,6 +86,15 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
         'analysed_spim': the_plume.spm_map.values.flatten()
     })
 
+    # Same shallow-water criterion remove_shallow_waters() applies to the
+    # plume mask (2026-08-10, manuscript TODO): lets Figure_3_panel() draw
+    # the bathymetric exclusion boundary actually used to produce this
+    # panel. bathymetric_threshold is 0 at the three zones that don't use
+    # this general exclusion (only the Gulf of Lion does), so this column is
+    # all-False and draws nothing there.
+    bathymetric_threshold = the_plume.parameters.get('bathymetric_threshold', 0)
+    df['shallow'] = the_plume.bathymetry_map.values.flatten() > -bathymetric_threshold
+
     if name_of_the_plot == 'B' :
 
         latitudes_used_for_finding_SPM_threshold = lat_values[the_plume.points_used_for_finding_SPM_threshold[:,1].astype(int)]
@@ -99,6 +108,59 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
         all_points_used_for_finding_SPM_threshold = pd.DataFrame({'longitude': all_longitudes_used_for_finding_SPM_threshold,
                                                               'latitude': all_latitudes_used_for_finding_SPM_threshold})
         all_points_used_for_finding_SPM_threshold.to_csv( os.path.join(folder_where_to_save_data, f"{name_of_the_plot}_all_points_used_for_finding_SPM_threshold.csv") )
+
+        # Export the SPM value found at every point tested along the
+        # search-direction transects, plus the near-mouth min/max bounds and
+        # the final derived SPM_threshold, so Figure_3_panel() can draw a
+        # panel showing how the gradient-cutoff filtering (kept vs. rejected
+        # transect points) and the near-mouth quantile bounds combine to
+        # pick the plume-edge threshold (2026-08-10, manuscript TODO).
+        # minimal_threshold/maximal_threshold are not stored on `the_plume`
+        # by determine_SPM_threshold(), so they're recomputed here the same
+        # way panache computes them internally (deterministic given the same
+        # scene/parameters) rather than duplicated inside panache itself.
+        plume_name = the_plume.plume_name
+        lower_q = the_plume.parameters.get('near_mouth_lower_quantile', 0.25)
+        upper_q = the_plume.parameters.get('near_mouth_upper_quantile', 0.75)
+        minimal_threshold, maximal_threshold = estimate_near_mouth_bounds(
+            the_plume.spm_map.values, the_plume.land_mask.values,
+            the_plume.parameters['pixel_starting_points'][plume_name],
+            lower_quantile=lower_q, upper_quantile=upper_q,
+            radius_pixels=the_plume.parameters.get('near_mouth_radius_pixels', 15),
+            window_shape=the_plume.parameters.get('near_mouth_window_shape', 'circle'),
+        )
+
+        start_y, start_x = the_plume.parameters['pixel_starting_points'][plume_name]
+        all_pts = the_plume.all_points_tested_for_finding_SPM_threshold
+        x_idx = all_pts[:, 0].astype(int)
+        y_idx = all_pts[:, 1].astype(int)
+
+        # Pixel-index Euclidean distance from the river mouth, converted to
+        # km via the scene's own lat/lon grid spacing.
+        lat_res_km = abs(lat_values[1] - lat_values[0]) * 111.0
+        lon_res_km = abs(lon_values[1] - lon_values[0]) * 111.0 * np.cos(np.deg2rad(np.mean(lat_values)))
+        distance_km = np.hypot((x_idx - start_x) * lon_res_km, (y_idx - start_y) * lat_res_km)
+
+        kept_set = set(map(tuple, the_plume.points_used_for_finding_SPM_threshold.astype(int)))
+        kept = np.array([(x, y) in kept_set for x, y in zip(x_idx, y_idx)])
+
+        transect_values = pd.DataFrame({
+            'longitude': lon_values[x_idx],
+            'latitude': lat_values[y_idx],
+            'distance_km': distance_km,
+            'analysed_spim': the_plume.spm_map.values[y_idx, x_idx],
+            'kept': kept,
+        })
+        transect_values.to_csv(os.path.join(folder_where_to_save_data, f"{name_of_the_plot}_transect_values.csv"))
+
+        threshold_values = pd.DataFrame({
+            'minimal_threshold': [minimal_threshold],
+            'maximal_threshold': [maximal_threshold],
+            'SPM_threshold': [the_plume.SPM_threshold],
+            'gradient_steepness_fraction': [the_plume.parameters.get('gradient_steepness_fraction', 0.9)],
+            'quantile_to_use': [the_plume.parameters['quantile_to_use'][plume_name]],
+        })
+        threshold_values.to_csv(os.path.join(folder_where_to_save_data, f"{name_of_the_plot}_threshold_values.csv"))
 
 
     if 'plume_mask' in vars(the_plume) :
@@ -412,6 +474,15 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         SPM_map = SPM_map_da.to_dataframe().reset_index()
         SPM_map['plume'] = plume_mask.values.astype(bool).flatten()
 
+        # Same shallow-water criterion remove_shallow_waters() applies to
+        # the plume mask (2026-08-10, manuscript TODO): lets
+        # Figure_3_zone_maps() draw the bathymetric exclusion boundary.
+        # bathymetric_threshold is 0 at the three zones that don't use this
+        # general exclusion (only the Gulf of Lion does), so this column is
+        # all-False and draws nothing there.
+        bathymetry_map = align_bathymetry(SPM_map_da, f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
+        SPM_map['shallow'] = (bathymetry_map.values.flatten() > -parameters['bathymetric_threshold'])
+
         SPM_map.to_csv(where_to_save_the_figure_3 + f"/DATA/{Zone}.csv")
 
     # Run as a standalone Rscript process rather than via in-process rpy2:
@@ -431,13 +502,15 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
 def Figure_3(where_to_save_the_figure):
     """
     Assembles manuscript Figure 3 (plume-detection methodology): panels A-D
-    from Figure_3_panels() side by side on top, the per-zone plume maps panel
-    from Figure_3_zone_maps() (zone_maps_panel.png) stacked below. Both write
-    their intermediates straight into FIGURE_3/ (neither is a standalone
-    manuscript figure itself), so this just reads them back out and
-    composites -- must be called after both.
+    from Figure_3_panels() side by side on top, panel e) (transect_panel.png,
+    also from Figure_3_panels()) as a full-width row in the middle, and the
+    per-zone plume maps panel from Figure_3_zone_maps() (zone_maps_panel.png,
+    panels f-i) stacked below. All three write their intermediates straight
+    into FIGURE_3/ (none is a standalone manuscript figure itself), so this
+    just reads them back out and composites -- must be called after both
+    Figure_3_panels() and Figure_3_zone_maps().
 
-    Panels A-D are resized down to the zone-maps panel's native width
+    Panels A-D and e) are resized down to the zone-maps panel's native width
     (preserving aspect ratio) before the horizontal/vertical stack, rather
     than upscaling the zone-maps panel to match a wider top row -- avoids
     blurring the source PNGs.
@@ -446,8 +519,9 @@ def Figure_3(where_to_save_the_figure):
     os.makedirs(figure_3_dir, exist_ok=True)
 
     panel_paths = [os.path.join(figure_3_dir, f"{letter}.png") for letter in "ABCD"]
+    transect_panel_path = os.path.join(figure_3_dir, "transect_panel.png")
     zone_maps_path = os.path.join(figure_3_dir, "zone_maps_panel.png")
-    missing = [p for p in panel_paths + [zone_maps_path] if not os.path.exists(p)]
+    missing = [p for p in panel_paths + [transect_panel_path, zone_maps_path] if not os.path.exists(p)]
     if missing:
         raise FileNotFoundError(
             "Figure_3() inputs missing: " + ", ".join(missing) +
@@ -468,9 +542,14 @@ def Figure_3(where_to_save_the_figure):
     for i, tile in enumerate(tiles):
         top_row.paste(tile, (tile_width * i, 0))
 
-    composite = Image.new("RGB", (target_width, top_row.height + zone_maps_panel.height), "white")
+    transect_panel = Image.open(transect_panel_path)
+    transect_row_height = round(target_width * transect_panel.height / transect_panel.width)
+    transect_row = transect_panel.resize((target_width, transect_row_height), Image.LANCZOS)
+
+    composite = Image.new("RGB", (target_width, top_row.height + transect_row.height + zone_maps_panel.height), "white")
     composite.paste(top_row, (0, 0))
-    composite.paste(zone_maps_panel, (0, top_row.height))
+    composite.paste(transect_row, (0, top_row.height))
+    composite.paste(zone_maps_panel, (0, top_row.height + transect_row.height))
 
     composite.save(os.path.join(figure_3_dir, "Figure_3.png"))
 
@@ -498,8 +577,12 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
         df = pd.read_csv(ts_file)
         zone = os.path.basename(os.path.dirname(ts_file))
         df['date'] = pd.to_datetime(df['date']).dt.date
-        df.loc[df['area_of_the_plume_mask_in_km2'] > plume_area_ceiling[zone],
-              'area_of_the_plume_mask_in_km2'] = np.nan
+        # Null every measurement column (not just area) on a screened day --
+        # mirrors util.R::load_plume_ts()'s plume_area_ceiling_exceeded fix
+        # (2026-08-XX), extended here now that Figure 4 also plots SPM mass,
+        # which was previously left unscreened on the same anomalous days.
+        ceiling_exceeded = df['area_of_the_plume_mask_in_km2'] > plume_area_ceiling[zone]
+        df.loc[ceiling_exceeded, df.columns.difference(['date'])] = np.nan
 
         # Fill gaps in the date range with explicit NaN rows 
         # so Figure 4 plots real data gaps (cloud cover, etc.)
@@ -543,18 +626,21 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
 def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold,
                                where_are_saved_plume_results_with_static_threshold,
                                where_to_save_the_figure):
-    """manuscript Figure 5 (sec:results_seasonal): monthly boxplots of all
-    four plume properties and five drivers, per zone, dynamic threshold.
-    Each zone's values are rescaled to 0-100% of that zone's own observed
-    range so zones of very different raw magnitude (Table 5) are visually
-    comparable; real (unscaled) interquartile values are annotated as text
-    labels. All data loading (incl. the along-coast PCA projection, which
-    needs func/multi.R) and plotting happens in R -- see
-    func/figure.R::Figure_5_seasonal_analysis() -- following the same
-    no-Python-prep pattern already used by Figure_S3_seasonal_boxplots()
-    below. Writes a shared figures/ARTICLE/FIGURE_5/DATA/monthly_boxplot_data.csv
-    (both thresholds) that the updated Figure_S3_seasonal_boxplots() reads
-    back in, so the dynamic/static computation is only done once.
+    """manuscript Figure 5 (sec:results_seasonal): heatmap of monthly median
+    values (% of each zone's own observed range) for all four plume
+    properties and five drivers, per zone, dynamic threshold -- one small
+    zone x month heatmap per variable, 9 in total in a single 3x3 grid
+    (2026-08-10, replacing an earlier 9-row-tall boxplot grid that was too
+    large to publish; see manuscript/TODO.md). All data loading (incl. the
+    along-coast PCA projection, which needs func/multi.R) and plotting
+    happens in R -- see func/figure.R::Figure_5_seasonal_analysis() --
+    following the same no-Python-prep pattern already used by
+    Figure_S3_seasonal_boxplots() below. Writes a shared
+    figures/ARTICLE/FIGURE_5/DATA/monthly_boxplot_data.csv (both thresholds,
+    full daily-level detail, not just the medians plotted here) that the
+    updated Figure_S3_seasonal_boxplots() reads back in, so the dynamic/
+    static computation is only done once. Writes Figure_5.png directly (a
+    single figure now, no Python-side compositing needed).
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
@@ -562,26 +648,6 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
         where_are_saved_plume_results_with_dynamic_threshold=robjects.StrVector([where_are_saved_plume_results_with_dynamic_threshold]),
         where_are_saved_plume_results_with_static_threshold=robjects.StrVector([where_are_saved_plume_results_with_static_threshold]),
         where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-
-    # Composite the properties + drivers panel blocks into one Figure_5.png,
-    # same PIL vertical-stack pattern as Figure_3() -- keeps "one figure" as
-    # the deliverable while giving each panel block (4 zones x 4 properties,
-    # 4 zones x 5 drivers) room to stay readable rather than cramming a
-    # single 4x9 facet grid.
-    figure_5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_5")
-    properties_path = os.path.join(figure_5_dir, "Figure_5_properties.png")
-    drivers_path = os.path.join(figure_5_dir, "Figure_5_drivers.png")
-    if not (os.path.exists(properties_path) and os.path.exists(drivers_path)):
-        print("Figure_5_seasonal_analysis: R panel(s) missing, skipping composite.")
-        return
-
-    top = Image.open(properties_path)
-    bottom = Image.open(drivers_path)
-    width = max(top.width, bottom.width)
-    composite = Image.new("RGB", (width, top.height + bottom.height), "white")
-    composite.paste(top, (0, 0))
-    composite.paste(bottom, (0, top.height))
-    composite.save(os.path.join(figure_5_dir, "Figure_5.png"))
 
 
 def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):

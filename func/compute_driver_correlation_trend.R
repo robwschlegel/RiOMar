@@ -10,9 +10,11 @@
 # (cor.test() at the identified best lag) alongside the lag itself.
 # Run from repo root: Rscript func/compute_driver_correlation_trend.R
 source("func/multi.R")
+# util.R::load_tide_gauge() needs tide.R::.load_tide_raw() -- see func/figure.R's identical comment.
+source("func/tide.R")
 
-drivers <- c(flow = "River discharge", wind = "Wind", tide = "Tide", wave = "Wave height")
-driver_units <- c(flow = "m^3 s^-1 yr^-1", wind = "m s^-1 yr^-1", tide = "m yr^-1", wave = "m yr^-1")
+drivers <- c(flow = "River discharge", wind = "Wind", tide = "Tide", wave = "Wave height", current = "Current speed")
+driver_units <- c(flow = "m^3 s^-1 yr^-1", wind = "m s^-1 yr^-1", tide = "m yr^-1", wave = "m yr^-1", current = "m s^-1 yr^-1")
 MAX_LAG_DAILY <- 14
 
 results <- purrr::pmap_dfr(zone_meta, function(...){

@@ -14,7 +14,8 @@ mass_trends <- purrr::pmap_dfr(zone_meta, function(...){
   # same convention as compute_area_trend.R/compute_shape_alongcoast_trend.R
   mass_adj <- deseason_doy(df$plume_area, df$date)
   trend <- driver_plume_trend(df, "flow", meta$mouth_name, save_plot = FALSE) |>
-    dplyr::mutate(mean_mass_kg = mean(mass_adj, na.rm = TRUE), sd_mass_kg = sd(mass_adj, na.rm = TRUE))
+    dplyr::mutate(zone = meta$zone,
+                  mean_mass_kg = mean(mass_adj, na.rm = TRUE), sd_mass_kg = sd(mass_adj, na.rm = TRUE))
   trend
 })
 
@@ -22,8 +23,9 @@ mass_trends_summary <- mass_trends |>
   dplyr::filter(variable == "plume", weight_choice == "ar") |>
   dplyr::mutate(slope_annualised_t_yr = slope_annualised / 1000,   # kg/yr -> t/yr
                 slope_t = slope / 1000,                            # kg -> t, per native time unit
+                intercept_t = intercept / 1000,                    # kg -> t, for Figure 4's geom_abline trend line
                 mean_mass_t = mean_mass_kg / 1000,
                 sd_mass_t = sd_mass_kg / 1000) |>
-  dplyr::select(mouth_name, timestep, n, mean_mass_t, sd_mass_t, slope_t, slope_annualised_t_yr, slope_p)
+  dplyr::select(zone, mouth_name, timestep, n, mean_mass_t, sd_mass_t, intercept_t, slope_t, slope_annualised_t_yr, slope_p)
 
 readr::write_csv(mass_trends_summary, "output/STATS/mass_SPM_trend_summary.csv")
