@@ -2,17 +2,17 @@
 
 # This script combines and cleans river discharge data downloaded from the
 # Hub'Eau hydrometrie API (see download_hubeau_flow() in func/dl.py,
-# wired into code/0_download_data.py). Station-to-zone mapping lives in
-# metadata/HydroPortail_station_list.csv. For each river, a "target" gauge
-# (the one whose scale/location we want the output series to represent,
-# usually the one closest to the river mouth) is extended using a "donor"
-# gauge with better temporal coverage, via combine_gauges() below. Every
-# output CSV carries a `flag` column ("measured" / "reconstructed" /
+# wired into code/0_download_data.py). 
+# Station-to-zone mapping lives in metadata/HydroPortail_station_list.csv. 
+# For each river, a "target" gauge (the one whose scale/location we want 
+# the output series to represent, usually the one closest to the river mouth) 
+# is extended using a "donor" gauge with better temporal coverage, 
+# via combine_gauges() below. 
+# Every output CSV carries a `flag` column ("measured" / "reconstructed" /
 # "measured_low_flow_uncertain") so reconstructed values are never presented
 # as directly observed.
-#
-# Exploratory/diagnostic plots for these fits live in
-# func/river_flow_diagnostics.R, not here.
+
+# Exploratory/diagnostic plots for these fits live in: func/river_flow_diagnostics.R
 
 
 # Setup -------------------------------------------------------------------
@@ -32,7 +32,7 @@ zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITT
 # what a record-extension transfer needs. Good default whenever the two
 # gauges' relationship is a reasonably stable power law across the flow
 # range they share.
-#
+
 # pred_x: the target series (may be gappy) used to calibrate the fit.
 # pred_y: the donor series (long/complete); predictions are returned for
 #         every date pred_y has, not just the overlap with pred_x.
@@ -59,7 +59,7 @@ predict_move1 <- function(pred_x, pred_y) {
 # rating-curve breakdown (Vilaine/Rieux, officially flagged unreliable
 # below 20 m3/s) or tidal/lock backwater effects that only distort part of
 # the range (Charente, Sevre Niortaise).
-#
+
 # pred_x, pred_y: same convention as predict_move1.
 predict_qppq <- function(pred_x, pred_y) {
   donor_ecdf <- ecdf(pred_y)
@@ -144,6 +144,9 @@ combine_gauges <- function(target_pattern, donor_pattern, dir_HP,
 # ~1.12 for Petit Rhone, vs. a flat ratio that swings from ~0.90 in floods
 # to ~0.98 in baseflow across the same data) with ~5-6% median error --
 # the same two-gauge machinery used everywhere else in this table.
+#
+# The Sèvre niortaise (BAY_OF_BISCAY) is handled specially below because it
+# requires three separate flow gauges to reconstruct it.
 river_config <- tibble::tribble(
   ~zone,                ~river,        ~type,     ~target_pattern,          ~donor_pattern,   ~method,  ~flag_below, ~filename,
   "GULF_OF_LION",       "grand_rhone", "extend",  "V730000302",             "V720001002",     "move1",  -Inf,        "grand_rhone.csv",

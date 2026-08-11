@@ -121,8 +121,8 @@ summarise_move1_extrapolation <- function(river_names = c("grand_rhone", "petit_
 }
 
 # Example usage:
-# plot_gauge_extension("charente")$series
-# plot_gauge_extension("vilaine")$scatter
+# plot_gauge_extension("grand_rhone")$series
+# plot_gauge_extension("grand_rhone")$scatter
 # summarise_gauge_extensions()
 # plot_sevre_niortaise()
 # summarise_move1_extrapolation()
