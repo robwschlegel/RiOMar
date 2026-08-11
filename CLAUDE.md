@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-RiOMar is a scientific data-processing pipeline for analysing river plumes along the French coast. It downloads, validates, and analyses satellite-derived chlorophyll a (Chl a) and suspended particulate matter (SPM) data alongside river discharge, wind, tide, and oceanographic driver data. The primary output is publication-quality figures and processed datasets. This repository is a Python-first rework of an earlier R codebase by Louis Terrats (the original module is at [myRIOMAR_dev](https://github.com/louis-terrats/myRIOMAR_dev)).
+RiOMar is a scientific data-processing pipeline for analysing river plumes along the French coast. It downloads, validates, and analyses satellite-derived chlorophyll a (Chl a) and suspended particulate matter (SPM) data alongside river discharge, wind, tide, wave, and ocean current data. The primary output is publication-quality figures and processed datasets. This repository is a rework of an earlier codebase by Louis Terrats (the original module is at [myRIOMAR_dev](https://github.com/louis-terrats/myRIOMAR_dev)).
 
 ## Running the pipeline
 
@@ -36,13 +36,17 @@ All scripts prepend `func/` to `sys.path` by setting `proj_dir` from `os.path.ab
 
 A browsable map of which script produces which figure/table, where each output lands, and what's currently a known gap is maintained at https://claude.ai/code/artifact/fd8a00ad-f109-48cd-94c1-2cca329f657f. It is a living document, not a one-time snapshot — update it in place (same URL) whenever the pipeline's wiring changes (a figure function moves, an output path changes, a `\figplaceholder` gets repointed, a gap gets fixed or a new one is found).
 
+## Roadmap to co-author review (living document)
+
+The tracker of remaining manuscript work before it goes to co-authors — open decisions, a "what's left" Gantt, task detail, and a completed-work log — is published at https://claude.ai/code/artifact/04edb9a0-c5b2-48e3-a446-84f5d5e49b45. When asked to update "the roadmap," update this artifact in place (same URL). Resolve an open decision by moving it out of the decisions section into the completed-work log with today's date; add newly-discovered work the same way other entries are dated and grouped.
+
 ## French river plume literature review (gaps document)
 
 When considering weaknesses or gaps in the current RiOMar plume-analysis methodology (e.g. for Discussion/Conclusion writing, or before proposing a methodological change), consult [manuscript/french_plume_literature_review.md](manuscript/french_plume_literature_review.md). It reviews every French river plume study (Seine, Loire, Gironde, Rhône, plus the Adour as an out-of-sample comparator) in `manuscript/references.bib`, grouped by zone, and synthesises seven recurring gap themes (no dynamical/process model, exclusion of the near-mouth/turbidity-maximum zone, no sub-daily/tidal-phase resolution, surface-only detection, plume detachment invisible to a threshold-and-flood-fill detector, ROFI used only as a static check, no compositional/biogeochemical SPM breakdown).
 
 A live, formatted version of the same content is published at https://claude.ai/code/artifact/a282bc0a-b486-4e88-897c-76d7a94db34b. Like the pipeline map above, this is a living document: if RiOMar's methodology changes in a way that closes, changes, or adds to one of the gaps it identifies, update both the `.md` file and that artifact URL together, in place.
 
-This document is a strong source of material for the manuscript's Discussion and Conclusion sections (which gaps are worth naming as limitations, which are natural future work) but has not yet been drawn on for that text -- it is currently reference-only.
+This document is a strong source of material for the manuscript's Discussion and Conclusion sections (which gaps are worth naming as limitations, which are natural future work).
 
 ## Target journal
 
@@ -77,7 +81,7 @@ Four coastal zones used throughout: `GULF_OF_LION`, `BAY_OF_SEINE`, `BAY_OF_BISC
 - [func/figure.py](func/figure.py) — all publication figures (`Figure_1`, `Figure_2`, `Figure_3`/`Figure_3_panels`/`Figure_3_zone_maps`, `Figure_4_S1_timeseries`, `Figure_5_seasonal_analysis`, `Figure_X11_weekly_results`, `Figure_7_driver_rose`, `Figure_8_driver_category`, `Figure_8_gam_partial`, `Figure_S3_seasonal_boxplots`, `Figure_S_daily_flow`)
 
 ### func/ modules (R)
-Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.R`, etc. — there is no `regmap.R`, regional-map creation is Python-only). These are used for analyses that rely on R packages (e.g. X11 seasonal decomposition, all plotting) and are called from Python via `rpy2`. `func/validate.R` is the authoritative satellite-vs-in-situ match-up pipeline (writes both `output/MATCH_UP_DATA/FRANCE/summary.csv`, feeding manuscript Table 4, and the SEXTANT/ODATIS-MR `STATISTICS/*.csv` tables feeding Figure 2).
+Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.R`, etc. — there is no `regmap.R`, regional-map creation is Python-only). These are used for analyses that rely on R packages (e.g. base stats and all plotting) and are called from Python via `rpy2`. `func/validate.R` is the authoritative satellite-vs-in-situ match-up pipeline (writes both `output/MATCH_UP_DATA/FRANCE/summary.csv`, feeding manuscript Table 4, and the SEXTANT/ODATIS-MR `STATISTICS/*.csv` tables feeding Figure 2).
 
 ### metadata/
 Zone configuration JSONs consumed directly by `panache` and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
@@ -94,15 +98,7 @@ is the standard argument passed to every major pipeline function. `util.define_p
 ### Multiprocessing
 `dl.py` and `regmap.py` use `multiprocess` (not the stdlib `multiprocessing`). The start method is forced to `'spawn'` for macOS compatibility — do not change this.
 
-### Seasonal analysis (monthly, not seasonal — sec:seasonal_methods)
-Added 2026-08-07: a monthly-cycle analysis sitting between the linear-trend and X11 sections, both in the pipeline and in the manuscript (Methods §2.7, Results §3.2). Groups by calendar month rather than by season, specifically to keep a balanced year-count in every group across the 1998–2025 record (a season straddling the year boundary, e.g. DJF, draws on 28 years for December but only 27 for January/February).
-- `func/multi.R::compute_monthly_trend()` — per-month AR(1)/HAC trend, reusing `fit_wls_hac_trend()`. De-seasoning (`deseason_doy()`) is applied to the **full** daily series *before* splitting by month, not skipped for the month subsets — the day-of-year climatological adjustment still varies within a single calendar month (e.g. early vs. late April), so skipping it would understate the trend's standard error the same way skipping it does for the annual trend.
-- `func/compute_seasonal_trend.R` — one-off script (same convention as `compute_area_trend.R` etc.) computing monthly trends for all 4 plume properties + 5 drivers, both thresholds, all 4 zones → `output/STATS/monthly_trend_summary.csv` (full detail) / `monthly_trend_compact_summary.csv` (per-zone-per-variable summary, feeds manuscript Table 7).
-- `func/driver_interactions.R::run_monthly_driver_interactions_analysis()` — reruns the six-step GLM/GAM/regime/RF sequence per calendar month (dynamic threshold only), called from `code/4_time_series.py`. `build_driver_matrix()` gained a `month_filter` parameter for this. `summarise_monthly_driver_dominance()` distils the 48 (12 month × 4 zone) runs into `output/STATS/monthly_driver_dominance_summary.csv` (feeds a Supplementary table) rather than dumping the full GLM/GAM/RF coefficients.
-- `func/compute_plume_shape.py` now loops over both thresholds (previously dynamic-only) — compactness for the static threshold didn't exist until 2026-08-07.
-- Manuscript Figure 5 (`\label{fig:seasonal}`) reused the `FIGURE_5/` output folder, which previously held the deprecated `Figure_5_driver_comparison()` scatter/lag-correlation figure — that content was still live, though, as the Supplementary "Lagged daily correlations" figure (`\label{fig:daily_flow}`), so it was restored under its own name/folder, `figure.R::Figure_S_daily_flow()` → `FIGURE_S_daily_flow/`, rather than being silently overwritten.
-- Figure 5 itself is a heatmap-of-medians (one zone x month tile grid per variable), not boxplots — `figure.R::Figure_5_seasonal_analysis()`.
+## Bug history
 
 Bug-fix history (root cause, symptom, before/after) is intentionally not kept here — it bloats a file loaded every session regardless of relevance. Each fix is commented in place at its own function; check `git log`/`git blame` on the relevant file for the full story.
-### Rhône apportionment
-The Rhône splits near Arles into Grand Rhône and Petit Rhône, each with its own gauge (Arles, Fourques). As of 2026-08-04 those gauges report continuously through 2024 with no gaps, so only 2025 is extended from the upstream Tarascon gauge via a MOVE.1 log-log regression fit separately per branch on the full 1998–2024 overlap (`func/river_flow_prep.R`, `river_config`; diagnostic: `func/river_flow_diagnostics.R::summarise_move1_extrapolation()`) — not a flat fraction of the combined discharge. Every Tarascon value used for the 2025 extension falls inside the 1998–2024 calibration range (no extrapolation). Fitted slopes: 1.01 (Grand Rhône), 0.89 (Petit Rhône) — re-check these and the 2024 cutoff after any HydroPortail data refresh, since both have already shifted once as more gauge data arrived (previously 1998–2022 calibration, slopes 0.99/1.12). (An earlier fixed-fraction rule — 11% to Petit Rhône before 2012-05-28, 10% thereafter — was superseded by this; it was never actually implemented in code and has been removed from the manuscript.)
+

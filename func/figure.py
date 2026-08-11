@@ -87,7 +87,7 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     })
 
     # Same shallow-water criterion remove_shallow_waters() applies to the
-    # plume mask (2026-08-10, manuscript TODO): lets Figure_3_panel() draw
+    # plume mask: lets Figure_3_panel() draw
     # the bathymetric exclusion boundary actually used to produce this
     # panel. bathymetric_threshold is 0 at the three zones that don't use
     # this general exclusion (only the Gulf of Lion does), so this column is
@@ -114,7 +114,7 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
         # the final derived SPM_threshold, so Figure_3_panel() can draw a
         # panel showing how the gradient-cutoff filtering (kept vs. rejected
         # transect points) and the near-mouth quantile bounds combine to
-        # pick the plume-edge threshold (2026-08-10, manuscript TODO).
+        # pick the plume-edge threshold.
         # minimal_threshold/maximal_threshold are not stored on `the_plume`
         # by determine_SPM_threshold(), so they're recomputed here the same
         # way panache computes them internally (deterministic given the same
@@ -349,8 +349,7 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
 
     # Crop to panache's own plume-area bbox (not regmap.py's wider
     # Basin_limits) -- every bbox used anywhere in this pipeline comes from
-    # panache, no exceptions (per Robert, 2026-08-07). This narrows these
-    # panels' extent relative to the old REGIONAL_MAPS-pickle-based crop.
+    # panache, no exceptions.
     ds = load_map_data(nc_path,
                        lon_range=tuple(parameters['lon_range_of_plume_area']),
                        lat_range=tuple(parameters['lat_range_of_plume_area']),
@@ -475,7 +474,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         SPM_map['plume'] = plume_mask.values.astype(bool).flatten()
 
         # Same shallow-water criterion remove_shallow_waters() applies to
-        # the plume mask (2026-08-10, manuscript TODO): lets
+        # the plume mask: lets
         # Figure_3_zone_maps() draw the bathymetric exclusion boundary.
         # bathymetric_threshold is 0 at the three zones that don't use this
         # general exclusion (only the Gulf of Lion does), so this column is
@@ -578,8 +577,8 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
         zone = os.path.basename(os.path.dirname(ts_file))
         df['date'] = pd.to_datetime(df['date']).dt.date
         # Null every measurement column (not just area) on a screened day --
-        # mirrors util.R::load_plume_ts()'s plume_area_ceiling_exceeded fix
-        # (2026-08-XX), extended here now that Figure 4 also plots SPM mass,
+        # mirrors util.R::load_plume_ts()'s plume_area_ceiling_exceeded fix,
+        # extended here now that Figure 4 also plots SPM mass,
         # which was previously left unscreened on the same anomalous days.
         ceiling_exceeded = df['area_of_the_plume_mask_in_km2'] > plume_area_ceiling[zone]
         df.loc[ceiling_exceeded, df.columns.difference(['date'])] = np.nan
@@ -629,11 +628,10 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
     """manuscript Figure 5 (sec:results_seasonal): heatmap of monthly median
     values (% of each zone's own observed range) for all four plume
     properties and five drivers, per zone, dynamic threshold -- one small
-    zone x month heatmap per variable, 9 in total in a single 3x3 grid
-    (2026-08-10, replacing an earlier 9-row-tall boxplot grid that was too
-    large to publish; see manuscript/TODO.md). All data loading (incl. the
-    along-coast PCA projection, which needs func/multi.R) and plotting
-    happens in R -- see func/figure.R::Figure_5_seasonal_analysis() --
+    zone x month heatmap per variable, 9 in total in a single 3x3 grid. 
+    All data loading (incl. the along-coast PCA projection, which needs 
+    func/multi.R) and plotting happens in R.
+    See func/figure.R::Figure_5_seasonal_analysis()
     following the same no-Python-prep pattern already used by
     Figure_S3_seasonal_boxplots() below. Writes a shared
     figures/ARTICLE/FIGURE_5/DATA/monthly_boxplot_data.csv (both thresholds,
@@ -653,11 +651,6 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
 def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):
     """Supplementary "Sx. Lagged daily correlations" figure (fig:daily_flow):
     daily plume area vs. river flow scatter + lagged correlation, per zone.
-    Restored 2026-08-07 under a new name/folder (FIGURE_S_daily_flow) after
-    Figure_5_seasonal_analysis() repurposed FIGURE_5/ -- this used to be
-    named Figure_5_driver_comparison() and write to the same path, which
-    would have silently swapped this Supplementary figure's content for the
-    new main-text Figure 5's.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
@@ -669,9 +662,7 @@ def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):
 
 def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
     """manuscript Figure 7: wind/wave direction-magnitude roses, coloured by
-    the flow-controlled plume-area response, one row per zone. Replaces the
-    original Figure 7/8 concept (X11-decomposed wind/wave magnitude time
-    series) -- direction matters as much or more than magnitude for both.
+    the flow-controlled plume-area response, one row per zone.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
@@ -679,19 +670,6 @@ def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
     r_function = robjects.r['Figure_7_driver_rose']
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
                n_sectors=robjects.IntVector([n_sectors]))
-
-
-# This figure has been deprecated. To be moved to a deprecated code section in this script.
-def Figure_8_driver_category(where_to_save_the_figure):
-    """manuscript Figure 8: flow-controlled plume-area residual vs. wave
-    height, coloured by on/off-shore wind category, one panel per zone.
-    Generalises the Rhone-only rhone_wind_wave_effect() analysis.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_8_driver_category']
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
 def Figure_8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
@@ -805,15 +783,29 @@ def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_sav
 
 def Figure_S3_seasonal_boxplots(where_to_save_the_figure):
     """
-    Migrated 2026-08-01 from manuscript/make_figures_tables.R's
+    Migrated from manuscript/make_figures_tables.R's
     generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
     writes straight to figures/ARTICLE/FIGURE_S3/ instead of via the
     manuscript/figures/ copy step. No Python-side data prep needed -- the R
     function reads output/panache/{dynamic,static}/{zone}/Results.csv directly.
-    Renamed 2026-07-31 from Figure_S4_seasonal_boxplots(), see
-    Figure_X11_weekly_results()'s note above.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
     robjects.r['Figure_S3_seasonal_boxplots'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+
+
+# =============================================================================
+#### Deprecated functions
+# =============================================================================
+
+def Figure_8_driver_category(where_to_save_the_figure):
+    """manuscript Figure 8: flow-controlled plume-area residual vs. wave
+    height, coloured by on/off-shore wind category, one panel per zone.
+    Generalises the Rhone-only rhone_wind_wave_effect() analysis.
+    """
+    figure_R_path = os.path.join(func_dir, 'figure.R')
+    robjects.r['source'](figure_R_path)
+
+    r_function = robjects.r['Figure_8_driver_category']
+    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 

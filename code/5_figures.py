@@ -69,10 +69,10 @@ Figure_X11_weekly_results(where_are_saved_X11_results_dynamic = "output/panache/
                           where_are_saved_X11_results_static = "output/panache/static",
                           where_to_save_the_figure = "figures")
 
-# manuscript Figures 7 and 9: wind/wave roses and GAM partial-dependence
-# curves. Figure 8 (flow-controlled wave/wind-category scatter) removed
-# 2026-08-05 (per Robert): its information is now covered by Figure 7.
+# Figures 7: wind/wave roses
 Figure_7_driver_rose(where_to_save_the_figure = "figures")
+
+# Figure 8: GAM partial-dependence curves
 Figure_8_gam_partial(where_to_save_the_figure = "figures")
 
 
@@ -85,9 +85,7 @@ Figure_8_gam_partial(where_to_save_the_figure = "figures")
 Figure_S3_seasonal_boxplots(where_to_save_the_figure = "figures")
 
 # Fig. daily_flow ("Sx. Lagged daily correlations"): daily plume area vs.
-# river flow scatter + lagged correlation, per zone. Restored 2026-08-07
-# under a new name/folder (previously Figure_5_driver_comparison(), writing
-# to FIGURE_5/ -- now repurposed for the new main-text Figure 5 above).
+# river flow scatter + lagged correlation, per zone.
 Figure_S_daily_flow(where_to_save_the_figure = "figures")
 
 # Figure S4a/b: flow/plume/ROFI succession + lagged correlation. Previously
