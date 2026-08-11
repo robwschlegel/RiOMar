@@ -13,32 +13,28 @@
 #   1. Baseline additive GLM
 #   2. + pairwise interaction terms, LRT/AIC
 #   3. GAM with te() tensor smooths
-#   4. Regime stratification (Rossby proxy, 6 m/s wind threshold, tidal bin)
+#   4. Regime stratification (discharge, wind, tide, current, wave)
 #   5. Per-metric models (area, centroid lon/lat, not just area)
 #   6. Exploratory random forest + iml H-statistic
 #   7. Do it all again per month per zone
 
 # Known simplifications / gaps, so nothing here is mistaken for more
 # rigorous than it is:
-#   - "Rossby number" in add_regime_labels() is NOT the true discharge
+#   - discharge_regime in add_regime_labels() is NOT the true discharge
 #     Rossby number from Fong & Geyer (2002) (Ro = U / (f * L), needing
 #     mouth width and outflow velocity); it is a per-zone standardised
 #     discharge (z-score) used purely as a cheap, ordered stand-in for
 #     "is today a high- or low-discharge day relative to this river's own range".
-#   - "Centroid" per-metric models use the unweighted mean pixel lon/lat of
-#     the daily plume mask as a simple proxy for plume position (Ralston et
-#     al. 2024's alongshore/cross-shore split is not reproduced here, since
-#     that needs a coastline-following coordinate rotation per zone this
-#     project doesn't yet have). SPM mass (also named in Ralston et al. as a
-#     separate response worth modelling) is not modelled here because it is
-#     not in the daily plume time series RiOMar currently outputs (only a
-#     confidence_index_in_perc column) -- see manuscript.tex Table 5's
-#     existing \tocheck{} placeholder for the same gap.
-#   - No R interpreter was available when this script was written, so it has
-#     been checked for syntactic and semantic consistency against func/
-#     util.R and func/multi.R (which it depends on) but has NOT been
-#     executed. Run it end to end and sanity-check a zone or two against
-#     the plots before trusting the numbers in the manuscript.
+#     Regime stratification (step 4) now covers five regimes in total --
+#     discharge_regime, wind_regime, tide_bin, current_regime, wave_regime,
+#     not just the three named in the "What this script does" summary above.
+#   - "Centroid" per-metric models use the SPM-weighted mean pixel lon/lat
+#     of the daily plume mask (lon/lat_weighted_centroid_of_the_plume_area),
+#     not an unweighted mean. Ralston et al. (2024)'s alongshore/cross-shore
+#     split is still not reproduced here, since that needs a coastline-
+#     following coordinate rotation per zone this project doesn't yet have.
+#   - SPM mass (mass_SPM_in_the_plume_area_in_g_m) IS modelled, as one of
+#     the five metric_responses fitted in step 5.
 
 
 # Setup ---------------------------------------------------------------------

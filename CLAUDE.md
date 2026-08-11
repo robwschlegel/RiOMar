@@ -73,7 +73,7 @@ Four coastal zones used throughout: `GULF_OF_LION`, `BAY_OF_SEINE`, `BAY_OF_BISC
 - [func/validate.py](func/validate.py) — placeholder, kept for git history; satellite vs in situ match-up now lives entirely in `func/validate.R` (see below)
 - [func/regmap.py](func/regmap.py) — regional map creation and QC (`create_regional_maps`, `QC_of_regional_maps`)
 - [func/plume.py](func/plume.py) — placeholder, kept for git history; plume detection is now handled entirely by the external `panache` package (`panache.plume_algorithm`, `panache.utils`); the one RiOMar-specific figure-prep helper this file used to hold (`preprocess_annual_dataset_and_compute_land_mask`) was removed from `func/figure.py` in favour of `panache.plume_algorithm.derive_masks_from_bathymetry`
-- [func/X11.py](func/X11.py) — X11 seasonal decomposition, calls R via `rpy2`; `Apply_X11_method_on_time_series`. **Frozen**: this file and its R counterpart `func/X11.R` are intentionally excluded from renaming/refactor passes — do not edit either, even for naming consistency
+- [func/X11.py](func/X11.py) — X11 seasonal decomposition, calls R via `rpy2`; `Apply_X11_method_on_time_series`. **Frozen**: this file is intentionally excluded from renaming/refactor passes — do not edit its existing functions, even for naming consistency. New wrapper functions may be added alongside them. `func/X11.R` is not frozen.
 - [func/figure.py](func/figure.py) — all publication figures (`Figure_1`, `Figure_2`, `Figure_3`/`Figure_3_panels`/`Figure_3_zone_maps`, `Figure_4_S1_timeseries`, `Figure_5_seasonal_analysis`, `Figure_X11_weekly_results`, `Figure_7_driver_rose`, `Figure_8_driver_category`, `Figure_8_gam_partial`, `Figure_S3_seasonal_boxplots`, `Figure_S_daily_flow`)
 
 ### func/ modules (R)

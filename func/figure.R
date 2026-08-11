@@ -4,7 +4,6 @@
 
 # Libraries ---------------------------------------------------------------
 
-library(plyr)
 library(tidyverse)
 library(scales)
 library(maps)
@@ -18,7 +17,10 @@ source("func/util.R")
 # For zone_meta/get_zone_meta/combine_plume_driver/plot_driver_rose/etc
 source("func/multi.R")
 
-# util.R::load_tide_gauge() calls tide.R::.load_tide_raw()
+# For the tide QC diagnostics (tide_qc_all(), save_tide_qc_examples(), etc.)
+# -- .load_tide_raw() and the QC logic load_tide_gauge() calls both live in
+# func/util.R itself, not here; nothing in the pipeline path requires this
+# file, it is sourced only for its standalone diagnostic/reporting functions.
 source("func/tide.R")
 
 
@@ -355,7 +357,7 @@ zone_maps_panels <- function(data_folder, include_station_points) {
 
   SPM_map_data <- file.path(data_folder, "DATA") |>
     list.files(pattern = "*.csv", full.names = TRUE) |>
-    llply(read_csv) |>
+    plyr::llply(read_csv) |>
     keep(~ 'analysed_spim' %in% names(.))
 
   insitu_stations <- file.path( data_folder, "DATA", "Stations_position.csv" ) |> read_csv()
@@ -363,7 +365,7 @@ zone_maps_panels <- function(data_folder, include_station_points) {
   points_for_the_legend <- data.frame(SOURCE = c('SOMLIT', 'REPHY'), longitude = c(0,0), latitude = c(0,0))
 
   SPM_map_data |>
-    llply(function(x) {
+    plyr::llply(function(x) {
       insitu_stations_of_the_map <- insitu_stations |>
         filter((LATITUDE |> between(min(x$lat), max(x$lat))) &
                  (LONGITUDE |> between(min(x$lon), max(x$lon))))
@@ -555,7 +557,7 @@ Figure_3_zone_maps <- function(where_to_save_the_figure) {
   # which(map_df$plume) on the first file missing that column.
   SPM_map_data <- where_to_save_the_figure |> 
     file.path('DATA', paste0(zone_meta$zone, ".csv")) |> 
-    llply(read_csv)
+    plyr::llply(read_csv)
 
   # Continues the lettering from Figure_3_panel()'s methodology row (A-D)
   # and Figure_3_transect_panel()'s e) (2026-08-10)
@@ -617,7 +619,7 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   # would otherwise sort panels alphabetically.
   SPM_map_data$Zone <- factor(SPM_map_data$Zone, levels = ZONE_ORDER)
 
-  SPM_map_ts <- SPM_map_data |> filter(Dynamic_threshold == 'Dynamic threshold') |> dlply(.(Zone), function(df_zone) {
+  SPM_map_ts <- SPM_map_data |> filter(Dynamic_threshold == 'Dynamic threshold') |> plyr::dlply(c("Zone"), function(df_zone) {
 
     unique_years <- df_zone$Years |> unique()
 
@@ -733,7 +735,7 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   })
   
   save_plot_as_png(annotate_figure(
-                     ggarrange(plotlist = SPM_map_ts |> llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
+                     ggarrange(plotlist = SPM_map_ts |> plyr::llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
                      left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "red3"),
                      right = text_grob("SPM mass (t)", rot = -90, size = 30, color = "steelblue4")),
                    'Figure_4', width = 20, height = 16, path = main_folder)
@@ -1076,7 +1078,7 @@ compute_x11_zone_plots <- function(data_dir, show_axis_titles = TRUE){
 
   regions <- unique(plume_data$Zone) |> order_zones()
 
-  regions |> llply(function(region) {
+  regions |> plyr::llply(function(region) {
 
     plume_data_region <- plume_data |> filter(Zone == region)
     river_data_region <- river_data |> filter(Zone == region)
@@ -1094,7 +1096,7 @@ compute_x11_zone_plots <- function(data_dir, show_axis_titles = TRUE){
 # Stacks one X11 component (Interannual/Seasonal/Residual) across all 4
 # zones into a single column -- the layout shared by every figure below.
 stack_x11_component <- function(zone_plots, component){
-  ggarrange(plotlist = zone_plots |> llply(function(x) x[[component]]), ncol = 1, nrow = 4, align = "v")
+  ggarrange(plotlist = zone_plots |> plyr::llply(function(x) x[[component]]), ncol = 1, nrow = 4, align = "v")
 }
 
 # manuscript Figure 6: X11 interannual (long-term) signal of plume area vs.
@@ -1146,7 +1148,7 @@ Figure_S1_thresholds <- function(where_to_save_the_figure){
   # otherwise sort panels alphabetically.
   SPM_map_data$Zone <- factor(SPM_map_data$Zone, levels = ZONE_ORDER)
 
-  SPM_map_ts <- SPM_map_data |> filter(Satellite_sensor == "merged") |> dlply(.(Zone), function(df_zone) {
+  SPM_map_ts <- SPM_map_data |> filter(Satellite_sensor == "merged") |> plyr::dlply(c("Zone"), function(df_zone) {
     
     unique_years <- df_zone$Years |> unique()
     
@@ -1266,7 +1268,7 @@ compute_x11_dynamic_vs_static_plots <- function(data_dir){
 
   regions <- unique(ts_data$Zone) |> order_zones()
 
-  regions |> llply(function(region) {
+  regions |> plyr::llply(function(region) {
     ts_dynamic <- ts_data |> filter(Zone == region, threshold == "dynamic") |> select(-Zone, -threshold)
     ts_static  <- ts_data |> filter(Zone == region, threshold == "static") |> select(-Zone, -threshold)
 

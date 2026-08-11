@@ -16,35 +16,6 @@ source("func/multi.R")
 
 plume_dir <- "output/panache/dynamic"
 
-compute_alongcoast <- function(zone, meta){
-  df <- read_csv(paste0(plume_dir, "/", zone, "/Results.csv"), show_col_types = FALSE) |>
-    dplyr::mutate(date = as.Date(date)) |>
-    dplyr::filter(!is.na(lon_weighted_centroid_of_the_plume_area), !is.na(lat_weighted_centroid_of_the_plume_area))
-
-  lat0 <- meta$mouth_lat; lon0 <- meta$mouth_lon
-  x_km <- (df$lon_weighted_centroid_of_the_plume_area - lon0) * 111.32 * cos(pi / 180 * lat0)
-  y_km <- (df$lat_weighted_centroid_of_the_plume_area - lat0) * 111.32
-
-  pc <- prcomp(cbind(x_km, y_km))
-  axis1 <- pc$rotation[, 1]
-  # Fix an arbitrary PCA sign convention: orient axis1 so its dominant
-  # component (whichever of east-west/north-south carries more of the
-  # loading) is positive, so "positive slope" has a stable, reportable
-  # geographic meaning (east or north) instead of flipping arbitrarily.
-  dominant_is_x <- abs(axis1[1]) >= abs(axis1[2])
-  if((dominant_is_x && axis1[1] < 0) || (!dominant_is_x && axis1[2] < 0)) axis1 <- -axis1
-  direction_label <- if(dominant_is_x) "east" else "north"
-  message(zone, ": along-coast axis loadings x(east)=", round(axis1[1], 3),
-          " y(north)=", round(axis1[2], 3), " -> positive = more ", direction_label)
-
-  alongcoast_km <- as.numeric(cbind(x_km, y_km) %*% axis1)
-
-  tibble::tibble(date = df$date, alongcoast_km = alongcoast_km) |>
-    complete(date = seq(min(date), max(date), by = "day")) |>
-    zoo::na.trim() |>
-    dplyr::mutate(zone = zone, .before = "date")
-}
-
 results <- purrr::pmap_dfr(zone_meta, function(...){
   meta <- tibble::tibble(...)
 
@@ -60,8 +31,8 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
     dplyr::mutate(mouth_name = meta$mouth_name, metric = "compactness",
                   mean_adj = mean(shape_adj, na.rm = TRUE), sd_adj = sd(shape_adj, na.rm = TRUE))
 
-  df_coast <- compute_alongcoast(meta$zone, meta)
-  coast_adj <- deseason_doy(df_coast$alongcoast_km, df_coast$date)
+  df_coast <- compute_alongcoast_ts(meta$zone, meta, plume_dir)
+  coast_adj <- deseason_doy(df_coast$value, df_coast$date)
   coast_trend <- fit_wls_hac_trend("ar", coast_adj, df_coast$date) |>
     dplyr::mutate(mouth_name = meta$mouth_name, metric = "alongcoast_km",
                   mean_adj = mean(coast_adj, na.rm = TRUE), sd_adj = sd(coast_adj, na.rm = TRUE))

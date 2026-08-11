@@ -54,7 +54,6 @@
 
 library(tidyverse)
 library(ncdf4)
-# library(heatwaveR)
 library(seasonal) # For X11 analysis (currently not used)
 library(RcppRoll) # For running means to get STL interannual signals closer to X11
 library(patchwork)
@@ -209,7 +208,7 @@ load_driver <- function(driver_name, meta){
 # function below operates on.
 # combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"))
 # combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"), metric_col = "mass_SPM_in_the_plume_area_in_g_m", outlier_max = NULL)
-combine_plume_driver <- function(driver_name, meta, metric_col = "area_of_the_plume_mask_in_km2", outlier_max = 20000,
+combine_plume_driver <- function(driver_name, meta, metric_col = "area_of_the_plume_mask_in_km2", outlier_max = NULL,
                                  plume_dir = "output/panache/dynamic"){
 
   df_plume  <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = metric_col, 
@@ -288,8 +287,8 @@ driver_display <- tibble::tribble(
 #   b) raw plume-area time series
 #   c) driver vs. plume scatter (+ linear fit)
 #   d) lagged correlation (plume lagged behind driver, 0-30 days)
-# mouth_name is used only for the plot title / output file name.
-plot_driver_comparison <- function(df, driver_name, mouth_name){
+# zone_name is used only for the plot title / output file name.
+plot_driver_comparison <- function(df, driver_name, zone_name){
 
   disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
   cor_df <- driver_plume_correlation(df) |> dplyr::filter(timestep == "daily")
@@ -317,14 +316,14 @@ plot_driver_comparison <- function(df, driver_name, mouth_name){
     labs(x = paste("lag plume after", disp$driver_name, "(days)"), y = "correlation (r)") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
 
-  plot_title <- grid::textGrob(paste0(mouth_name, " : ", driver_name, " vs plume size"),
+  plot_title <- grid::textGrob(paste0(zone_name, " : ", driver_name, " vs plume size"),
                                gp = grid::gpar(fontsize = 16, fontface = "bold", col = "black"))
   ts_plot <- ggpubr::ggarrange(driver_plot, panache_plot, ncol = 1, nrow = 2, labels = c("a)", "b)"), align = "v")
   cor_plot <- ggpubr::ggarrange(driver_plume_cor_plot, driver_plume_cor_lag_plot, ncol = 1, nrow = 2, labels = c("c)", "d)"), heights = c(1, 0.3))
   full_plot <- ggpubr::ggarrange(ts_plot, cor_plot, ncol = 2, nrow = 1)
   full_plot_title <- ggpubr::ggarrange(plot_title, full_plot, ncol = 1, nrow = 2, heights = c(0.05, 1)) + ggpubr::bgcolor("white")
 
-  ggsave(filename = paste0("figures/driver_comparison/cor_plot_", driver_name, "_plume_", mouth_name, ".png"),
+  ggsave(filename = paste0("figures/driver_comparison/cor_plot_", driver_name, "_plume_", zone_name, ".png"),
          plot = full_plot_title, width = 12, height = 6, dpi = 600)
   invisible(full_plot_title)
 }
@@ -602,13 +601,12 @@ compute_monthly_trend <- function(value, date, min_n = 30){
 # The along-coast direction is estimated per zone as
 # the first principal component of the centroid's own long-term scatter (in
 # local km, relative to the river mouth), then each day's centroid is
-# projected onto that axis. Shared by func/compute_seasonal_trend.R and
-# func/figure.R::Figure_5_seasonal_analysis(). NB: func/compute_shape_alongcoast_trend.R
-# has its own near-identical local compute_alongcoast() (slightly different
-# output shape: alongcoast_km/zone columns, a diagnostic message) predating
-# this shared version -- left as-is rather than refactored onto this helper,
-# since that script already feeds a validated, published Table 5 number and
-# isn't otherwise part of this change.
+# projected onto that axis. Shared by func/compute_seasonal_trend.R,
+# func/figure.R::Figure_5_seasonal_analysis(), and
+# func/compute_shape_alongcoast_trend.R (which used to carry its own
+# near-identical local compute_alongcoast() before it was deduplicated onto
+# this shared version -- verified to reproduce identical output first,
+# since that script feeds a published Table 5 number).
 # compute_alongcoast_ts("GULF_OF_LION", get_zone_meta(zone_name = "GULF_OF_LION"), "output/panache/dynamic")
 compute_alongcoast_ts <- function(zone, meta, plume_dir){
   df <- read_csv(paste0(plume_dir, "/", zone, "/Results.csv"), show_col_types = FALSE) |>
@@ -768,7 +766,7 @@ run_driver_suite <- function(driver_name){
     meta <- tibble::tibble(...)
     df <- combine_plume_driver(driver_name, meta)
 
-    plot_driver_comparison(df, driver_name, meta$mouth_name)
+    plot_driver_comparison(df, driver_name, meta$zone)
     plot_driver_plume_dual_axis(df, driver_name, meta$zone)
     cor_stats <- driver_plume_correlation(df) |> dplyr::mutate(mouth_name = meta$mouth_name, zone = meta$zone, driver_name = driver_name)
     trend_stats <- driver_plume_trend(df, driver_name, meta$mouth_name)

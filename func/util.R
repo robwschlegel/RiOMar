@@ -605,11 +605,14 @@ plume_area_ceiling <- c(BAY_OF_BISCAY = 12000, BAY_OF_SEINE = 2500,
 # column becomes `plume_area` downstream (every driver_plume_* function in
 # multi.R is written against that column name regardless of what it holds,
 # so this is the one place a different plume metric -- e.g. mass_SPM_in_the_
-# plume_area_in_g_m -- needs to be wired in). `outlier_max` is only a
-# sensible guard for the area column (20000 km^2 is physically implausible
-# for these zones); pass NULL to skip it for other metrics.
+# plume_area_in_g_m -- needs to be wired in). `outlier_max` screens the
+# `plume_area` column only, dropping values above the threshold as NA; it
+# defaults to NULL (no screening). Pass an explicit value (e.g. 20000, a
+# physically implausible km^2 area for these zones) at call sites that need
+# the guard -- do not rely on an implicit default, since a metric other than
+# area may not share the same physically sensible ceiling.
 load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic",
-                          metric_col = "area_of_the_plume_mask_in_km2", outlier_max = 20000){
+                          metric_col = "area_of_the_plume_mask_in_km2", outlier_max = NULL){
   file_name <- paste0(plume_dir, "/", zone, "/Results.csv")
   suppressMessages({
     df_plume <- read_csv(file_name) |>

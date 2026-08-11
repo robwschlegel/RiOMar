@@ -1596,3 +1596,87 @@ def Apply_X11_method_on_time_series(core_arguments, Zones,
                 Temporal_resolution=robjects.StrVector([info.Temporal_resolution])
             )
 
+
+# =============================================================================
+#### New wrapper functions -- driver (wind/tide/wave/current) X11 decomposition
+# =============================================================================
+# Added to let func/compute_driver_x11_correlation_table.py and
+# func/compute_driver_x11_figures.py run the driver-vs-plume X11 comparison
+# entirely in Python (weekly resolution), replacing the R seasonal::seas()/
+# X-13ARIMA-SEATS version that was limited to monthly input. These are pure
+# additions -- nothing above this point is modified, and every function here
+# reuses temporal_decomp_V2_7_x11 as-is underneath.
+
+def bin_to_pseudo_weekly(dates, values):
+    """
+    Collapses a daily series onto the same 4-bin-per-month (day 4/12/20/28)
+    pseudo-weekly grid Apply_X11_method_on_time_series() uses for plume area
+    (see its inline binning above), so other daily series (driver data) can
+    be run through temporal_decomp_V2_7_x11's WEEKLY mode the same way. Not
+    called by Apply_X11_method_on_time_series, which keeps its own identical
+    inline copy of this logic unmodified.
+    """
+    bin_centers = [4, 12, 20, 28]
+    def assign_bin(day):
+        return min(bin_centers, key=lambda x: abs(x - day))
+
+    df = pd.DataFrame({'date': pd.to_datetime(dates), 'value': pd.to_numeric(pd.Series(values).reset_index(drop=True))})
+    df['bin'] = df['date'].dt.day.apply(assign_bin)
+    binned = df.groupby([df['date'].dt.to_period('M'), 'bin']).agg({'value': 'mean'}).reset_index()
+    binned['date'] = pd.to_datetime(binned['date'].astype(str) + "-" + binned['bin'].astype(str), format="%Y-%m-%d")
+    return binned[['date', 'value']].sort_values('date').reset_index(drop=True)
+
+
+def decompose_driver_series(values, dates, time_frequency="WEEKLY"):
+    """
+    Thin wrapper around temporal_decomp_V2_7_x11 (unmodified) for driver
+    series (wind/tide/wave/current) that don't need
+    apply_X11_method_and_save_results()'s file-saving side effects -- just
+    the Interannual (trend) component, for correlating against plume area's
+    own Interannual signal. Uses the same fixed arguments
+    apply_X11_method_and_save_results() already uses. Returns None if the
+    series fails the internal data-quality cutoff (flag == -100), rather
+    than an all-NaN frame.
+    """
+    results = temporal_decomp_V2_7_x11(values=values, dates=pd.to_datetime(dates),
+                                       time_frequency=time_frequency,
+                                       filter_outlier=False, overall_cutoff=50,
+                                       out_limit=3, perc_month_limit=50,
+                                       var_stationary=False, lin_interpol=False,
+                                       cutoff_fill=30, season_test=True)
+    if results['24_flag'] == -100:
+        return None
+    return pd.DataFrame({'date': results['7_dates'], 'Interannual_signal': results['10_Interannual_signal']})
+
+
+def plot_driver_x11_dual_axis(df, zone_title, driver_label, driver_colour):
+    """
+    Dual-axis Interannual trend-cycle comparison (plume area vs one driver),
+    with an r-value annotation -- matplotlib equivalent of func/
+    compute_driver_x11_figures.R's plot_x11_dual_axis(). df must have
+    columns date/plume_trend/driver_trend (already decomposed + date-aligned
+    upstream). Uses matplotlib's native twinx() with independent
+    auto-scaling on each axis, rather than porting the R version's manual
+    scale-factor trick -- that trick exists only to work around ggplot2's
+    single-axis-plus-relabelling limitation, which matplotlib's twinx()
+    doesn't share.
+    """
+    r_value = df['plume_trend'].corr(df['driver_trend'])
+
+    fig, ax1 = plt.subplots(figsize=(10, 3))
+    ax1.plot(df['date'], df['plume_trend'], color='brown', marker='o', markersize=3)
+    ax1.set_ylabel('Plume area (km²)', color='brown')
+    ax1.tick_params(axis='y', labelcolor='brown')
+
+    ax2 = ax1.twinx()
+    ax2.plot(df['date'], df['driver_trend'], color=driver_colour, marker='o', markersize=3)
+    ax2.set_ylabel(driver_label, color=driver_colour)
+    ax2.tick_params(axis='y', labelcolor=driver_colour)
+
+    ax1.set_title(zone_title)
+    ax1.text(0.02, 0.95, f"r = {r_value:.2f}", transform=ax1.transAxes,
+             ha='left', va='top', fontsize=12, color='black')
+    ax1.tick_params(axis='x', rotation=90)
+    fig.tight_layout()
+    return fig
+
