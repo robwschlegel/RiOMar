@@ -147,6 +147,16 @@ combine_gauges <- function(target_pattern, donor_pattern, dir_HP,
 #
 # The Sèvre niortaise (BAY_OF_BISCAY) is handled specially below because it
 # requires three separate flow gauges to reconstruct it.
+#
+# Potential future candidate for SOUTHERN_BRITTANY: Le Falleron. Mouth at
+# Port du Collet, Baie de Bourgneuf (47.029N, 1.983W). Three Hub'Eau
+# stations identified, none yet added below:
+#   N011301010 - Le Falleron a Falleron                     (active, ~26.4 km from mouth)
+#   N011303010 - Le Falleron a Saint-Etienne-de-Mer-Morte    (active, ~20.8 km from mouth)
+#   N011302010 - Le Falleron a Machecoul [Le Bas Falleron]   (closed 2009-10-05, ~15.3 km from mouth)
+# Distances are straight-line (geodesic), not along-channel; the river
+# meanders through the Marais Breton so true flow-path distances are
+# somewhat longer, especially near the coast.
 river_config <- tibble::tribble(
   ~zone,                ~river,        ~type,     ~target_pattern,          ~donor_pattern,   ~method,  ~flag_below, ~filename,
   "GULF_OF_LION",       "grand_rhone", "extend",  "V730000302",             "V720001002",     "move1",  -Inf,        "grand_rhone.csv",
