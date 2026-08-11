@@ -160,26 +160,23 @@ load_driver <- function(driver_name, meta){
       dplyr::select(date, value = tide_range, tide_mean)
 
   } else if(driver_name == "wind"){
-    lon_round <- plyr::round_any(meta$mouth_lon, 0.5)
-    lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
-    lon_range <- c(lon_round - 0.5, lon_round + 0.5)
-    lat_range <- c(lat_round - 0.5, lat_round + 0.5)
+    zone_box <- dplyr::filter(zones_bbox, zone == meta$zone)
+    lon_range <- c(zone_box$lon_min, zone_box$lon_max)
+    lat_range <- c(zone_box$lat_min, zone_box$lat_max)
     wind_files <- dir(paste0("~/pCloudDrive/data/WIND/", meta$zone), pattern = "_daily_", full.names = TRUE)
     df_wind <- purrr::map_dfr(wind_files, load_wind_sub, lon_range, lat_range) |>
       wind_add_direction(meta$zone)
     df <- df_wind |> dplyr::select(date, value = wind_spd, wind_dir, direction, u, v)
 
   } else if(driver_name == "current"){
-    lon_round <- plyr::round_any(meta$mouth_lon, 0.5)
-    lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
-    lon_range <- c(lon_round - 0.5, lon_round + 0.5)
-    lat_range <- c(lat_round - 0.5, lat_round + 0.5)
+    zone_box <- dplyr::filter(zones_bbox, zone == meta$zone)
+    lon_range <- c(zone_box$lon_min, zone_box$lon_max)
+    lat_range <- c(zone_box$lat_min, zone_box$lat_max)
     df_current <- load_surface_current(meta$zone, lon_range, lat_range)
     df <- df_current |> dplyr::select(date, value = current_spd, current_dir, u, v)
 
   } else if(driver_name == "rofi"){
-    # "rofi" = region-of-freshwater-influence extent, a model output distinct
-    # from the ambient coastal current above. 
+    # "rofi" = region-of-freshwater-influence extent
     # NB: no ROFI data for the Gulf of Lion
     rofi_files <- dir("data/ROFI", full.names = TRUE)
     df_rofi <- purrr::map_dfr(rofi_files, load_ROFI) |>
@@ -188,10 +185,9 @@ load_driver <- function(driver_name, meta){
     df <- df_rofi |> dplyr::select(date, value = ROFI_surface)
 
   } else if(driver_name == "wave"){
-    lon_round <- plyr::round_any(meta$mouth_lon, 0.5)
-    lat_round <- plyr::round_any(meta$mouth_lat, 0.5)
-    lon_range <- c(lon_round - 0.5, lon_round + 0.5)
-    lat_range <- c(lat_round - 0.5, lat_round + 0.5)
+    zone_box <- dplyr::filter(zones_bbox, zone == meta$zone)
+    lon_range <- c(zone_box$lon_min, zone_box$lon_max)
+    lat_range <- c(zone_box$lat_min, zone_box$lat_max)
     wave_files <- dir(paste0("~/pCloudDrive/data/WAVE/", meta$zone), pattern = "_daily_", full.names = TRUE)
     df_wave <- purrr::map_dfr(wave_files, load_wave, lon_range, lat_range)
     df <- df_wave |> dplyr::select(date, value = wave_height, wave_dir)
@@ -532,9 +528,24 @@ ar_weights_func <- function(val_col, start_year, time_step){
   ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
   ar_model <- ar(ts_obj, order.max = 1)
   phi_est <- ar_model$ar
+  # order.max = 1 lets ar() select order 0 (no AR component) by AIC when the
+  # series shows no significant AR(1) structure, leaving phi_est empty --
+  # not observed on the daily series this was originally always called with
+  # (autocorrelation there is essentially always significant), but real for
+  # short annual series (e.g. compute_octant_trend()). Fall back to
+  # unweighted in that case rather than erroring.
+  # sqrt(phi_est) below assumes a positive AR(1) coefficient -- true for
+  # every persistent daily geophysical series this was originally used on,
+  # but a short annual series (e.g. compute_octant_trend()) can legitimately
+  # show negative/oscillating autocorrelation, which would otherwise produce
+  # NaN weights and crash lm(). Same unweighted fallback as the order-0 case
+  # above.
+  if(length(phi_est) == 0 || phi_est <= 0) return(rep(1, length(val_col)))
   sigma_est <- sqrt(phi_est)
   error_variance <- sigma_est^2 / (1 - phi_est^2)
-  rep((1 / (error_variance^2)), length(val_col))
+  weights <- rep((1 / (error_variance^2)), length(val_col))
+  if(!all(is.finite(weights))) return(rep(1, length(val_col)))
+  weights
 }
 stl_weights_func <- function(val_col, start_year, time_step){
   ts_obj <- ts(zoo::na.approx(val_col), frequency = time_step, start = c(start_year, 1))
@@ -563,9 +574,9 @@ deseason_doy <- function(value, date){
     dplyr::pull(value_adj)
 }
 
-fit_wls_hac_trend <- function(weight_choice, val_col, date_col){
+fit_wls_hac_trend <- function(weight_choice, val_col, date_col, time_step = NULL){
   start_year <- year(min(date_col))
-  time_step <- if(length(val_col) < 1000) 12 else 365
+  if(is.null(time_step)) time_step <- if(length(val_col) < 1000) 12 else 365
   weights <- switch(weight_choice,
                     ar = ar_weights_func(val_col, start_year, time_step),
                     stl = stl_weights_func(val_col, start_year, time_step),
@@ -594,6 +605,96 @@ compute_monthly_trend <- function(value, date, min_n = 30){
     }
     fit_wls_hac_trend("ar", value_adj[idx], date[idx]) |>
       dplyr::mutate(month = m, .before = 1)
+  })
+}
+
+# Annual compass-octant occupancy trend (sec:linear_trends). Direction is
+# circular (0-360 degrees), so a raw-angle OLS trend has no principled
+# meaning across the 0/360 wrap and would mask bimodal regime shifts -- this
+# instead bins each day into compass_octant()'s 8 categories (the same
+# categorical treatment already used for the GAM/GLM/RF direction
+# predictors, driver_interactions.R::build_driver_matrix()) and trends each
+# octant's annual proportion-of-days using the same fit_wls_hac_trend()
+# engine as every other trend in this pipeline, with an explicit time_step =
+# 1 (the auto-detected 12/365 heuristic assumes a daily-resolution series,
+# wrong for this annual one-point-per-year series). Octants below min_years
+# of data or min_occurrence average share are returned as NA rows rather
+# than fit, mirroring compute_monthly_trend()'s min_n guard -- a rarely
+# occurring octant (e.g. Southern Brittany's wave direction is ~80% west,
+# multi.R:444-446) would otherwise produce a spurious-looking "significant"
+# trend from a handful of days.
+compute_octant_trend <- function(degrees, date, min_years = 15, min_occurrence = 0.01){
+  octant <- compass_octant(degrees)
+  labels <- levels(octant)
+  daily <- tibble::tibble(year = year(date), octant = octant) |>
+    dplyr::filter(!is.na(octant))
+
+  annual_totals <- daily |> dplyr::summarise(n_total = dplyr::n(), .by = "year")
+
+  annual_counts <- daily |>
+    dplyr::summarise(n_days = dplyr::n(), .by = c("year", "octant")) |>
+    tidyr::complete(year = annual_totals$year, octant = labels, fill = list(n_days = 0)) |>
+    dplyr::left_join(annual_totals, by = "year") |>
+    dplyr::mutate(proportion = n_days / n_total)
+
+  purrr::map_dfr(labels, function(oct){
+    df_oct <- dplyr::filter(annual_counts, octant == oct) |> dplyr::arrange(year)
+    n_years <- nrow(df_oct)
+    mean_occurrence <- mean(df_oct$proportion, na.rm = TRUE)
+
+    if(n_years < min_years || is.na(mean_occurrence) || mean_occurrence < min_occurrence){
+      return(tibble::tibble(octant = oct, n_years = n_years, mean_occurrence = mean_occurrence,
+                            time_step = NA_real_, start_year = NA_real_, weight_choice = "ar",
+                            intercept = NA_real_, slope = NA_real_, slope_se = NA_real_,
+                            slope_t = NA_real_, slope_p = NA_real_))
+    }
+
+    fit_wls_hac_trend("ar", df_oct$proportion, as.Date(paste0(df_oct$year, "-07-01")), time_step = 1) |>
+      dplyr::mutate(octant = oct, n_years = n_years, mean_occurrence = mean_occurrence, .before = 1)
+  })
+}
+
+# Monthly companion to compute_octant_trend() (sec:seasonal_methods), for
+# the calendar-month-grouped seasonal analysis convention used throughout
+# this pipeline (balanced year-count per month, unlike a calendar-boundary-
+# crossing season). Unlike compute_monthly_trend(), which de-seasons a
+# continuous daily series once and then fits OLS directly on that series'
+# per-month day-level subset, direction is categorical -- there is no
+# continuous magnitude to de-season -- so this aggregates first (each
+# calendar month's annual proportion-of-days-in-octant, one point per year)
+# and trends that aggregated series, reusing the same fit_wls_hac_trend()
+# engine. Same min_years/min_occurrence guards as compute_octant_trend().
+compute_monthly_octant_trend <- function(degrees, date, min_years = 10, min_occurrence = 0.01){
+  octant <- compass_octant(degrees)
+  labels <- levels(octant)
+  daily <- tibble::tibble(year = year(date), month = month(date), octant = octant) |>
+    dplyr::filter(!is.na(octant))
+
+  monthly_totals <- daily |> dplyr::summarise(n_total = dplyr::n(), .by = c("year", "month"))
+
+  monthly_counts <- daily |>
+    dplyr::summarise(n_days = dplyr::n(), .by = c("year", "month", "octant")) |>
+    tidyr::complete(tidyr::nesting(year, month), octant = labels, fill = list(n_days = 0)) |>
+    dplyr::left_join(monthly_totals, by = c("year", "month")) |>
+    dplyr::mutate(proportion = n_days / n_total)
+
+  purrr::map_dfr(1:12, function(m){
+    purrr::map_dfr(labels, function(oct){
+      df_oct <- dplyr::filter(monthly_counts, month == m, octant == oct) |> dplyr::arrange(year)
+      n_years <- nrow(df_oct)
+      mean_occurrence <- mean(df_oct$proportion, na.rm = TRUE)
+
+      if(n_years < min_years || is.na(mean_occurrence) || mean_occurrence < min_occurrence){
+        return(tibble::tibble(month = m, octant = oct, n_years = n_years, mean_occurrence = mean_occurrence,
+                              time_step = NA_real_, start_year = NA_real_, weight_choice = "ar",
+                              intercept = NA_real_, slope = NA_real_, slope_se = NA_real_,
+                              slope_t = NA_real_, slope_p = NA_real_))
+      }
+
+      fit_wls_hac_trend("ar", df_oct$proportion,
+                        as.Date(paste0(df_oct$year, "-", sprintf("%02d", m), "-15")), time_step = 1) |>
+        dplyr::mutate(month = m, octant = oct, n_years = n_years, mean_occurrence = mean_occurrence, .before = 1)
+    })
   })
 }
 

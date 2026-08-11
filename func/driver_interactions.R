@@ -33,8 +33,6 @@
 #     not an unweighted mean. Ralston et al. (2024)'s alongshore/cross-shore
 #     split is still not reproduced here, since that needs a coastline-
 #     following coordinate rotation per zone this project doesn't yet have.
-#   - SPM mass (mass_SPM_in_the_plume_area_in_g_m) IS modelled, as one of
-#     the five metric_responses fitted in step 5.
 
 
 # Setup ---------------------------------------------------------------------
