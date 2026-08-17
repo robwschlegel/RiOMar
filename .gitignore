@@ -30,6 +30,7 @@ output/panache
 
 # Figures
 figures/ARTICLE/FIGURES/*/DATA
+figures/ARTICLE/FIGURE_S7/monthly/
 
 # Other content
 notebooks
