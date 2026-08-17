@@ -574,6 +574,9 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
 
     def _load_results(ts_file):
         df = pd.read_csv(ts_file)
+        # panache v5.0.0+ writes one row per individual river mouth plus a
+        # combined 'ALL' row per date -- keep only the zone-level union.
+        df = df[df['river'] == 'ALL']
         zone = os.path.basename(os.path.dirname(ts_file))
         df['date'] = pd.to_datetime(df['date']).dt.date
         # Null every measurement column (not just area) on a screened day --

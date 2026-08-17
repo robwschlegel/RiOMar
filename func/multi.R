@@ -381,7 +381,7 @@ flow_controlled_residual <- function(df){
 # Direction/magnitude rose for wind or wave or currents, 
 # coloured by the flow-controlled plume-area response.
 plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
-  driver_name <- match.arg(driver_name, c("wind", "wave"))
+  driver_name <- match.arg(driver_name, c("wind", "wave", "current"))
   dir_col <- paste0(driver_name, "_dir")
   disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
 
@@ -712,6 +712,7 @@ compute_monthly_octant_trend <- function(degrees, date, min_years = 10, min_occu
 compute_alongcoast_ts <- function(zone, meta, plume_dir){
   df <- read_csv(paste0(plume_dir, "/", zone, "/Results.csv"), show_col_types = FALSE) |>
     dplyr::mutate(date = as.Date(date)) |>
+    dplyr::filter(.data$river == "ALL") |>
     dplyr::filter(!is.na(lon_weighted_centroid_of_the_plume_area), !is.na(lat_weighted_centroid_of_the_plume_area))
 
   lat0 <- meta$mouth_lat; lon0 <- meta$mouth_lon

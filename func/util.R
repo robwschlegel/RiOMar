@@ -612,11 +612,14 @@ plume_area_ceiling <- c(BAY_OF_BISCAY = 12000, BAY_OF_SEINE = 2500,
 # the guard -- do not rely on an implicit default, since a metric other than
 # area may not share the same physically sensible ceiling.
 load_plume_ts <- function(zone, plume_dir = "output/panache/dynamic",
-                          metric_col = "area_of_the_plume_mask_in_km2", outlier_max = NULL){
+                          metric_col = "area_of_the_plume_mask_in_km2", outlier_max = NULL,
+                          river = "ALL"){
   file_name <- paste0(plume_dir, "/", zone, "/Results.csv")
   suppressMessages({
     df_plume <- read_csv(file_name) |>
       dplyr::mutate(date = as.Date(date)) |>
+      dplyr::filter(.data$river == !!river) |>
+      dplyr::select(-river) |>
       dplyr::select(date:confidence_index_in_perc) |>
       complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
       dplyr::mutate(plume_area_ceiling_exceeded = area_of_the_plume_mask_in_km2 > plume_area_ceiling[[zone]],
@@ -639,7 +642,14 @@ load_plume_surface <- function(zone, plume_dir = "output/panache/dynamic"){
   lon  <- ncvar_get(nc_dat, "lon")
   lat  <- ncvar_get(nc_dat, "lat")
   time <- .nc_time_to_date(nc_dat, "time")
-  mask <- ncvar_get(nc_dat, "plume_mask")  # [lon, lat, time]
+  # plume_mask dims are [lon, lat, river, time]; keep only the combined 'ALL'
+  # river layer (panache v5.0.0+ adds one mask layer per individual river
+  # plus this union layer -- see plume_algorithm.py::_stack_river_masks())
+  river_names <- ncvar_get(nc_dat, "river")
+  idx_all <- which(river_names == "ALL")
+  mask <- ncvar_get(nc_dat, "plume_mask",
+                    start = c(1, 1, idx_all, 1),
+                    count = c(-1, -1, 1, -1))  # [lon, lat, time]
   nc_close(nc_dat)
 
   hit <- which(mask == 1, arr.ind = TRUE)
@@ -673,6 +683,32 @@ load_river_flow <- function(dir_name){
     dplyr::summarise(flow = sum(flow, na.rm = TRUE),
                      n_rivers = dplyr::n(), .by = "date") |>
     dplyr::filter(n_rivers == length(data_list))
+}
+
+# Load one river's flow, or a small named group of rivers sharing a mouth/
+# estuary (e.g. Gironde = Garonne + Dordogne, Sevre = Sevre Niortaise + Lay)
+# summed together -- same per-file read/sum logic as load_river_flow(),
+# just restricted to specific files instead of every CSV in the zone
+# directory. Used to match panache's now-individual river-mouth plume output
+# (see metadata/river_discharge_mapping.csv) against its own discharge.
+# load_river_flow_single("GULF_OF_LION", "grand_rhone")
+# load_river_flow_single("BAY_OF_BISCAY", c("garonne", "dordogne"))
+load_river_flow_single <- function(zone, river_slugs){
+  dir_name <- file.path("data/RIVER_FLOW", zone)
+  files_to_load <- file.path(dir_name, paste0(river_slugs, ".csv"))
+
+  data_list <- lapply(files_to_load, function(file){
+    df <- read.csv(file, header = TRUE)
+    df$date <- as.Date(df$date)
+    df[, c("flow", "date")] <- list(df$debit, df$date)
+    df[, c("flow", "date")]
+  })
+
+  dplyr::bind_rows(data_list) |>
+    dplyr::summarise(flow = sum(flow, na.rm = TRUE),
+                     n_rivers = dplyr::n(), .by = "date") |>
+    dplyr::filter(n_rivers == length(files_to_load)) |>
+    dplyr::select(-n_rivers)
 }
 
 # Load tide gauge data

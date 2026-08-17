@@ -25,9 +25,9 @@ source("func/multi.R")
 # Read one zone/threshold Results.csv, gap-filled to a continuous daily
 # sequence. Keeps every core column (date through confidence_index_in_perc,
 # same slice used by util.R::load_plume_ts()) but, unlike load_plume_ts(),
-# does NOT null out large values so nothing gets silently discarded before 
-# it can be flagged. The per-river SPM_threshold_* columns are dropped since their
-# names differ by zone (one column per river mouth in that zone).
+# does NOT null out large values so nothing gets silently discarded before
+# it can be flagged. Filtered to the combined 'ALL' river row (panache
+# v5.0.0+ writes one row per individual river mouth plus this union row).
 # load_plume_results("GULF_OF_LION", "dynamic")
 load_plume_results <- function(zone, threshold = c("dynamic", "static")){
   threshold <- match.arg(threshold)
@@ -35,6 +35,8 @@ load_plume_results <- function(zone, threshold = c("dynamic", "static")){
   suppressMessages({
     df <- read_csv(file_name) |>
       dplyr::mutate(date = as.Date(date)) |>
+      dplyr::filter(.data$river == "ALL") |>
+      dplyr::select(-river) |>
       dplyr::select(date:confidence_index_in_perc) |>
       tidyr::complete(date = seq(min(date), max(date), by = "day"))
   })

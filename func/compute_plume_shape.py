@@ -43,7 +43,9 @@ for PLUME_DIR in PLUME_DIRS:
         perimeter_km = np.full(n_time, np.nan)
         compactness = np.full(n_time, np.nan)
 
-        masks = ds.plume_mask.values.astype(bool)
+        # panache v5.0.0+ adds a 'river' dim (one mask per river mouth plus
+        # a combined 'ALL' union layer) -- keep only the zone-level union.
+        masks = ds.plume_mask.sel(river="ALL").values.astype(bool)
         for i in range(n_time):
             mask = masks[i]
             n = int(mask.sum())

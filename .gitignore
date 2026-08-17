@@ -16,6 +16,7 @@ data/ROFI
 data/HydroRIVERS_v10_eu_shp
 data/VOG_shapes
 data/summer_school
+data/EUROPE_shapefile
 
 # Large outputs
 output/MATCH_UP_DATA

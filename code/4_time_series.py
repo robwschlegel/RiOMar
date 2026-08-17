@@ -17,7 +17,7 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from X11 import Apply_X11_method_on_time_series
+from X11 import Apply_X11_method_on_time_series, Apply_X11_method_on_time_series_per_river
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg')
@@ -40,13 +40,20 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
 # =============================================================================
 
 # NB: X11 can only be used on weekly or monthly data, not daily
-
 Apply_X11_method_on_time_series(sextant_spm_all,
                                 Zones = zones_list,
                                 plume_time_step = "WEEKLY",
                                 plume_dir_in = "output/panache/dynamic",
                                 X11_dir_out = "output/panache/dynamic",
                                 include_river_flow = True)
+
+# Per-river variant (metadata/river_discharge_mapping.csv): now that panache
+# v5.0.0+ tracks individual river-mouth plume time series, also run the same
+# X11 plume-vs-flow comparison once per river instead of only per zone.
+Apply_X11_method_on_time_series_per_river(sextant_spm_all,
+                                          plume_time_step = "WEEKLY",
+                                          plume_dir_in = "output/panache/dynamic",
+                                          X11_dir_out = "output/panache/dynamic")
 
 
 # =============================================================================
@@ -59,6 +66,11 @@ Apply_X11_method_on_time_series(sextant_spm_all,
                                 plume_dir_in = "output/panache/static",
                                 X11_dir_out = "output/panache/static",
                                 include_river_flow = True)
+
+Apply_X11_method_on_time_series_per_river(sextant_spm_all,
+                                          plume_time_step = "WEEKLY",
+                                          plume_dir_in = "output/panache/static",
+                                          X11_dir_out = "output/panache/static")
 
 
 # =============================================================================

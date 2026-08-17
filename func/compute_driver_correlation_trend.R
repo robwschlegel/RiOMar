@@ -28,8 +28,15 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
     peak_test <- cor.test(df$plume_area, lagged_value)
 
     trend <- fit_wls_hac_trend("ar", df$value, df$date)
+
+    # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
+    # matching the same convention Table 5's generators already use
+    # (func/compute_area_trend.R etc.), added 2026-08-11 per manuscript/TODO.md.
+    value_adj <- deseason_doy(df$value, df$date)
+
     tibble::tibble(zone = meta$zone, driver = driver_name, driver_label = driver_label,
-                   n = nrow(df), r = peak$cor, lag_days = peak$lag, r_p = peak_test$p.value,
+                   n = nrow(df), mean_value = mean(value_adj, na.rm = TRUE), sd_value = sd(value_adj, na.rm = TRUE),
+                   r = peak$cor, lag_days = peak$lag, r_p = peak_test$p.value,
                    trend_annual = trend$slope * 365.25, trend_p = trend$slope_p,
                    unit = driver_units[[driver_name]])
   })

@@ -35,6 +35,9 @@ ALPHA   = {"dynamic": 0.8,       "static": 0.6}
 def load_results(zone, threshold):
     path = os.path.join(proj_dir, "output", "panache", threshold, zone, "Results.csv")
     df = pd.read_csv(path, parse_dates=["date"])
+    # panache v5.0.0+ writes one row per individual river mouth plus a
+    # combined 'ALL' row per date -- keep only the zone-level union.
+    df = df[df["river"] == "ALL"]
     df["date"] = pd.to_datetime(df["date"]).dt.normalize()
     df = df.sort_values("date").reset_index(drop=True)
     # Treat area == 0 as no plume: set area and centroid columns to NaN so they

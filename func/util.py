@@ -388,9 +388,9 @@ def date_from_path(path):
     return ''.join(match.groups()) if match else None   
 
 
-def load_csv_files(SOMLIT = False, REPHY = False, 
-                   RIVER_FLOW = False, Zone_of_river_flow = None, 
-                   RIVER_FLOW_time_resolution = ''):
+def load_csv_files(SOMLIT = False, REPHY = False,
+                   RIVER_FLOW = False, Zone_of_river_flow = None,
+                   RIVER_FLOW_time_resolution = '', river_files = None):
     
     if SOMLIT : 
         SOMLIT_dir = os.path.join(proj_dir, 'data', 'INSITU_data', 'SOMLIT')
@@ -408,9 +408,16 @@ def load_csv_files(SOMLIT = False, REPHY = False,
     if RIVER_FLOW : 
         
         where_are_river_data = os.path.join(proj_dir, 'data', 'RIVER_FLOW', Zone_of_river_flow)
-        
-        files_to_load = glob.glob(os.path.join(where_are_river_data, '*.csv'))
-        
+
+        # river_files restricts the sum to specific rivers (e.g. one
+        # individual river mouth, or a small basin-sharing group like
+        # Gironde = Garonne + Dordogne) instead of every CSV in the zone
+        # directory -- see metadata/river_discharge_mapping.csv.
+        if river_files is not None:
+            files_to_load = [os.path.join(where_are_river_data, f"{slug}.csv") for slug in river_files]
+        else:
+            files_to_load = glob.glob(os.path.join(where_are_river_data, '*.csv'))
+
         # Convert file paths to Path objects for consistent handling
         files_to_read = [Path(f) for f in files_to_load if Path(f).suffix in ('.csv')]
 

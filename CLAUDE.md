@@ -78,7 +78,7 @@ Four coastal zones used throughout: `GULF_OF_LION`, `BAY_OF_SEINE`, `BAY_OF_BISC
 - [func/regmap.py](func/regmap.py) — regional map creation and QC (`create_regional_maps`, `QC_of_regional_maps`)
 - [func/plume.py](func/plume.py) — placeholder, kept for git history; plume detection is now handled entirely by the external `panache` package (`panache.plume_algorithm`, `panache.utils`); the one RiOMar-specific figure-prep helper this file used to hold (`preprocess_annual_dataset_and_compute_land_mask`) was removed from `func/figure.py` in favour of `panache.plume_algorithm.derive_masks_from_bathymetry`
 - [func/X11.py](func/X11.py) — X11 seasonal decomposition, calls R via `rpy2`; `Apply_X11_method_on_time_series`. **Frozen**: this file is intentionally excluded from renaming/refactor passes — do not edit its existing functions, even for naming consistency. New wrapper functions may be added alongside them. `func/X11.R` is not frozen.
-- [func/figure.py](func/figure.py) — all publication figures (`Figure_1`, `Figure_2`, `Figure_3`/`Figure_3_panels`/`Figure_3_zone_maps`, `Figure_4_S1_timeseries`, `Figure_5_seasonal_analysis`, `Figure_X11_weekly_results`, `Figure_7_driver_rose`, `Figure_8_driver_category`, `Figure_8_gam_partial`, `Figure_S3_seasonal_boxplots`, `Figure_S_daily_flow`)
+- [func/figure.py](func/figure.py) — all publication figures (`Figure_1`, `Figure_2`, `Figure_3`/`Figure_3_panels`/`Figure_3_zone_maps`, `Figure_4_S1_timeseries`, `Figure_5_seasonal_analysis`, `Figure_S_daily_flow`, `Figure_X11_weekly_results`, `Figure_7_driver_rose`, `Figure_8_gam_partial`, `Figure_S3_seasonal_boxplots`). `Figure_8_driver_category` is deprecated (uncalled, kept under a "Deprecated functions" heading in both `figure.py` and `figure.R` for git history)
 
 ### func/ modules (R)
 Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.R`, etc. — there is no `regmap.R`, regional-map creation is Python-only). These are used for analyses that rely on R packages (e.g. base stats and all plotting) and are called from Python via `rpy2`. `func/validate.R` is the authoritative satellite-vs-in-situ match-up pipeline (writes both `output/MATCH_UP_DATA/FRANCE/summary.csv`, feeding manuscript Table 4, and the SEXTANT/ODATIS-MR `STATISTICS/*.csv` tables feeding Figure 2).
@@ -97,6 +97,10 @@ is the standard argument passed to every major pipeline function. `util.define_p
 
 ### Multiprocessing
 `dl.py` and `regmap.py` use `multiprocess` (not the stdlib `multiprocessing`). The start method is forced to `'spawn'` for macOS compatibility — do not change this.
+
+## Future work ideas
+
+- An SST (sea surface temperature) analysis of river plumes — how the plume footprint appears in a high-resolution SST product — is still an idea worth pursuing, not yet scoped or started. A stub subsection for this in `manuscript.tex` (§ Results, "Sea surface temperature") was removed 2026-08-12 since it held no content; revisit as a possible future-work mention or a follow-up study, not a manuscript gap to fill now.
 
 ## Bug history
 

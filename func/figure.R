@@ -30,34 +30,55 @@ source("func/tide.R")
 # for Figure 1's zoomed insets.
 # Loaded lazily (library(sf) is NOT called at file scope
 
-# Four evenly spaced y-axis ticks from 0 up to a "nice" round number at or
-# above max(x). Unlike base pretty()/scales::breaks_pretty(), 
-# which restrict the step to a 1/2/5 x 10^k multiple, a step of 2.5 x 10^k 
-# is allowed too -- needed so 3 equal steps can land close to max(x) 
-# (e.g. max ~7500 -> steps of 2500, giving 0, 2500, 5000, 7500) rather than 
-# overshooting it by a lot. Picks the *smallest* nice step whose 3 steps still 
-# reach max(x) -- picking whichever nice step is merely closest to max(x)/3 
-# (tried first) can round down and clip real data above the top tick, 
-# found via the Gulf of Lion's actual max area (8987 km^2) rounding down to a 7500 top tick.
-four_ticks_from_zero <- function(x){
-  max_val <- max(x, na.rm = TRUE)
-  raw_step <- max_val / 3
+# Step size for four_ticks_from_zero() below, factored out so a dual-axis
+# figure (e.g. Figure_4_timeseries()) can also compute the step needed to
+# reach an arbitrary target -- not just a series' own max(x) -- letting two
+# independently-scaled axes share the same top tick instead of each rounding
+# up separately and leaving whichever axis rounds up less stranded well
+# below the panel top (fixed 2026-08-11, Figure 4's "dead space" tweak).
+# Unlike base pretty()/scales::breaks_pretty(), which restrict the step to a
+# 1/2/5 x 10^k multiple, a step of 2.5 x 10^k is allowed too -- needed so 3
+# equal steps can land close to the target (e.g. target ~7500 -> steps of
+# 2500, giving 0, 2500, 5000, 7500) rather than overshooting it by a lot.
+# Picks the *smallest* nice step whose 3 steps still reach the target --
+# picking whichever nice step is merely closest to target/3 (tried first)
+# can round down and clip real data above the top tick, found via the Gulf
+# of Lion's actual max area (8987 km^2) rounding down to a 7500 top tick.
+nice_step_for_target <- function(target){
+  raw_step <- target / 3
   magnitude <- 10 ^ floor(log10(raw_step))
   candidate_steps <- c(1, 2, 2.5, 5, 10) * magnitude
-  step <- min(candidate_steps[candidate_steps * 3 >= max_val])
+  min(candidate_steps[candidate_steps * 3 >= target])
+}
+
+# Four evenly spaced y-axis ticks from 0 up to a "nice" round number at or
+# above max(x). See nice_step_for_target() above for the step-selection logic.
+four_ticks_from_zero <- function(x){
+  step <- nice_step_for_target(max(x, na.rm = TRUE))
   seq(0, step * 3, by = step)
 }
 
-.high_res_france_coastline_cache <- NULL
+# Natural Earth 10m "Land" (naturalearthdata.com, public domain), vendored
+# into data/EUROPE_shapefile/ 2026-08-11: a single global land-polygon layer
+# at the same 10m-class resolution as the GADM France file this replaced,
+# covering all of Europe and the UK (and everywhere else) in one file. Was
+# previously France-only (GADM ADM0), overplotted on the crude `maps`-
+# package "world" coastline for every other country -- visibly mismatched
+# resolution at the UK/Belgium/Spain edges of every map. No per-country
+# subsetting needed: "Land" is one continuous landmass polygon, matching
+# how it's used below (a single filled black layer, not coloured by
+# country), so create_the_basic_map() no longer needs the low-res
+# map_data("world") layer at all when high_res_coast = TRUE.
+.high_res_coastline_cache <- NULL
 high_res_coastline <- function(){
-  if(is.null(.high_res_france_coastline_cache)){
+  if(is.null(.high_res_coastline_cache)){
     library(sf)
-    .high_res_france_coastline_cache <<- sf::st_read("data/FRANCE_shapefile/gadm41_FRA_0.shp", quiet = TRUE) |> 
-      sf::st_coordinates() |> 
-      as.data.frame() |> 
+    .high_res_coastline_cache <<- sf::st_read("data/EUROPE_shapefile/ne_10m_land.shp", quiet = TRUE) |>
+      sf::st_coordinates() |>
+      as.data.frame() |>
       dplyr::transmute(long = X, lat = Y, group = interaction(L1, L2, L3, drop = TRUE))
   }
-  .high_res_france_coastline_cache
+  .high_res_coastline_cache
 }
 
 create_the_basic_map <- function(map_df, var_name,
@@ -97,14 +118,16 @@ create_the_basic_map <- function(map_df, var_name,
   the_map <- the_base_map +
 
     (if(high_res_coast){
-      # High-resolution France coastline (GADM) layered over the crude
-      # "world" database coastline -- other countries stay at world
-      # resolution (irrelevant at inset zoom levels, and not worth the
-      # GADM detail on the national map either), but France's own coast
-      # gets the same GADM detail whether this is a zoomed inset or the
-      # main national panel.
+      # High-resolution coastline (Natural Earth 10m land, all of Europe +
+      # UK and beyond -- see high_res_coastline() above) as the only layer.
+      # Fixed 2026-08-11: previously this was France-only (GADM), layered
+      # OVER the crude low-res map_data("world") coastline underneath, so
+      # every neighbouring country's coast (UK, Belgium, Spain) stayed at
+      # visibly cruder resolution than France's own -- both on the main
+      # national panel and every zoomed inset. The new file covers the
+      # whole extent any of these maps needs, so the low-res layer is no
+      # longer drawn at all when high_res_coast = TRUE.
       list(
-        geom_polygon(data = map_data("world"), aes(x=long, y=lat, group = group), color = 'grey60', fill = 'black'),
         geom_polygon(data = high_res_coastline(), aes(x = long, y = lat, group = group), color = 'grey60', fill = 'black')
       )
     } else {
@@ -279,9 +302,17 @@ Figure_1 <- function(where_to_save_the_figure) {
   # old shared-offset approach clipped the Seine label against its inset's
   # right edge and crowded the two Rhone labels together).
   mouth <- function(river_name) dplyr::filter(zone_river_mouths, river == river_name)
-  river_label_style <- function(river_name, primary, ...){
+  # fill/alpha added 2026-08-11 (per TODO.md): the labels had no background
+  # fill at all (geom_label()'s box border was visible but its interior was
+  # effectively transparent), making text hard to read against the busy SPM
+  # colour raster underneath. fill is the opposite of the label's own text
+  # colour (dark fill behind white text, light fill behind black text) so
+  # each stays legible against its own box, at a shared alpha = 0.2 so the
+  # coastline/SPM data is still visible through it.
+  river_label_style <- function(river_name, primary, colour, ...){
     geom_label(data = mouth(river_name), aes(x = lon, y = lat, label = river),
-              fontface = if(primary) "bold" else "plain", size = if(primary) 8 else 6, ...)
+              fontface = if(primary) "bold" else "plain", size = if(primary) 8 else 6,
+              colour = colour, fill = if(colour == "white") "black" else "white", alpha = 0.2, ...)
   }
 
   river_labels_by_zone <- list(
@@ -535,8 +566,17 @@ Figure_3_transect_panel <- function(where_to_save_the_figure) {
     scale_linetype_manual(values = ref_line_styles, labels = ref_line_labels, name = NULL) +
     labs(x = "Distance from river mouth (km)", y = "SPM (g m⁻³)", tag = "e)") +
     ggplot_theme() +
+    # Legend moved inside the plot area 2026-08-11 (was legend.position =
+    # "right", eating into the panel's plotting width) and its text sized up
+    # for legibility, per manuscript/TODO.md. Anchored top-right: rendered
+    # against the real transect data, SPM decays sharply with distance from
+    # the mouth, so nothing is ever plotted in the high-distance/high-SPM
+    # corner -- confirmed empty, not assumed.
     theme(plot.tag = element_text(size = 35, face = "bold"), plot.tag.position = c(0.01, 0.98),
-          legend.position = "right", text = element_text(size = 20, colour = "black"),
+          legend.position = "inside", legend.position.inside = c(0.88, 0.8),
+          legend.background = element_rect(fill = "white", colour = "grey70"),
+          legend.text = element_text(size = 18), legend.title = element_text(size = 18),
+          text = element_text(size = 20, colour = "black"),
           axis.text = element_text(size = 18, colour = "black"))
 
   save_plot_as_png(the_plot, "transect_panel", width = 24, height = 8, path = where_to_save_the_figure)
@@ -602,15 +642,6 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   SPM_map_data <- main_folder |> file.path('DATA', 'ts_data.csv') |> read_csv()
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
 
-  # Plume-area trend line uses the same AR(1)/HAC-weighted fit as Table 5's
-  # "Surface area" row -- see func/compute_area_trend.R. SPM mass trend line
-  # uses the same estimator via
-  # func/compute_mass_spm_trend.R -- "daily" timestep row only, since that
-  # file also has a "monthly" row per zone.
-  area_trend <- read_csv("output/STATS/area_trend_summary.csv", show_col_types = FALSE)
-  mass_trend <- read_csv("output/STATS/mass_SPM_trend_summary.csv", show_col_types = FALSE) |>
-    filter(timestep == "daily")
-
   # Panel order follows ZONE_ORDER (north to south), matching every other
   # multi-zone figure/table in the project -- dlply()'s default grouping
   # would otherwise sort panels alphabetically.
@@ -629,14 +660,6 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
 
     if (index_to_remove |> length() > 0) {df_zone <- df_zone[-index_to_remove,]}
 
-    zone_trend <- area_trend |> filter(zone == df_zone$Zone[1]) |>
-      mutate(trend_label = paste0("Area trend: ", sprintf("%+.2f", slope_annualised), " km² yr⁻¹ (",
-                                  ifelse(slope_p < 0.001, "p < 0.001", paste0("p = ", signif(slope_p, 2))), ")"))
-
-    zone_mass_trend <- mass_trend |> filter(zone == df_zone$Zone[1]) |>
-      mutate(trend_label = paste0("Mass trend: ", sprintf("%+.1f", slope_annualised_t_yr), " t yr⁻¹ (",
-                                  ifelse(slope_p < 0.001, "p < 0.001", paste0("p = ", signif(slope_p, 2))), ")"))
-
     df_merged <- df_zone |> filter(Satellite_sensor == "merged") |>
       mutate(mass_t = mass_SPM_in_the_plume_area_in_g_m / 1000)  # despite the column name, source values are kg
 
@@ -645,9 +668,6 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
     scaling_factor <- sec_axis_adjustement_factors(var_to_scale = df_merged$mass_t,
                                                     var_ref = df_merged$area_of_the_plume_mask_in_km2)
     df_merged <- df_merged |> mutate(mass_scaled = mass_t * scaling_factor$diff + scaling_factor$adjust)
-    zone_mass_trend <- zone_mass_trend |>
-      mutate(intercept_scaled = intercept_t * scaling_factor$diff + scaling_factor$adjust,
-             slope_scaled = slope_t * scaling_factor$diff)
 
     r_value <- cor(df_merged$area_of_the_plume_mask_in_km2, df_merged$mass_t, use = "complete.obs")
     r_label <- paste0("r (area, mass) = ", sprintf("%.2f", r_value))
@@ -660,25 +680,37 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
     mass_breaks_top_scaled <- max(mass_breaks) * scaling_factor$diff + scaling_factor$adjust
     ylim_top <- max(max(area_breaks), mass_breaks_top_scaled)
 
+    # Whichever axis's own rounded top tick did *not* set ylim_top gets 4
+    # evenly spaced ticks over [0, ylim_top] (translated into its native
+    # units) instead of its own independently-rounded set -- otherwise that
+    # axis's series is visually stranded well below the panel top ("dead
+    # space", fixed 2026-08-11: measured 11-37% of panel height per zone
+    # before this fix). Tried re-running nice_step_for_target() against the
+    # translated target first: rejected, because a target that lands just
+    # above one candidate step's 3x reach (e.g. 16895 vs. 5000*3=15000) can
+    # force a jump to the next candidate (10000*3=30000), nearly doubling
+    # ylim_top and making the mismatch worse, not better (verified against
+    # real Figure 4 data: Gulf of Lion dead space went from 11% to 44%).
+    # Evenly-spaced ticks guarantee an exact match to the dominant axis's
+    # fractional tick positions -- zero dead space by construction, with no
+    # risk of clipping (ylim_top already covers this axis's own real max) --
+    # at the cost of the subordinate axis's tick labels not being as round.
+    if (mass_breaks_top_scaled < ylim_top) {
+      mass_target_native <- (ylim_top - scaling_factor$adjust) / scaling_factor$diff
+      mass_breaks <- seq(0, mass_target_native, length.out = 4)
+    } else if (max(area_breaks) < ylim_top) {
+      area_breaks <- seq(0, ylim_top, length.out = 4)
+    }
+
     the_ts_plot_wo_modis <- ggplot() +
       geom_point(data = df_merged,
-                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") +
+                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3", alpha = 0.6) +
       geom_path(data = df_merged,
                 aes(x = date, y = area_of_the_plume_mask_in_km2), color = "red3") +
-      geom_abline(data = zone_trend, aes(intercept = intercept, slope = slope),
-                  colour = "red3", linewidth = 1.2, linetype = "dashed") +
 
-      geom_point(data = df_merged, aes(x = date, y = mass_scaled), color = "steelblue4") +
+      geom_point(data = df_merged, aes(x = date, y = mass_scaled), color = "steelblue4", alpha = 0.6) +
       geom_path(data = df_merged, aes(x = date, y = mass_scaled), color = "steelblue4") +
-      geom_abline(data = zone_mass_trend, aes(intercept = intercept_scaled, slope = slope_scaled),
-                  colour = "steelblue4", linewidth = 1.2, linetype = "dashed") +
 
-      # Trend labels stacked in the upper-right corner (area above mass);
-      # the area/mass correlation sits top-centre.
-      geom_text(data = zone_trend, aes(x = Inf, y = Inf, label = trend_label), inherit.aes = FALSE,
-               hjust = 1.03, vjust = 1.5, size = 6, colour = "red3") +
-      geom_text(data = zone_mass_trend, aes(x = Inf, y = Inf, label = trend_label), inherit.aes = FALSE,
-               hjust = 1.03, vjust = 3.2, size = 6, colour = "steelblue4") +
       annotate("text", x = mean(range(df_merged$date, na.rm = TRUE)), y = Inf, label = r_label,
               hjust = 0.5, vjust = 1.5, size = 6, colour = "black") +
 
@@ -690,11 +722,15 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
       coord_cartesian(ylim = c(0, ylim_top)) +
       # No per-panel y-axis title -- a single shared label is added once via
       # annotate_figure() on the assembled composite below, rather than
-      # repeating "Plume area (km²)"/"SPM mass (t)" on all four stacked
-      # panels. 4 ticks per axis, always starting at 0, four_ticks_from_zero() above.
+      # repeating "Plume area (km²)"/"SPM mass (x10^5 t)" on all four stacked
+      # panels. 4 ticks per axis, always starting at 0, four_ticks_from_zero()
+      # above. Mass axis labels shown as x10^5 t (2026-08-11: raw values,
+      # e.g. Bay of Biscay's ~500,000 t, rendered in scientific notation by
+      # default) rather than the shared axis title alone carrying that scale.
       scale_y_continuous(name = NULL, breaks = area_breaks,
                          sec.axis = sec_axis(transform = ~ (. - scaling_factor$adjust) / scaling_factor$diff,
-                                             name = NULL, breaks = mass_breaks)) +
+                                             name = NULL, breaks = mass_breaks,
+                                             labels = function(b) format(round(b / 1e5, 1), trim = TRUE))) +
       labs(x = "", title = zone_title(df_zone$Zone[1])) +
       ggplot_theme() +
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
@@ -733,7 +769,7 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   save_plot_as_png(annotate_figure(
                      ggarrange(plotlist = SPM_map_ts |> plyr::llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
                      left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "red3"),
-                     right = text_grob("SPM mass (t)", rot = -90, size = 30, color = "steelblue4")),
+                     right = text_grob("SPM mass (x10⁵ t)", rot = -90, size = 30, color = "steelblue4")),
                    'Figure_4', width = 20, height = 16, path = main_folder)
 }
 
@@ -819,9 +855,25 @@ Figure_5_seasonal_analysis <- function(where_are_saved_plume_results_with_dynami
   # re-reads this same data -- so a static-threshold box sitting outside
   # 0-100% there is a real, visible signal that the two thresholds disagree,
   # not scaling noise.
+  #
+  # Bounds are the 2nd/98th percentile, not the literal min/max (fixed
+  # 2026-08-11, per Robert): several variables are heavy-tailed by nature
+  # (SPM mass, river flow -- a handful of flood/resuspension days carry far
+  # more mass/discharge than any typical day) or have their range set by a
+  # short run of genuine extreme-event days (Bay of Seine along-coast drift,
+  # dominated by the Feb-2014 storm cluster). A literal min/max range let
+  # those rare days set the whole 28-year scale, compressing every month's
+  # median toward one end regardless of real seasonal variation -- e.g. the
+  # Gulf of Lion's SPM mass median sat at 1.9% of its literal range. The
+  # ~4% of days beyond the 2nd/98th percentile now saturate at the colour
+  # scale's ends instead of dominating it; the monthly *median* pct plotted
+  # by Figure_5 was already robust to this on its own, but the fix has to
+  # apply here (to `value` before pct is computed) so Figure S3's boxplot
+  # whiskers -- which do use extreme per-day pct values -- see it too.
   scale_range <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
-    dplyr::summarise(range_min = min(value, na.rm = TRUE), range_max = max(value, na.rm = TRUE),
+    dplyr::summarise(range_min = stats::quantile(value, 0.02, na.rm = TRUE),
+                     range_max = stats::quantile(value, 0.98, na.rm = TRUE),
                      .by = c(zone, variable))
 
   df <- long_data |>
@@ -856,6 +908,73 @@ Figure_5_seasonal_analysis <- function(where_are_saved_plume_results_with_dynami
 }
 
 
+# Supplementary "Sx. Lagged daily correlations" figure (fig:daily_flow):
+# daily plume area vs. river flow scatter + lagged correlation, per zone.
+# Misplaced under a "Deprecated" heading by the 2026-08-11 figure.R cleanup
+# pass (only its old main-text role, superseded by Figure_5_seasonal_analysis()
+# above, was ever deprecated -- this Supplementary figure itself is still
+# live, called from code/5_figures.py); moved back out here.
+Figure_S_daily_flow <- function(where_to_save_the_figure, max_lag_daily = 14){
+
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S_daily_flow")
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+
+  # ggplot_theme()'s font sizes are tuned for the single-column, 4-row
+  # figures elsewhere (e.g. Figures_6_7); an 8-panel 2x4 grid needs smaller
+  # text and explicit margins so axis titles don't clip against the plot
+  # edge or the panel above. Same theme for every zone, so built once here
+  # rather than inside the per-zone loop below.
+  panel_theme <- theme(plot.title = element_text(hjust = 0.5, size = 20),
+                       axis.title = element_text(size = 15, colour = "black"),
+                       axis.text = element_text(size = 12, colour = "black"),
+                       plot.margin = margin(t = 8, r = 12, b = 5, l = 5),
+                       panel.background = element_blank(),
+                       panel.grid.major = element_blank(),
+                       panel.grid.minor = element_blank(),
+                       panel.border = element_rect(linetype = "solid", fill = NA))
+
+  panels <- purrr::pmap(zone_meta, function(...){
+    meta <- tibble::tibble(...)
+    df <- combine_plume_driver("flow", meta)
+
+    cor_df <- driver_plume_correlation(df, max_lag_daily = max_lag_daily) |>
+      dplyr::filter(timestep == "daily")
+    peak <- cor_df |> dplyr::slice_max(cor, n = 1)
+
+    # Panel title is the zone (the flow series compared here is already
+    # zone-summed across every contributing river -- see load_river_flow()),
+    # not the representative river/mouth name.
+    zone_label <- zone_title(meta$zone)
+
+    scatter_plot <- ggplot(df, aes(x = value, y = plume_area)) +
+      geom_point(alpha = 0.3, colour = "grey30", size = 0.8) +
+      geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 1.2) +
+      labs(x = "River flow (m³ s⁻¹)", y = "Plume area (km²)", title = zone_label) +
+      panel_theme
+
+    lag_plot <- ggplot(cor_df, aes(x = lag, y = cor)) +
+      geom_line(colour = "grey30") +
+      geom_point(colour = "grey30") +
+      geom_point(data = peak, colour = "firebrick", size = 3) +
+      geom_text(data = peak, aes(label = paste0(lag, "d")), vjust = -1.2, colour = "firebrick", size = 4) +
+      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+      labs(x = "Lag, plume after flow (days)", y = "Correlation (r)", title = zone_label) +
+      panel_theme
+
+    list(scatter = scatter_plot, lag = lag_plot)
+  })
+
+  plotlist <- panels |> purrr::map(function(p) list(p$scatter, p$lag)) |> purrr::flatten()
+
+  panel_labels <- paste0(letters[seq_along(plotlist)], ")")
+  full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = length(panels), align = "v",
+                                 labels = panel_labels, font.label = list(size = 18, face = "bold"),
+                                 hjust = -0.3, vjust = 1.3)
+
+  save_plot_as_png(full_plot, "Figure_S_daily_flow", width = 16, height = 18, path = main_folder)
+}
+
+
 # Figure 6: X11 interannual (long-term) signal of plume area vs.
 # river flow, dynamic threshold (main results), all four zones. Per-panel
 # axis titles are suppressed (show_axis_titles = FALSE) in favour of one
@@ -872,9 +991,12 @@ Figure_6_x11_interannual <- function(where_to_save_the_figure){
 }
 
 
-# Figure 7: wind and wave direction/magnitude roses, one row per
+# Figure 7: wind, wave, and current direction/magnitude roses, one row per
 # zone, coloured by the flow-controlled plume-area response
-# (multi.R::plot_driver_rose()).
+# (multi.R::plot_driver_rose()). Current column added 2026-08-11 (per
+# Robert), a plotting-only addition -- current speed/direction was already
+# loaded elsewhere in the pipeline (e.g. Table 6's driver set) under the
+# same column-naming convention plot_driver_rose() already expects.
 Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 8){
 
   main_folder_of_Figure_7 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_7")
@@ -882,18 +1004,21 @@ Figure_7_driver_rose <- function(where_to_save_the_figure, n_sectors = 8){
 
   plotlist <- purrr::pmap(zone_meta, function(...){
     meta <- tibble::tibble(...)
-    # One flow join/STL per zone, shared across the wind and wave roses below
-    # (plot_driver_rose() would otherwise recompute the identical df_flow twice).
+    # One flow join/STL per zone, shared across the wind/wave/current roses
+    # below (plot_driver_rose() would otherwise recompute the identical
+    # df_flow three times).
     df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
-    list(wind = plot_driver_rose("wind", meta, n_sectors, df_flow), wave = plot_driver_rose("wave", meta, n_sectors, df_flow))
-  }) |> purrr::map(function(p) list(p$wind, p$wave)) |> purrr::flatten()
+    list(wind = plot_driver_rose("wind", meta, n_sectors, df_flow),
+        wave = plot_driver_rose("wave", meta, n_sectors, df_flow),
+        current = plot_driver_rose("current", meta, n_sectors, df_flow))
+  }) |> purrr::map(function(p) list(p$wind, p$wave, p$current)) |> purrr::flatten()
 
   panel_labels <- paste0(letters[seq_along(plotlist)], ")")
-  full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = nrow(zone_meta), align = "v",
+  full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 3, nrow = nrow(zone_meta), align = "v",
                                  labels = panel_labels, font.label = list(size = 18, face = "bold"),
                                  hjust = -0.3, vjust = 1.3)
 
-  save_plot_as_png(full_plot, "Figure_7", width = 16, height = 20, path = main_folder_of_Figure_7)
+  save_plot_as_png(full_plot, "Figure_7", width = 24, height = 20, path = main_folder_of_Figure_7)
 }
 
 
@@ -911,7 +1036,7 @@ Figure_8_gam_partial <- function(where_to_save_the_figure, stats_dir = "output/S
   # other figure in this file.
   source("func/driver_interactions.R")
 
-  main_folder_of_Figure_8 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_*")
+  main_folder_of_Figure_8 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_8")
   if (!dir.exists(main_folder_of_Figure_8)) dir.create(main_folder_of_Figure_8, recursive = TRUE)
 
   driver_labels <- c(flow = "River flow (m³ s⁻¹)", wind_spd = "Wind speed (m s⁻¹)",
@@ -997,6 +1122,22 @@ compute_x11_zone_plots <- function(data_dir, show_axis_titles = TRUE){
 # zones into a single column -- the layout shared by every figure below.
 stack_x11_component <- function(zone_plots, component){
   ggarrange(plotlist = zone_plots |> plyr::llply(function(x) x[[component]]), ncol = 1, nrow = 4, align = "v")
+}
+
+# Renders each of two X11-component stacks (e.g. Seasonal + Residual) to its
+# own PNG first, then composites them with magick::image_append(stack=TRUE)
+# -- nesting a second ggarrange() around two already-4-row ggarrange() stacks
+# instead corrupts the rotated secondary-axis text (checked visually: the
+# y-axis labels overlap into an unreadable smear). Compositing at the image
+# level, like the pre-2026-08-01 Figure_8/Figure_10 assembly did, avoids this.
+save_x11_component_composite <- function(zone_plots, components, name, path){
+  panel_files <- purrr::map_chr(components, function(component){
+    save_plot_as_png(stack_x11_component(zone_plots, component), paste0(name, "_", tolower(component)),
+                     width = 20, height = 16, path = path)
+    file.path(path, paste0(name, "_", tolower(component), ".png"))
+  })
+  composite <- magick::image_append(magick::image_read(panel_files), stack = TRUE)
+  magick::image_write(composite, file.path(path, paste0(name, ".png")))
 }
 
 # Figure S1: plume-area time series, fixed vs. dynamic threshold
@@ -1149,6 +1290,23 @@ compute_x11_dynamic_vs_static_plots <- function(data_dir){
   })
 }
 
+# manuscript Figure S2 (fig:s2): X11 seasonal + residual components, dynamic
+# threshold, all four zones -- the two components not shown in main Figure 6.
+# Shares Figure 6's DATA/ prep (data_dir points at FIGURE_6/, not FIGURE_S2/).
+# Restored 2026-08-11: accidentally deleted from this file on 2026-08-10
+# (commit c76fe1f) while figure.py::Figure_X11_weekly_results() still called
+# it -- silently broken since then, the R call wrapped in a try/except that
+# only prints a warning, so no pipeline run surfaced the failure. Body
+# unchanged from the pre-deletion version; compute_x11_zone_plots() and
+# save_x11_component_composite() (used below) were untouched by the deletion.
+Figure_S2_x11_components <- function(where_to_save_the_figure){
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S2")
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+  zone_plots <- compute_x11_zone_plots(data_dir)
+  save_x11_component_composite(zone_plots, c("Seasonal", "Residual"), "Figure_S2", main_folder)
+}
+
 # manuscript Supplementary figure: X11 interannual signal of plume area,
 # dynamic vs. static threshold, all four zones.
 Figure_S5_x11_interannual_dynamic_vs_static <- function(where_to_save_the_figure){
@@ -1219,11 +1377,15 @@ Figure_S3_seasonal_boxplots <- function(where_to_save_the_figure){
 
   long_data <- readr::read_csv(data_path, show_col_types = FALSE)
 
-  # Same dynamic-threshold-only scale as Figure_5_seasonal_analysis(), so the
-  # two figures' y-axes are directly comparable.
+  # Same dynamic-threshold-only scale as Figure_5_seasonal_analysis() -- incl.
+  # the 2nd/98th-percentile bounds fixed there 2026-08-11 -- so the two
+  # figures' y-axes are directly comparable. Boxplot whiskers below use
+  # per-day pct extremes directly, so this fix matters here even more than
+  # in Figure 5 (which only plots the more-robust monthly median).
   scale_range <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
-    dplyr::summarise(range_min = min(value, na.rm = TRUE), range_max = max(value, na.rm = TRUE),
+    dplyr::summarise(range_min = stats::quantile(value, 0.02, na.rm = TRUE),
+                     range_max = stats::quantile(value, 0.98, na.rm = TRUE),
                      .by = c(zone, variable))
 
   df <- long_data |>
@@ -1280,82 +1442,5 @@ Figure_8_driver_category <- function(where_to_save_the_figure){
   full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = 2, common.legend = TRUE, legend = "bottom")
 
   save_plot_as_png(full_plot, "Figure_8", width = 14, height = 12, path = main_folder_of_Figure_8)
-}
-
-# Lag correlation plots by intensity categories
-Figure_S_daily_flow <- function(where_to_save_the_figure, max_lag_daily = 14){
-
-  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_S_daily_flow")
-  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-
-  # ggplot_theme()'s font sizes are tuned for the single-column, 4-row
-  # figures elsewhere (e.g. Figures_6_7); an 8-panel 2x4 grid needs smaller
-  # text and explicit margins so axis titles don't clip against the plot
-  # edge or the panel above. Same theme for every zone, so built once here
-  # rather than inside the per-zone loop below.
-  panel_theme <- theme(plot.title = element_text(hjust = 0.5, size = 20),
-                       axis.title = element_text(size = 15, colour = "black"),
-                       axis.text = element_text(size = 12, colour = "black"),
-                       plot.margin = margin(t = 8, r = 12, b = 5, l = 5),
-                       panel.background = element_blank(),
-                       panel.grid.major = element_blank(),
-                       panel.grid.minor = element_blank(),
-                       panel.border = element_rect(linetype = "solid", fill = NA))
-
-  panels <- purrr::pmap(zone_meta, function(...){
-    meta <- tibble::tibble(...)
-    df <- combine_plume_driver("flow", meta)
-
-    cor_df <- driver_plume_correlation(df, max_lag_daily = max_lag_daily) |>
-      dplyr::filter(timestep == "daily")
-    peak <- cor_df |> dplyr::slice_max(cor, n = 1)
-
-    # Panel title is the zone (the flow series compared here is already
-    # zone-summed across every contributing river -- see load_river_flow()),
-    # not the representative river/mouth name.
-    zone_label <- zone_title(meta$zone)
-
-    scatter_plot <- ggplot(df, aes(x = value, y = plume_area)) +
-      geom_point(alpha = 0.3, colour = "grey30", size = 0.8) +
-      geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 1.2) +
-      labs(x = "River flow (m³ s⁻¹)", y = "Plume area (km²)", title = zone_label) +
-      panel_theme
-
-    lag_plot <- ggplot(cor_df, aes(x = lag, y = cor)) +
-      geom_line(colour = "grey30") +
-      geom_point(colour = "grey30") +
-      geom_point(data = peak, colour = "firebrick", size = 3) +
-      geom_text(data = peak, aes(label = paste0(lag, "d")), vjust = -1.2, colour = "firebrick", size = 4) +
-      scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
-      labs(x = "Lag, plume after flow (days)", y = "Correlation (r)", title = zone_label) +
-      panel_theme
-
-    list(scatter = scatter_plot, lag = lag_plot)
-  })
-
-  plotlist <- panels |> purrr::map(function(p) list(p$scatter, p$lag)) |> purrr::flatten()
-
-  panel_labels <- paste0(letters[seq_along(plotlist)], ")")
-  full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 2, nrow = length(panels), align = "v",
-                                 labels = panel_labels, font.label = list(size = 18, face = "bold"),
-                                 hjust = -0.3, vjust = 1.3)
-
-  save_plot_as_png(full_plot, "Figure_S_daily_flow", width = 16, height = 18, path = main_folder)
-}
-
-# Renders each of two X11-component stacks (e.g. Seasonal + Residual) to its
-# own PNG first, then composites them with magick::image_append(stack=TRUE)
-# -- nesting a second ggarrange() around two already-4-row ggarrange() stacks
-# instead corrupts the rotated secondary-axis text (checked visually: the
-# y-axis labels overlap into an unreadable smear). Compositing at the image
-# level, like the pre-2026-08-01 Figure_8/Figure_10 assembly did, avoids this.
-save_x11_component_composite <- function(zone_plots, components, name, path){
-  panel_files <- purrr::map_chr(components, function(component){
-    save_plot_as_png(stack_x11_component(zone_plots, component), paste0(name, "_", tolower(component)),
-                     width = 20, height = 16, path = path)
-    file.path(path, paste0(name, "_", tolower(component), ".png"))
-  })
-  composite <- magick::image_append(magick::image_read(panel_files), stack = TRUE)
-  magick::image_write(composite, file.path(path, paste0(name, ".png")))
 }
 

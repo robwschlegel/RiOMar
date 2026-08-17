@@ -70,6 +70,7 @@ load_plume_no_estuary <- function(zone_name, plume_dir = "output/panache/dynamic
   pixel_area_km2 <- pixel_area_km2(zone_name, plume_dir)
 
   df_ref <- read_csv(paste0(plume_dir, "/", zone_name, "/Results.csv"), show_col_types = FALSE) |>
+    dplyr::filter(.data$river == "ALL") |>
     dplyr::transmute(date = as.Date(date))
 
   df_ref |>

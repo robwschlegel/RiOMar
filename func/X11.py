@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import rpy2.robjects as robjects
+from rpy2.rinterface_lib.embedded import RRuntimeError
 from scipy.stats import f, kruskal, norm, chi2, t
 from scipy import stats
 from pandas.core.window.rolling import Rolling
@@ -1546,6 +1547,9 @@ def Apply_X11_method_on_time_series(core_arguments, Zones,
         file_names_pattern = f"{plume_dir_in}/{info.Zone}/Results.csv"
 
         ts_data = pd.read_csv(file_names_pattern)
+        # panache v5.0.0+ writes one row per individual river mouth plus a
+        # combined 'ALL' row per date -- keep only the zone-level union.
+        ts_data = ts_data[ts_data['river'] == 'ALL']
         ts_data['date'] = pd.to_datetime(ts_data['date'])
 
         # Set bin integers
@@ -1620,7 +1624,13 @@ def bin_to_pseudo_weekly(dates, values):
     def assign_bin(day):
         return min(bin_centers, key=lambda x: abs(x - day))
 
-    df = pd.DataFrame({'date': pd.to_datetime(dates), 'value': pd.to_numeric(pd.Series(values).reset_index(drop=True))})
+    # Both reset to a default index before the dict->DataFrame construction,
+    # which otherwise aligns the two Series by pandas index rather than by
+    # position -- harmless for a freshly-read CSV's default RangeIndex, but
+    # silently NaNs out most rows when either input carries a non-default
+    # index (e.g. dates/values pulled from an already-filtered DataFrame).
+    df = pd.DataFrame({'date': pd.to_datetime(dates).reset_index(drop=True),
+                       'value': pd.to_numeric(pd.Series(values).reset_index(drop=True))})
     df['bin'] = df['date'].dt.day.apply(assign_bin)
     binned = df.groupby([df['date'].dt.to_period('M'), 'bin']).agg({'value': 'mean'}).reset_index()
     binned['date'] = pd.to_datetime(binned['date'].astype(str) + "-" + binned['bin'].astype(str), format="%Y-%m-%d")
@@ -1679,4 +1689,100 @@ def plot_driver_x11_dual_axis(df, zone_title, driver_label, driver_colour):
     ax1.tick_params(axis='x', rotation=90)
     fig.tight_layout()
     return fig
+
+
+# =============================================================================
+#### New wrapper function -- per-river X11 plume-vs-flow comparison
+# =============================================================================
+# Per-river variant of Apply_X11_method_on_time_series(include_river_flow=
+# True): runs the same X11 decomposition + plume-vs-flow comparison plot
+# once per individual river mouth (metadata/river_discharge_mapping.csv)
+# instead of once per zone, now that panache v5.0.0+ tracks individual
+# river-mouth plume time series (Results.csv's `river` column). Reuses
+# apply_X11_method_and_save_results() and X11.R::
+# plot_time_series_of_plume_area_and_river_flow() unchanged -- both key
+# purely on the passed identifier strings, not a fixed 4-zone list, so a
+# synthetic "<ZONE>__<River>" identifier substitutes cleanly for Zone. A
+# pure addition -- Apply_X11_method_on_time_series above is untouched here.
+
+def Apply_X11_method_on_time_series_per_river(core_arguments, plume_time_step,
+                                              plume_dir_in, X11_dir_out):
+
+    river_map = pd.read_csv(os.path.join(proj_dir, 'metadata', 'river_discharge_mapping.csv'))
+
+    core_arguments = dict(core_arguments)
+    core_arguments.update({'Zones': sorted(river_map['zone'].unique().tolist()),
+                           'Years': "*",
+                           'Satellite_variables': ['SPM'],
+                           'Temporal_resolution': ([plume_time_step]
+                                                   if isinstance(plume_time_step, str)
+                                                   else plume_time_step)})
+
+    cases_to_process = get_all_cases_to_process_for_regional_maps_or_plumes_or_X11(core_arguments)
+
+    var_to_use = 'area_of_the_plume_mask_in_km2'
+
+    X11_R_path = os.path.join(func_dir, 'X11.R')
+    robjects.r['source'](X11_R_path)
+    r_function = robjects.r['plot_time_series_of_plume_area_and_river_flow']
+
+    for i, info in cases_to_process.iterrows():
+
+        for _, river_row in river_map[river_map['zone'] == info.Zone].iterrows():
+            panache_river = river_row['panache_river']
+            river_slugs = river_row['discharge_slugs'].split('|')
+            # Single underscore (not double) so X11.R's title-generation
+            # (str_replace_all(Zone, "_", " ")) reads as one clean phrase
+            # rather than leaving a double space at the join point.
+            river_id = f"{info.Zone}_{panache_river.replace(' ', '_')}"
+
+            info_river = info.copy()
+            info_river['Zone'] = river_id
+
+            file_names_pattern = f"{plume_dir_in}/{info.Zone}/Results.csv"
+            ts_data = pd.read_csv(file_names_pattern)
+            ts_data = ts_data[ts_data['river'] == panache_river]
+            ts_data['date'] = pd.to_datetime(ts_data['date'])
+            ts_data[var_to_use] = pd.to_numeric(ts_data[var_to_use])
+
+            plume_binned = bin_to_pseudo_weekly(ts_data['date'], ts_data[var_to_use])
+
+            apply_X11_method_and_save_results(values=plume_binned['value'].tolist(), variable_name=var_to_use,
+                                              dates=plume_binned['date'], info=info_river,
+                                              X11_dir_out=X11_dir_out)
+
+            river_flow_data = load_csv_files(RIVER_FLOW=True,
+                                             Zone_of_river_flow=info.Zone,
+                                             RIVER_FLOW_time_resolution=info.Temporal_resolution,
+                                             river_files=river_slugs)
+
+            apply_X11_method_and_save_results(values=river_flow_data.Values.tolist(),
+                                              variable_name='river_flow',
+                                              dates=river_flow_data.date,
+                                              info=info_river.replace({info_river.Satellite_variable: "River_flow",
+                                                                 info_river.atmospheric_correction: "",
+                                                                 info_river.sensor_name: "",
+                                                                 info_river.Data_source: "River_flow"}),
+                                              X11_dir_out=X11_dir_out)
+
+            # A river with a patchier individual plume-area series than the
+            # zone-level 'ALL' union can fail temporal_decomp_V2_7_x11's
+            # internal data-quality gate (the same flag == -100 case
+            # decompose_driver_series() above already checks for) -- the
+            # per-signal CSV/PNG above still get written either way, but the
+            # combined comparison plot's scale breaks on the resulting
+            # all-NA Interannual/Seasonal/Residual columns. Skip that one
+            # river's comparison plot rather than aborting the whole batch.
+            try:
+                r_function(
+                    where_are_saved_X11_results=robjects.StrVector([X11_dir_out]),
+                    Zone=robjects.StrVector([river_id]),
+                    Data_source=robjects.StrVector([info.Data_source]),
+                    sensor_name=robjects.StrVector([info.sensor_name]),
+                    atmospheric_correction=robjects.StrVector([info.atmospheric_correction]),
+                    Temporal_resolution=robjects.StrVector([info.Temporal_resolution])
+                )
+            except RRuntimeError as e:
+                print(f"!!! Skipping plume-vs-flow comparison plot for {river_id} "
+                     f"-- X11 decomposition likely failed its data-quality gate: {e}")
 
