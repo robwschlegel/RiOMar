@@ -393,7 +393,7 @@ zone_maps_panels <- function(data_folder, include_station_points) {
 
   points_for_the_legend <- data.frame(SOURCE = c('SOMLIT', 'REPHY'), longitude = c(0,0), latitude = c(0,0))
 
-  SPM_map_data |>
+  SPM_maps <- SPM_map_data |>
     plyr::llply(function(x) {
       insitu_stations_of_the_map <- insitu_stations |>
         filter((LATITUDE |> between(min(x$lat), max(x$lat))) &
@@ -438,8 +438,9 @@ zone_maps_panels <- function(data_folder, include_station_points) {
               axis.text = element_text(size=25, colour = "black"))
 
       return(the_map)
-    }) |>
-    ggarrange(plotlist = ., common.legend = TRUE)
+    })
+
+  ggarrange(plotlist = SPM_maps, common.legend = TRUE)
 }
 
 # Standalone regional-zone-maps figure

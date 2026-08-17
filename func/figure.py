@@ -466,7 +466,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         plume_masks_path = os.path.join(where_are_saved_regional_maps, 'panache', 'dynamic', Zone, 'PlumeMasks.nc')
         with xr.open_dataset(plume_masks_path) as mask_ds:
             plume_mask = (mask_ds['plume_mask']
-                          .sel(time=Date)
+                          .sel(time=Date, river='ALL')
                           .reindex(lat=SPM_map_da.lat, lon=SPM_map_da.lon, method='nearest')
                           .load())
 
