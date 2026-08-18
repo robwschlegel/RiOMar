@@ -83,6 +83,9 @@ Four coastal zones used throughout: `GULF_OF_LION`, `BAY_OF_SEINE`, `BAY_OF_BISC
 ### func/ modules (R)
 Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.R`, etc. — there is no `regmap.R`, regional-map creation is Python-only). These are used for analyses that rely on R packages (e.g. base stats and all plotting) and are called from Python via `rpy2`. `func/validate.R` is the authoritative satellite-vs-in-situ match-up pipeline (writes both `output/MATCH_UP_DATA/FRANCE/summary.csv`, feeding manuscript Table 4, and the SEXTANT/ODATIS-MR `STATISTICS/*.csv` tables feeding Figure 2).
 
+### Per-river panache output
+`panache`'s `Results.csv`/`PlumeMasks.nc` carry one row/mask layer per individual river mouth within a zone, plus an `'ALL'` union-mask row/layer (the zone total). RiOMar's loaders (`util.R::load_plume_ts()`, `figure.py::_load_results()`, `compute_plume_shape.py`, etc.) default to `river == "ALL"` for all zone-level stats. A real per-river analysis layer also exists (`func/compute_river_plume_correlation.R`, `X11.py::Apply_X11_method_on_time_series_per_river()`, `metadata/river_discharge_mapping.csv`) but is intentionally not surfaced in the manuscript — all published tables/figures stay at zone level, per project convention.
+
 ### metadata/
 Zone configuration JSONs consumed directly by `panache` and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
 

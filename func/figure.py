@@ -700,28 +700,29 @@ def _prep_x11_weekly_data(where_are_saved_X11_results, data_dir):
     """
     os.makedirs(os.path.join(data_dir, 'DATA'), exist_ok=True)
 
-    ts_plume_files = glob.glob(
-        os.path.join(where_are_saved_X11_results, '*', 'X11_ANALYSIS', 'area_of_the_plume_mask_in_km2',
-                     'SEXTANT_merged_Standard_WEEKLY.csv'))
-
-    ts_river_files = glob.glob(
-        os.path.join(where_are_saved_X11_results, '*', 'X11_ANALYSIS', 'river_flow', 'River_flow___WEEKLY.csv'))
-
     regions = ["BAY_OF_BISCAY", "GULF_OF_LION", "BAY_OF_SEINE", "SOUTHERN_BRITTANY"]
 
+    # Globbed per exact zone directory (not '*') so the per-river X11 output
+    # directories (e.g. BAY_OF_SEINE_Seine) added alongside the zone-level
+    # ones don't get pulled in here too -- a '*' wildcard + substring region
+    # match previously matched both, duplicating dates per zone.
     ts_plume_data = []
-    for ts_file in ts_plume_files:
-        region_found = next((region for region in regions if region in ts_file), None)
-        ts_data = pd.read_csv(ts_file)
-        ts_data['Zone'] = region_found
-        ts_plume_data.append(ts_data)
+    for region in regions:
+        for ts_file in glob.glob(
+                os.path.join(where_are_saved_X11_results, region, 'X11_ANALYSIS', 'area_of_the_plume_mask_in_km2',
+                             'SEXTANT_merged_Standard_WEEKLY.csv')):
+            ts_data = pd.read_csv(ts_file)
+            ts_data['Zone'] = region
+            ts_plume_data.append(ts_data)
 
     ts_river_data = []
-    for ts_file in ts_river_files:
-        region_found = next((region for region in regions if region in ts_file), None)
-        ts_data = pd.read_csv(ts_file)
-        ts_data['Zone'] = region_found
-        ts_river_data.append(ts_data)
+    for region in regions:
+        for ts_file in glob.glob(
+                os.path.join(where_are_saved_X11_results, region, 'X11_ANALYSIS', 'river_flow',
+                             'River_flow___WEEKLY.csv')):
+            ts_data = pd.read_csv(ts_file)
+            ts_data['Zone'] = region
+            ts_river_data.append(ts_data)
 
     pd.concat(ts_plume_data).to_csv(os.path.join(data_dir, 'DATA', 'ts_plume_data.csv'))
     pd.concat(ts_river_data).to_csv(os.path.join(data_dir, 'DATA', 'ts_river_data.csv'))
@@ -740,16 +741,15 @@ def _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_
     regions = ["BAY_OF_BISCAY", "GULF_OF_LION", "BAY_OF_SEINE", "SOUTHERN_BRITTANY"]
 
     def _load_plume(where_are_saved_X11_results, threshold_label):
-        ts_plume_files = glob.glob(
-            os.path.join(where_are_saved_X11_results, '*', 'X11_ANALYSIS', 'area_of_the_plume_mask_in_km2',
-                         'SEXTANT_merged_Standard_WEEKLY.csv'))
         dfs = []
-        for ts_file in ts_plume_files:
-            region_found = next((region for region in regions if region in ts_file), None)
-            ts_data = pd.read_csv(ts_file)
-            ts_data['Zone'] = region_found
-            ts_data['threshold'] = threshold_label
-            dfs.append(ts_data)
+        for region in regions:
+            for ts_file in glob.glob(
+                    os.path.join(where_are_saved_X11_results, region, 'X11_ANALYSIS',
+                                 'area_of_the_plume_mask_in_km2', 'SEXTANT_merged_Standard_WEEKLY.csv')):
+                ts_data = pd.read_csv(ts_file)
+                ts_data['Zone'] = region
+                ts_data['threshold'] = threshold_label
+                dfs.append(ts_data)
         return pd.concat(dfs)
 
     dynamic_df = _load_plume(where_are_saved_X11_results_dynamic, 'dynamic')
