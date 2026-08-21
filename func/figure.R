@@ -640,12 +640,32 @@ Figure_3_zone_maps <- function(where_to_save_the_figure) {
 Figure_4_timeseries <- function(where_to_save_the_figure){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
 
+  # Manual top of each panel's left-hand (plume area) y-axis, set by hand
+  # per zone rather than derived from that zone's own data max -- see
+  # comment at its call site below.
+  manual_area_ylim_top <- c(
+    "BAY_OF_SEINE" = 3000,
+    "SOUTHERN_BRITTANY" = 7000,
+    "BAY_OF_BISCAY" = 11000,
+    "GULF_OF_LION" = 11000
+  )
+
+  # Static left-hand (plume area) axis tick breaks per zone, set by hand
+  # independently of manual_area_ylim_top above -- these don't necessarily
+  # reach the axis top (e.g. Southern Brittany's top tick is 6000 against
+  # a 7000 limit), they're just the labelled ticks.
+  manual_area_breaks <- list(
+    "BAY_OF_SEINE" = c(0, 1000, 2000, 3000),
+    "SOUTHERN_BRITTANY" = c(0, 2000, 4000, 6000),
+    "BAY_OF_BISCAY" = c(0, 3000, 6000, 9000),
+    "GULF_OF_LION" = c(0, 3000, 6000, 9000)
+  )
+
   SPM_map_data <- main_folder |> file.path('DATA', 'ts_data.csv') |> read_csv()
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
 
   # Panel order follows ZONE_ORDER (north to south), matching every other
-  # multi-zone figure/table in the project -- dlply()'s default grouping
-  # would otherwise sort panels alphabetically.
+  # multi-zone figure/table in the project
   SPM_map_data$Zone <- factor(SPM_map_data$Zone, levels = ZONE_ORDER)
 
   SPM_map_ts <- SPM_map_data |> filter(Dynamic_threshold == 'Dynamic threshold') |> plyr::dlply(c("Zone"), function(df_zone) {
@@ -673,34 +693,24 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
     r_value <- cor(df_merged$area_of_the_plume_mask_in_km2, df_merged$mass_t, use = "complete.obs")
     r_label <- paste0("r (area, mass) = ", sprintf("%.2f", r_value))
 
-    area_breaks <- four_ticks_from_zero(df_merged$area_of_the_plume_mask_in_km2)
-    mass_breaks <- four_ticks_from_zero(df_merged$mass_t)
-    # mass_breaks' own top tick, transformed into area's scale -- the ylim
-    # below must clear whichever axis' rounded-up top tick is higher, or
-    # that axis' last tick/label gets clipped off the top of the panel.
-    mass_breaks_top_scaled <- max(mass_breaks) * scaling_factor$diff + scaling_factor$adjust
-    ylim_top <- max(max(area_breaks), mass_breaks_top_scaled)
+    # Left-hand (area) axis top and tick breaks are both set manually per
+    # zone, rather than via nice_step_for_target()/four_ticks_from_zero()
+    # on the data max, per Robert's request 2026-08-21/2026-08-22. Labels
+    # are still rounded to the nearest integer below in case that ever
+    # changes.
+    zone_key <- as.character(df_zone$Zone[1])
+    ylim_top <- manual_area_ylim_top[[zone_key]]
+    area_breaks <- manual_area_breaks[[zone_key]]
 
-    # Whichever axis's own rounded top tick did *not* set ylim_top gets 4
-    # evenly spaced ticks over [0, ylim_top] (translated into its native
-    # units) instead of its own independently-rounded set -- otherwise that
-    # axis's series is visually stranded well below the panel top ("dead
-    # space", fixed 2026-08-11: measured 11-37% of panel height per zone
-    # before this fix). Tried re-running nice_step_for_target() against the
-    # translated target first: rejected, because a target that lands just
-    # above one candidate step's 3x reach (e.g. 16895 vs. 5000*3=15000) can
-    # force a jump to the next candidate (10000*3=30000), nearly doubling
-    # ylim_top and making the mismatch worse, not better (verified against
-    # real Figure 4 data: Gulf of Lion dead space went from 11% to 44%).
-    # Evenly-spaced ticks guarantee an exact match to the dominant axis's
-    # fractional tick positions -- zero dead space by construction, with no
-    # risk of clipping (ylim_top already covers this axis's own real max) --
-    # at the cost of the subordinate axis's tick labels not being as round.
-    if (mass_breaks_top_scaled < ylim_top) {
+    mass_breaks <- four_ticks_from_zero(df_merged$mass_t)
+    # mass_breaks' own top tick, transformed into area's scale -- rescale
+    # mass_breaks to span the same manual ylim_top whenever its natural
+    # top tick doesn't already land there, so the right-hand axis' last
+    # tick/label isn't stranded below the panel top.
+    mass_breaks_top_scaled <- max(mass_breaks) * scaling_factor$diff + scaling_factor$adjust
+    if (mass_breaks_top_scaled != ylim_top) {
       mass_target_native <- (ylim_top - scaling_factor$adjust) / scaling_factor$diff
       mass_breaks <- seq(0, mass_target_native, length.out = 4)
-    } else if (max(area_breaks) < ylim_top) {
-      area_breaks <- seq(0, ylim_top, length.out = 4)
     }
 
     the_ts_plot_wo_modis <- ggplot() +
@@ -721,14 +731,8 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
                    expand = c(0.01,0.01)) +
 
       coord_cartesian(ylim = c(0, ylim_top)) +
-      # No per-panel y-axis title -- a single shared label is added once via
-      # annotate_figure() on the assembled composite below, rather than
-      # repeating "Plume area (km²)"/"SPM mass (x10^5 t)" on all four stacked
-      # panels. 4 ticks per axis, always starting at 0, four_ticks_from_zero()
-      # above. Mass axis labels shown as x10^5 t (2026-08-11: raw values,
-      # e.g. Bay of Biscay's ~500,000 t, rendered in scientific notation by
-      # default) rather than the shared axis title alone carrying that scale.
-      scale_y_continuous(name = NULL, breaks = area_breaks,
+      # No per-panel y-axis title
+      scale_y_continuous(name = NULL, breaks = area_breaks, labels = function(b) round(b),
                          sec.axis = sec_axis(transform = ~ (. - scaling_factor$adjust) / scaling_factor$diff,
                                              name = NULL, breaks = mass_breaks,
                                              labels = function(b) format(round(b / 1e5, 1), trim = TRUE))) +
@@ -770,7 +774,7 @@ Figure_4_timeseries <- function(where_to_save_the_figure){
   save_plot_as_png(annotate_figure(
                      ggarrange(plotlist = SPM_map_ts |> plyr::llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
                      left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "red3"),
-                     right = text_grob("SPM mass (x10⁵ t)", rot = -90, size = 30, color = "steelblue4")),
+                     right = text_grob("SPM mass (t x 10⁵)", rot = -90, size = 30, color = "steelblue4")),
                    'Figure_4', width = 20, height = 16, path = main_folder)
 }
 
@@ -877,11 +881,22 @@ Figure_5_seasonal_analysis <- function(where_are_saved_plume_results_with_dynami
                      range_max = stats::quantile(value, 0.98, na.rm = TRUE),
                      .by = c(zone, variable))
 
+  # geom_tile's discrete y-axis places the first factor level at the bottom,
+  # so levels are reversed from ZONE_ORDER here to read north (Bay of Seine)
+  # at top -> south (Gulf of Lion) at bottom, top-to-bottom -- matching the
+  # project's north-to-south panel convention (see ZONE_ORDER, func/util.R)
+  # used by every facet_wrap multi-zone figure elsewhere. "Southern Brittany"
+  # is abbreviated to "S. Brittany" for this axis label only (not zone_title()
+  # itself, which other figures/tables still use unabbreviated) to save
+  # left-margin white space in this 3x3 panel grid.
+  zone_labels <- zone_title(rev(zones))
+  zone_labels[zone_labels == "Southern Brittany"] <- "S. Brittany"
+
   df <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
     dplyr::left_join(scale_range, by = c("zone", "variable")) |>
     dplyr::mutate(pct = 100 * (value - range_min) / (range_max - range_min),
-                  zone = factor(zone, levels = zones, labels = zone_title(zones)),
+                  zone = factor(zone, levels = rev(zones), labels = zone_labels),
                   month = factor(month, levels = 1:12, labels = month.abb),
                   variable = factor(variable, levels = names(variable_display), labels = unname(variable_display)))
 
