@@ -312,7 +312,7 @@ plot_driver_comparison <- function(df, driver_name, zone_name){
     labs(x = paste("lag plume after", disp$driver_name, "(days)"), y = "correlation (r)") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
 
-  plot_title <- grid::textGrob(paste0(zone_name, " : ", driver_name, " vs plume size"),
+  plot_title <- grid::textGrob(paste0(zone_title(zone_name), " : ", driver_name, " vs plume size"),
                                gp = grid::gpar(fontsize = 16, fontface = "bold", col = "black"))
   ts_plot <- ggpubr::ggarrange(driver_plot, panache_plot, ncol = 1, nrow = 2, labels = c("a)", "b)"), align = "v")
   cor_plot <- ggpubr::ggarrange(driver_plume_cor_plot, driver_plume_cor_lag_plot, ncol = 1, nrow = 2, labels = c("c)", "d)"), heights = c(1, 0.3))
@@ -344,7 +344,7 @@ plot_driver_plume_dual_axis <- function(df, driver_name, zone_name){
     scale_y_continuous(name = "Plume area (km²)",
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
                                            name = disp$driver_label)) +
-    labs(title = zone_name) +
+    labs(title = zone_title(zone_name)) +
     ggplot_theme() +
     theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
           plot.subtitle = element_text(hjust = 0.5),
@@ -740,7 +740,7 @@ compute_alongcoast_ts <- function(zone, meta, plume_dir){
 # actually holds a different metric_col (see combine_plume_driver()), since the plot
 # filename is keyed only on driver_name/mouth_name and would otherwise silently
 # overwrite the existing plume-area trend figure for that driver/mouth.
-driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL, save_plot = TRUE){
+driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL, save_plot = TRUE, plot_label = mouth_name){
 
   disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
 
@@ -822,7 +822,7 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL, sav
                 aes(x = x_monthly, y = y_plume, label = paste0("Plume area slope = ", round(slope_annualised, 2), " km^2 yr-1\n",
                                                                 "p-value = ", round(slope_p, 2)))) +
       labs(x = NULL, y = "Plume area [km^2]",
-          title = paste0(mouth_name, " : plume area after statistical treatment (vs. ", driver_name, ")"),
+          title = paste0(plot_label, " : plume area after statistical treatment (vs. ", driver_name, ")"),
           subtitle = "Red = adjusted monthly values; blue = adjusted daily values; brown = original data") +
       theme(panel.border = element_rect(fill = NA, colour = "black"))
 
@@ -842,12 +842,13 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL, sav
                 aes(x = x_monthly, y = y_driver, label = paste0(disp$driver_label, " slope = ", round(slope_annualised, 2), " yr-1\n",
                                                                 "p-value = ", round(slope_p, 2)))) +
       labs(x = NULL, y = disp$driver_label,
-          title = paste0(mouth_name, " : ", driver_name, " after statistical treatment"),
+          title = paste0(plot_label, " : ", driver_name, " after statistical treatment"),
           subtitle = "Red = adjusted monthly values; blue = adjusted daily values; purple = original data") +
       theme(panel.border = element_rect(fill = NA, colour = "black"))
 
     pl_combi <- ggpubr::ggarrange(pl_plume, pl_driver, ncol = 1, nrow = 2)
-    ggsave(filename = paste0("figures/driver_comparison/trends_plume_", driver_name, "_adj_", mouth_name, ".png"),
+    plot_label_file <- stringr::str_replace_all(plot_label, " ", "_")
+    ggsave(filename = paste0("figures/driver_comparison/trends_plume_", driver_name, "_adj_", plot_label_file, ".png"),
           pl_combi, width = 12, height = 10)
   }
 
@@ -871,7 +872,7 @@ run_driver_suite <- function(driver_name){
     plot_driver_comparison(df, driver_name, meta$zone)
     plot_driver_plume_dual_axis(df, driver_name, meta$zone)
     cor_stats <- driver_plume_correlation(df) |> dplyr::mutate(mouth_name = meta$mouth_name, zone = meta$zone, driver_name = driver_name)
-    trend_stats <- driver_plume_trend(df, driver_name, meta$mouth_name)
+    trend_stats <- driver_plume_trend(df, driver_name, meta$mouth_name, plot_label = zone_title(meta$zone))
 
     list(correlation = cor_stats, trend = trend_stats)
   })

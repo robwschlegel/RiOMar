@@ -64,16 +64,22 @@ make_the_plot <- function(X11_data, type_of_signal) {
                                                  var_ref = X11_data_for_plot$plume_area)
   
   X11_data_for_plot <- X11_data_for_plot %>% mutate(river_flow_scaled = river_flow * scaling_factor$diff + scaling_factor$adjust)
-  
-  the_plot <- ggplot() + 
-    
-    geom_point(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") + 
-    geom_path(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") + 
-    
-    geom_point(data = X11_data_for_plot, aes(x = dates, y = river_flow_scaled), color = "blue") + 
-    geom_path(data = X11_data_for_plot, aes(x = dates, y = river_flow_scaled), color = "blue") + 
-    
-    scale_x_date(name = "", 
+
+  r_value <- cor(X11_data_for_plot$plume_area, X11_data_for_plot$river_flow, use = "complete.obs")
+  r_label <- paste0("r = ", sprintf("%.2f", r_value))
+
+  the_plot <- ggplot() +
+
+    geom_point(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") +
+
+    geom_point(data = X11_data_for_plot, aes(x = dates, y = river_flow_scaled), color = "blue") +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = river_flow_scaled), color = "blue") +
+
+    annotate("text", x = min(X11_data_for_plot$dates), y = Inf, label = r_label,
+            hjust = 0, vjust = 1.5, size = 6, colour = "black") +
+
+    scale_x_date(name = "",
                  breaks = paste(unique_years, "01-01", sep = "-") %>% as.Date(), 
                  labels = unique_years %>% str_extract_all('[0-9][0-9]$') %>% unlist()) +
     
