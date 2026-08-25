@@ -6,8 +6,9 @@
 #
 # Trend: output/STATS/monthly_trend_summary.csv (func/compute_seasonal_trend.R),
 # dynamic threshold, AR(1)/HAC-weighted per-calendar-month slope
-# (compute_monthly_trend(), func/multi.R) -- the same slope behind Table 6 and
-# the Supplementary month-by-month table. Percent-per-year here is
+# (compute_monthly_trend(), func/multi.R) -- the same slope behind the
+# monthly_trends_table_main slot and the Supplementary month-by-month table.
+# Percent-per-year here is
 # 100 * (slope * 365.25) / mean, where mean is that zone x variable's overall
 # mean value pooled across all months and years (dynamic threshold), not a
 # per-month mean -- so all 12 monthly cells for a given zone x variable share
@@ -17,8 +18,9 @@
 # The mean is recomputed here from the same source loaders
 # (load_plume_ts()/load_driver()/PlumeShape.csv/compute_alongcoast_ts())
 # compute_seasonal_trend.R used to produce the slopes, rather than read from
-# Figure_5's monthly_boxplot_data.csv -- that file stores SPM mass in tonnes
-# (Figure_5_seasonal_analysis's plume_area/1000 conversion) while
+# the seasonal_boxplot_heatmap slot's monthly_boxplot_data.csv -- that file
+# stores SPM mass in tonnes (plot_seasonal_boxplot_heatmap's plume_area/1000
+# conversion) while
 # monthly_trend_summary.csv's SPM_mass slope is fit on raw kg, and it may not
 # include every variable (e.g. compactness) if it predates a PlumeShape.csv
 # run. Recomputing the mean directly from the same raw series as the slope

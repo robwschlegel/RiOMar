@@ -27,15 +27,16 @@ source("func/tide.R")
 # Utils -------------------------------------------------------------------
 
 # High-resolution France coastline (GADM level-0 boundary, ~216,000 vertices)
-# for Figure 1's zoomed insets.
+# for the study-zone-map figure's zoomed insets.
 # Loaded lazily (library(sf) is NOT called at file scope
 
 # Step size for four_ticks_from_zero() below, factored out so a dual-axis
-# figure (e.g. Figure_4_timeseries()) can also compute the step needed to
+# figure (e.g. plot_plume_area_timeseries()) can also compute the step needed to
 # reach an arbitrary target -- not just a series' own max(x) -- letting two
 # independently-scaled axes share the same top tick instead of each rounding
 # up separately and leaving whichever axis rounds up less stranded well
-# below the panel top (fixed 2026-08-11, Figure 4's "dead space" tweak).
+# below the panel top (fixed 2026-08-11, the plume-area-timeseries figure's
+# "dead space" tweak).
 # Unlike base pretty()/scales::breaks_pretty(), which restrict the step to a
 # 1/2/5 x 10^k multiple, a step of 2.5 x 10^k is allowed too -- needed so 3
 # equal steps can land close to the target (e.g. target ~7500 -> steps of
@@ -485,8 +486,9 @@ plot_validation_scatterplot_panel <- function(spm_scatterplot_path, turb_scatter
 }
 
 
-# Renders one methodology panel (A-D) for manuscript Figure 3
-# where_to_save_the_figure <- '/figures/ARTICLE/FIGURE_3'
+# Renders one methodology panel (A-D) for the plume_methodology_panel figure
+# (manuscript/figure_table_registry.csv)
+# where_to_save_the_figure <- '/figures/ARTICLE/' + that slot's output_subdir
 # name_of_the_plot <- "C"
 plot_methodology_worked_example_panel <- function(where_to_save_the_figure, name_of_the_plot) {
   
@@ -588,23 +590,24 @@ plot_methodology_transect_panel <- function(where_to_save_the_figure) {
 }
 
 
-# Renders the per-zone plume-maps panel feeding manuscript Figure 3
+# Renders the per-zone plume-maps panel feeding the plume_methodology_panel
+# figure (manuscript/figure_table_registry.csv)
 plot_methodology_zone_maps_panel <- function(where_to_save_the_figure) {
 
   # Read only the four per-zone SPM-map CSVs figure.py's plot_methodology_zone_maps_panel()
   # writes here (Zone.csv, via zone_meta$zone for canonical zone naming/order)
-  # -- a plain "*.csv" glob on this shared FIGURE_3/DATA/ folder also picks up
+  # -- a plain "*.csv" glob on this shared DATA/ folder also picks up
   # Figure_3_panels()' A-E.csv (which lack a `plume` column entirely) and its
   # *_threshold.csv debug files, crashing create_the_basic_map()'s
   # which(map_df$plume) on the first file missing that column.
-  SPM_map_data <- where_to_save_the_figure |> 
-    file.path('DATA', paste0(zone_meta$zone, ".csv")) |> 
+  SPM_map_data <- where_to_save_the_figure |>
+    file.path('DATA', paste0(zone_meta$zone, ".csv")) |>
     plyr::llply(read_csv)
 
   # Continues the lettering from plot_methodology_worked_example_panel()'s methodology row (A-D)
-  # and plot_methodology_transect_panel()'s e) zone_meta$zone is already arranged by 
-  # ZONE_ORDER (north to south) Seine, Southern Brittany, Bay of Biscay, Gulf of Lion), 
-  # matching the order these zones are listed in the Figure 3 caption.
+  # and plot_methodology_transect_panel()'s e) zone_meta$zone is already arranged by
+  # ZONE_ORDER (north to south) Seine, Southern Brittany, Bay of Biscay, Gulf of Lion),
+  # matching the order these zones are listed in the figure's caption.
   panel_letters <- c("f)", "g)", "h)", "i)")
   SPM_maps <- purrr::map2(SPM_map_data, panel_letters, function(SPM_map, letter) {
 
@@ -787,7 +790,8 @@ plot_plume_area_timeseries <- function(where_to_save_the_figure){
 # Monthly heatmap (sec:results_seasonal) of all four plume properties and
 # five drivers, per zone, dynamic threshold. Rescaling each zone's values to
 # 0-100% of that zone's own observed dynamic-threshold range so zones of very
-# different raw magnitude (Table 3) are comparable in one figure; real
+# different raw magnitude (see the panache_stats_table slot) are comparable
+# in one figure; real
 # (unscaled) interquartile values are annotated as text. Also writes the
 # shared long-format data (both thresholds) that
 # plot_seasonal_boxplots_dynamic_vs_static() below reads back in, so the
@@ -841,7 +845,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
           dplyr::mutate(date = as.Date(date)) |>
           dplyr::transmute(date, variable = "compactness", value = compactness)
       } else {
-        message("Figure_5_seasonal_analysis: no PlumeShape.csv for ", threshold_label, "/", meta$zone,
+        message("plot_seasonal_boxplot_heatmap: no PlumeShape.csv for ", threshold_label, "/", meta$zone,
                " -- skipping compactness for this threshold.")
         df_shape <- NULL
       }
@@ -864,8 +868,9 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
   readr::write_csv(long_data, file.path(data_dir, "monthly_boxplot_data.csv"))
 
   # Each zone x variable's 0-100% scale is fixed from the *dynamic*-threshold
-  # values only, then applied to both thresholds when Figure S3 (below)
-  # re-reads this same data -- so a static-threshold box sitting outside
+  # values only, then applied to both thresholds when the
+  # seasonal_boxplots_dynamic_vs_static figure (below) re-reads this same
+  # data -- so a static-threshold box sitting outside
   # 0-100% there is a real, visible signal that the two thresholds disagree,
   # not scaling noise.
   #
@@ -880,9 +885,10 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
   # Gulf of Lion's SPM mass median sat at 1.9% of its literal range. The
   # ~4% of days beyond the 2nd/98th percentile now saturate at the colour
   # scale's ends instead of dominating it; the monthly *median* pct plotted
-  # by Figure_5 was already robust to this on its own, but the fix has to
-  # apply here (to `value` before pct is computed) so Figure S3's boxplot
-  # whiskers -- which do use extreme per-day pct values -- see it too.
+  # by plot_seasonal_boxplot_heatmap() was already robust to this on its own,
+  # but the fix has to apply here (to `value` before pct is computed) so the
+  # seasonal_boxplots_dynamic_vs_static figure's boxplot whiskers -- which do
+  # use extreme per-day pct values -- see it too.
   scale_range <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
     dplyr::summarise(range_min = stats::quantile(value, 0.02, na.rm = TRUE),
@@ -912,7 +918,8 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
   # month heatmap per variable, all 9 (4 properties + 5 drivers) in a single
   # 3x3 panel grid ; the full distributional detail (this exact
   # median plus IQR/range) is still in monthly_boxplot_data.csv (written
-  # above) and, per month/zone/property/driver, in Table 6
+  # above) and, per month/zone/property/driver, in the
+  # monthly_trends_table_main slot's source
   # (output/STATS/monthly_trend_compact_summary.csv) for anyone who needs it.
   heat_stats <- df |>
     dplyr::summarise(median_pct = stats::median(pct, na.rm = TRUE), .by = c(zone, variable, month))
@@ -927,7 +934,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
          axis.text.y = element_text(size = 10), panel.grid = element_blank())
 
   save_plot_as_png(p_heatmap, registry_basename(figure_5_output_subdir), width = 12, height = 10, path = figure_5_dir)
-  message("Wrote Figure_5.png")
+  message("Wrote ", registry_filename(figure_5_output_subdir))
   invisible(TRUE)
 }
 
@@ -1005,9 +1012,9 @@ plot_daily_flow_lagged_correlation <- function(where_to_save_the_figure, max_lag
 # X11 interannual (long-term) signal of plume area vs. river flow, dynamic
 # threshold (main results), all four zones. Per-panel axis titles are
 # suppressed (show_axis_titles = FALSE) in favour of one shared left/right
-# label on the assembled composite, matching Figure 3's convention
-# (annotate_figure(), not a title repeated on all four panels). Manuscript
-# slot "x11_interannual_river_flow" -- see
+# label on the assembled composite, matching the plume_methodology_panel
+# figure's convention (annotate_figure(), not a title repeated on all four
+# panels). Manuscript slot "x11_interannual_river_flow" -- see
 # manuscript/figure_table_registry.csv for its current figure number.
 plot_x11_interannual_river_flow <- function(where_to_save_the_figure){
   output_subdir <- get_registry_row("x11_interannual_river_flow")$output_subdir
@@ -1025,15 +1032,15 @@ plot_x11_interannual_river_flow <- function(where_to_save_the_figure){
 # coloured by the flow-controlled plume-area response
 # (multi.R::plot_driver_rose()). Current column added 2026-08-11 (per
 # Robert), a plotting-only addition -- current speed/direction was already
-# loaded elsewhere in the pipeline (e.g. Table 4's driver set) under the
-# same column-naming convention plot_driver_rose() already expects.
+# loaded elsewhere in the pipeline (e.g. the driver_stats_table's driver set)
+# under the same column-naming convention plot_driver_rose() already expects.
 # Manuscript slot "driver_rose_diagram" -- see
 # manuscript/figure_table_registry.csv for its current figure number.
 plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
 
   output_subdir <- get_registry_row("driver_rose_diagram")$output_subdir
-  main_folder_of_Figure_7 <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
-  if (!dir.exists(main_folder_of_Figure_7)) dir.create(main_folder_of_Figure_7, recursive = TRUE)
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
 
   plotlist <- purrr::pmap(zone_meta, function(...){
     meta <- tibble::tibble(...)
@@ -1051,7 +1058,7 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
                                  labels = panel_labels, font.label = list(size = 18, face = "bold"),
                                  hjust = -0.3, vjust = 1.3)
 
-  save_plot_as_png(full_plot, registry_basename(output_subdir), width = 24, height = 20, path = main_folder_of_Figure_7)
+  save_plot_as_png(full_plot, registry_basename(output_subdir), width = 24, height = 20, path = main_folder)
 }
 
 
@@ -1059,9 +1066,9 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
 # per zone (driver_interactions.R::fit_gam()/gam_partial_effect()). Tide is
 # intentionally excluded from the plot -- since tidal range is an
 # essentially fixed astronomical property of each site rather than something
-# worth a dedicated panel; it stays in the underlying GAM/Table 4 statistics,
-# just not visualised here. Manuscript slot "gam_partial_effects" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# worth a dedicated panel; it stays in the underlying GAM/driver_stats_table
+# statistics, just not visualised here. Manuscript slot "gam_partial_effects"
+# -- see manuscript/figure_table_registry.csv for its current figure number.
 plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "output/STATS"){
 
   # Sourced here rather than at file scope (unlike multi.R above): this pulls
@@ -1071,8 +1078,8 @@ plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "outp
   source("func/driver_interactions.R")
 
   output_subdir <- get_registry_row("gam_partial_effects")$output_subdir
-  main_folder_of_Figure_8 <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
-  if (!dir.exists(main_folder_of_Figure_8)) dir.create(main_folder_of_Figure_8, recursive = TRUE)
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
 
   driver_labels <- c(flow = "River flow (m³ s⁻¹)", wind_spd = "Wind speed (m s⁻¹)",
                      wave_height = "Wave height (m)", current = "Current speed (m s⁻¹)")
@@ -1089,7 +1096,7 @@ plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "outp
     df <- readr::read_csv(file.path(stats_dir, paste0("daily_driver_matrix_", zone_name, ".csv")), show_col_types = FALSE)
     gam_model <- fit_gam(df)
     drivers_to_show <- intersect(names(driver_labels), available_drivers(df))
-    if(!setequal(drivers_to_show, names(driver_labels))) stop("Figure_8_gam_partial(): zone ", zone_name,
+    if(!setequal(drivers_to_show, names(driver_labels))) stop("plot_gam_partial_effects(): zone ", zone_name,
       " does not have the full driver set (", paste(names(driver_labels), collapse = ", "),
       "); the fixed 4-column grid assumes every zone does.")
 
@@ -1108,7 +1115,7 @@ plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "outp
     function(p, d) p + labs(x = driver_labels[[d]]))
 
   panel_labels <- paste0(letters[seq_len(length(zones) * n_drivers)], ")")
-  # hjust/vjust pushed further in than Figure 7/S_daily_flow's convention
+  # hjust/vjust pushed further in than the driver_rose_diagram/daily_flow_lagged_correlation figures' convention
   # (hjust=-0.3, vjust=1.3): this grid's panels are much smaller (4x4 vs.
   # 2-column), so the same absolute offset landed the tag on top of the
   # topmost y-axis tick label instead of clear of it.
@@ -1123,7 +1130,7 @@ plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "outp
     ggpubr::ggarrange(row_labels, panel_grid, ncol = 2, widths = c(0.05, 1)),
     left = ggpubr::text_grob("Partial effect on plume area (km²)", rot = 90, size = 20))
 
-  save_plot_as_png(full_plot, registry_basename(output_subdir), width = 20, height = 16, path = main_folder_of_Figure_8)
+  save_plot_as_png(full_plot, registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 
 
@@ -1189,9 +1196,9 @@ plot_threshold_comparison <- function(where_to_save_the_figure){
   SPM_map_data <- data_dir |> file.path('DATA', 'ts_data.csv') |> read_csv()
   SPM_map_data$Dynamic_threshold <- ifelse(SPM_map_data$Dynamic_threshold, 'Dynamic threshold', 'Fixed threshold')
 
-  # Panel order follows ZONE_ORDER (north to south), matching Figure 4 and
-  # every other multi-zone figure/table -- dlply()'s default grouping would
-  # otherwise sort panels alphabetically.
+  # Panel order follows ZONE_ORDER (north to south), matching the
+  # plume_area_timeseries figure and every other multi-zone figure/table --
+  # dlply()'s default grouping would otherwise sort panels alphabetically.
   SPM_map_data$Zone <- factor(SPM_map_data$Zone, levels = ZONE_ORDER)
 
   SPM_map_ts <- SPM_map_data |> filter(Satellite_sensor == "merged") |> plyr::dlply(c("Zone"), function(df_zone) {
@@ -1221,7 +1228,8 @@ plot_threshold_comparison <- function(where_to_save_the_figure){
       
       coord_cartesian(ylim = c(0, max(df_zone$area_of_the_plume_mask_in_km2, na.rm = TRUE))) +
       # No per-panel y-axis title -- a single shared label is added once via
-      # annotate_figure() on the assembled composite below, matching Figure 4.
+      # annotate_figure() on the assembled composite below, matching the
+      # plume_area_timeseries figure.
       labs(y = NULL, x = "", title = zone_title(df_zone$Zone[1])) +
       ggplot_theme() +
       theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
@@ -1386,8 +1394,8 @@ plot_x11_residual_dynamic_vs_static <- function(where_to_save_the_figure){
   save_plot_as_png(stack_x11_component(zone_plots, "Residual"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 
-# Figure S3: monthly (previously JJA vs. NDJ) dynamic-vs-static
-# threshold comparison of the four plume properties, all four zones. Drivers
+# Monthly (previously JJA vs. NDJ) dynamic-vs-static threshold comparison of
+# the four plume properties, all four zones. Drivers
 # are deliberately not shown here: driver values
 # don't depend on the plume-detection threshold at all, so their dynamic and
 # static boxes are only ever near-identical up to sampling noise -- not an
@@ -1428,11 +1436,12 @@ plot_seasonal_boxplots_dynamic_vs_static <- function(where_to_save_the_figure){
 
   long_data <- readr::read_csv(data_path, show_col_types = FALSE)
 
-  # Same dynamic-threshold-only scale as Figure_5_seasonal_analysis() -- incl.
-  # the 2nd/98th-percentile bounds fixed there 2026-08-11 -- so the two
+  # Same dynamic-threshold-only scale as plot_seasonal_boxplot_heatmap() --
+  # incl. the 2nd/98th-percentile bounds fixed there 2026-08-11 -- so the two
   # figures' y-axes are directly comparable. Boxplot whiskers below use
   # per-day pct extremes directly, so this fix matters here even more than
-  # in Figure 5 (which only plots the more-robust monthly median).
+  # in the seasonal_boxplot_heatmap figure (which only plots the
+  # more-robust monthly median).
   scale_range <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
     dplyr::summarise(range_min = stats::quantile(value, 0.02, na.rm = TRUE),

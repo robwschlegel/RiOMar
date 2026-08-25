@@ -1,5 +1,6 @@
-# One-off: regenerate just the Figure S7 GAM composite (plot_gam_figure())
-# after the plot_gam_figure()/gam_partial_effect() code changes, without
+# One-off: regenerate just the gam_monthly_dominance_<zone> GAM composite
+# (plot_gam_figure()) after the plot_gam_figure()/gam_partial_effect() code
+# changes, without
 # redoing the slow GLM/regime/RF steps in run_full_analysis() (~57 min for
 # those alone, unneeded here since none of that code changed).
 # Run from repo root: Rscript func/render_gam_figure_only.R

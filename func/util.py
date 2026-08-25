@@ -473,7 +473,8 @@ def load_csv_files(SOMLIT = False, REPHY = False,
         # date where even one tributary's debit was NaN (fixed 2026-08-10,
         # found via the Bay of Seine: the Orne is 44.8% NaN, which was
         # discarding valid Seine flow on the same dates and showing up as
-        # large gaps in Figure 6's river-flow line). 'sum' already skips NaN
+        # large gaps in the x11_interannual_river_flow figure's river-flow
+        # line). 'sum' already skips NaN
         # by default, so this now matches func/multi.R::load_river_flow()'s
         # dplyr::n()/sum(na.rm=TRUE) semantics: a zone's flow is the sum of
         # whichever of its rivers reported a numeric value that day.

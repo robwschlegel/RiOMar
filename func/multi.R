@@ -472,7 +472,8 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
     # offset previously here was based on the opposite (wrong) assumption
     # that `sector` was a bin's left edge, and rotated the whole rose one
     # half-sector counter-clockwise, putting N to the left of 12 o'clock
-    # instead of at it (found 2026-08-10, visible in every panel of Fig. 7).
+    # instead of at it (found 2026-08-10, visible in every panel of the
+    # driver_rose_diagram figure).
     coord_polar(start = 0) +
     scale_x_continuous(breaks = compass_breaks, labels = compass_labels, limits = c(0, 360)) +
     scale_fill_gradient2(low = "steelblue", mid = "grey90", high = "firebrick", midpoint = 0,
@@ -703,11 +704,11 @@ compute_monthly_octant_trend <- function(degrees, date, min_years = 10, min_occu
 # the first principal component of the centroid's own long-term scatter (in
 # local km, relative to the river mouth), then each day's centroid is
 # projected onto that axis. Shared by func/compute_seasonal_trend.R,
-# func/figure.R::Figure_5_seasonal_analysis(), and
+# func/figure.R::plot_seasonal_boxplot_heatmap(), and
 # func/compute_shape_alongcoast_trend.R (which used to carry its own
 # near-identical local compute_alongcoast() before it was deduplicated onto
 # this shared version -- verified to reproduce identical output first,
-# since that script feeds a published Table 4 number).
+# since that script feeds the published panache_stats_table).
 # compute_alongcoast_ts("GULF_OF_LION", get_zone_meta(zone_name = "GULF_OF_LION"), "output/panache/dynamic")
 compute_alongcoast_ts <- function(zone, meta, plume_dir){
   df <- read_csv(paste0(plume_dir, "/", zone, "/Results.csv"), show_col_types = FALSE) |>

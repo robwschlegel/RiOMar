@@ -1,8 +1,9 @@
 """
 One-off: derive a daily plume-shape (compactness) time series per zone from
 the panache PlumeMasks.nc daily masks, since no shape metric currently exists
-anywhere in the pipeline (see manuscript/manuscript.tex Table 5, "Shape: TBD
-metric"). Compactness = 4*pi*area / perimeter^2 (isoperimetric ratio; 1 for a
+anywhere in the pipeline (see manuscript/manuscript.tex's panache_stats_table,
+"Shape: TBD metric" -- manuscript/figure_table_registry.csv has its current
+table number). Compactness = 4*pi*area / perimeter^2 (isoperimetric ratio; 1 for a
 circle, lower for elongated/irregular shapes). Perimeter is estimated with
 skimage's Crofton estimator (more accurate than naive edge-counting for
 digitised shapes) and converted to km using the grid's near-isotropic pixel
@@ -13,8 +14,9 @@ Run from repo root with the RiOMar conda env:
   /home/calanus/anaconda3/envs/RiOMar/bin/python3 func/compute_plume_shape.py
 
 Covers both the dynamic and static thresholds (added 2026-08-07, per Robert,
-so the seasonal-analysis Figure S3 dynamic-vs-static comparison can include
-compactness -- previously only the dynamic threshold had been run).
+so the seasonal_boxplots_dynamic_vs_static figure's dynamic-vs-static
+comparison can include compactness -- previously only the dynamic threshold
+had been run).
 """
 import numpy as np
 import pandas as pd

@@ -220,8 +220,8 @@ driver_octant_pixel_counts_timesteps <- octant_pixel_counts_timesteps(driver_oct
 
 # ggplot_theme()'s font sizes are tuned for single-panel, article-scale
 # figures; these grids pack several facets into one PNG, so they need their
-# own much smaller theme (same reasoning as figure.R::Figure_S_daily_flow's
-# panel_theme).
+# own much smaller theme (same reasoning as
+# figure.R::plot_daily_flow_lagged_correlation's panel_theme).
 .spatial_variance_panel_theme <- theme_bw(base_size = 8) +
   theme(plot.title = element_text(hjust = 0.5, size = 11, face = "bold"),
        strip.background = element_rect(fill = "grey90"),

@@ -23,7 +23,7 @@ mass_trends_summary <- mass_trends |>
   dplyr::filter(variable == "plume", weight_choice == "ar") |>
   dplyr::mutate(slope_annualised_t_yr = slope_annualised / 1000,   # kg/yr -> t/yr
                 slope_t = slope / 1000,                            # kg -> t, per native time unit
-                intercept_t = intercept / 1000,                    # kg -> t, for Figure 4's geom_abline trend line
+                intercept_t = intercept / 1000,                    # kg -> t, for the plume_area_timeseries figure's geom_abline trend line
                 mean_mass_t = mean_mass_kg / 1000,
                 sd_mass_t = sd_mass_kg / 1000) |>
   dplyr::select(zone, mouth_name, timestep, n, mean_mass_t, sd_mass_t, intercept_t, slope_t, slope_annualised_t_yr, slope_p)

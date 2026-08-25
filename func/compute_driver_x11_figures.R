@@ -1,7 +1,7 @@
 # func/compute_driver_x11_figures.R
 #
-# NOTE (2026-08-11): Section 1 (the Figure-6-style stacked X11 trend-cycle
-# comparison, one PNG per driver) moved to func/compute_driver_x11_figures.py,
+# NOTE (2026-08-11): Section 1 (the x11_interannual_river_flow-style stacked
+# X11 trend-cycle comparison, one PNG per driver) moved to func/compute_driver_x11_figures.py,
 # which uses func/X11.py's weekly Census-Pezzulli decomposition instead of
 # the monthly-only seasonal::seas()/X-13ARIMA-SEATS this file used to call
 # directly (X-13 rejects weekly-frequency input outright -- confirmed by
@@ -21,8 +21,8 @@ dir.create(CATEGORY_DIR, recursive = TRUE, showWarnings = FALSE)
 
 # 2. Category-split versions for wind and wave height -----------------------
 # "The categories we have established" = the calm (<3 m/s) / onshore /
-# offshore wind classification already used for manuscript Figure 8
-# (plot_category_scatter(), func/multi.R) -- applied here to both the
+# offshore wind classification already used for the gam_partial_effects
+# figure (plot_category_scatter(), func/multi.R) -- applied here to both the
 # wind and the wave-height comparison, since that's the only categorical
 # scheme in the pipeline that applies uniformly to all four zones (the
 # Rhone-only calm/onshore-easterly/Mistral/other scheme in

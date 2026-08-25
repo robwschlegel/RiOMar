@@ -168,9 +168,9 @@ fit_gam <- function(df, response = "plume_area"){
 }
 
 # Full GAM output figures. Each zone is a separate manuscript slot
-# (gam_monthly_dominance_<zone> in manuscript/figure_table_registry.csv, e.g.
-# fig:s7_bay_of_seine = Figure S11) since one call here produces all four at
-# once -- pass fig_paths, a named list keyed by zone_name, for that case.
+# (gam_monthly_dominance_<zone> in manuscript/figure_table_registry.csv)
+# since one call here produces all four at once -- pass fig_paths, a named
+# list keyed by zone_name, for that case.
 # fig_path (single shared base, zone name appended) is kept for the
 # static-threshold companion run, which isn't individually manuscript-
 # referenced and so has no per-zone registry slot.
@@ -211,7 +211,7 @@ plot_gam_figure <- function(gam_models, fig_path = NULL, fig_paths = NULL){
 # Works with fit_gam() as-is (pairwise te() tensor smooths only, no univariate s() terms)
 # since partial dependence is a post-hoc prediction technique.
 # It doesn't need a particular smooth-term structure, just a model to predict from. 
-# Used by func/figure.R::Figure_8_gam_partial().
+# Used by func/figure.R::plot_gam_partial_effects().
 # gam_partial_effect(fit_gam(driver_matrices[["GULF_OF_LION"]]), "wind_spd", driver_matrices[["GULF_OF_LION"]])
 gam_partial_effect <- function(gam_model, driver_name, df, n_points = 50){
   drivers <- available_drivers(df)
@@ -333,7 +333,7 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
     purrr::compact() |> dplyr::bind_rows()
   readr::write_csv(glm_comparison_stats, file.path(stats_dir, "driver_glm_comparison.csv"))
 
-  message("[", Sys.time(), "] Step 3/6: fitting GAMs with tensor-product smooths and drawing Figure 10...")
+  message("[", Sys.time(), "] Step 3/6: fitting GAMs with tensor-product smooths and drawing the GAM figure(s)...")
 
   # Step 3: GAM
   gam_models <- purrr::map(zones, ~ fit_gam(driver_matrices[[.x]])) |>
@@ -414,9 +414,8 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
 run_driver_interactions_analysis <- function(){
 
   # Each zone is its own manuscript slot (gam_monthly_dominance_<zone> in
-  # manuscript/figure_table_registry.csv, e.g. fig:s7_bay_of_seine =
-  # Figure S11) -- build the per-zone output path for each from the registry
-  # rather than hardcoding a shared "FIGURE_S7" base.
+  # manuscript/figure_table_registry.csv) -- build the per-zone output path
+  # for each from the registry rather than hardcoding a shared folder.
   dynamic_fig_paths <- purrr::set_names(zones) |>
     purrr::map(function(zone_name){
       slot_key <- paste0("gam_monthly_dominance_", tolower(zone_name))
@@ -448,8 +447,9 @@ run_driver_interactions_analysis <- function(){
 # Monthly entry point (sec:seasonal_methods) ---------------------------------
 # Re-runs the same six-step sequence independently within each calendar
 # month's data subset, dynamic threshold only (the static-threshold pass is
-# not repeated here -- Figure S3's dynamic-vs-static comparison only needs
-# the boxplot-distribution data prepared in func/figure.py, not these
+# not repeated here -- the seasonal_boxplots_dynamic_vs_static figure's
+# dynamic-vs-static comparison only needs the boxplot-distribution data
+# prepared in func/figure.py, not these
 # driver-interaction results). Each month's full run_full_analysis() output
 # (GLM comparison, GAM summary + figure, regime stats, per-metric models, RF
 # importance/H-statistic) is kept on disk under output/STATS/monthly/<MM>/

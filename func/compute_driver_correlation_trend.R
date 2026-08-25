@@ -1,13 +1,15 @@
 # One-off: compute, per zone, the best-lag correlation between each driver
 # and plume area, and the driver's own AR(1)/HAC-weighted linear trend
-# (func/multi.R::fit_wls_hac_trend(), the same estimator used for Table 4's
-# plume-area/SPM-mass rows -- func/compute_area_trend.R), for manuscript
-# Table 5's River discharge / Wind / Tide / Wave height rows.
+# (func/multi.R::fit_wls_hac_trend(), the same estimator used for the
+# panache_stats_table's plume-area/SPM-mass rows -- func/compute_area_trend.R),
+# for the driver_stats_table's River discharge / Wind / Tide / Wave height
+# rows. See manuscript/figure_table_registry.csv for current numbers.
 #
 # Best-lag search over 0-14 days (func/compute_driver_x11_correlation_table.R
-# ::daily_flow_r_best_lag()/category_r_best_lag(), manuscript Figure 5) --
-# applied here to all four drivers for consistency, plus a p-value
-# (cor.test() at the identified best lag) alongside the lag itself.
+# ::daily_flow_r_best_lag()/category_r_best_lag(), the
+# daily_flow_lagged_correlation figure) -- applied here to all four drivers
+# for consistency, plus a p-value (cor.test() at the identified best lag)
+# alongside the lag itself.
 # Run from repo root: Rscript func/compute_driver_correlation_trend.R
 source("func/multi.R")
 # util.R::load_tide_gauge() needs tide.R::.load_tide_raw() -- see func/figure.R's identical comment.
@@ -30,8 +32,8 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
     trend <- fit_wls_hac_trend("ar", df$value, df$date)
 
     # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
-    # matching the same convention Table 4's generators already use
-    # (func/compute_area_trend.R etc.), added 2026-08-11 per manuscript/TODO.md.
+    # matching the same convention the panache_stats_table's generators
+    # already use (func/compute_area_trend.R etc.), added 2026-08-11 per manuscript/TODO.md.
     value_adj <- deseason_doy(df$value, df$date)
 
     tibble::tibble(zone = meta$zone, driver = driver_name, driver_label = driver_label,

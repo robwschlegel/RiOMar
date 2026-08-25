@@ -2,8 +2,9 @@
 # same Sutton et al. (2022)-style AR(1)/HAC estimator (func/multi.R::
 # driver_plume_trend()/fit_wls_hac_trend()) already used for the SPM mass
 # trend (func/compute_mass_spm_trend.R) and the abstract's plume-area trend
-# claim. Fills manuscript.tex Table 4's "Surface area" row (mean km^2, trend km^2/yr)
-# and provides the intercept/slope drawn as the trend line on manuscript Figure 4.
+# claim. Fills the panache_stats_table's "Surface area" row (mean km^2, trend km^2/yr)
+# and provides the intercept/slope drawn as the trend line on the plume_area_timeseries figure.
+# See manuscript/figure_table_registry.csv for those slots' current numbers.
 # Run from repo root: Rscript func/compute_area_trend.R
 source("func/multi.R")
 

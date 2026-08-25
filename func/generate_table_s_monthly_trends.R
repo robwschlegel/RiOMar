@@ -2,14 +2,13 @@
 # month-by-month linear trend detail" table (\label{tab:s_monthly_trends} in
 # manuscript.tex), from output/STATS/monthly_trend_summary.csv
 # (func/compute_seasonal_trend.R). Dynamic threshold only, AR(1)/HAC-weighted
-# ("ar") trend -- matching the compact main-text Table 6
-# (\label{tab:monthly_trends}) convention this table is the full detail
-# behind.
+# ("ar") trend -- matching the compact main-text monthly_trends_table_main
+# slot (\label{tab:monthly_trends}) convention this table is the full detail
+# behind. See manuscript/figure_table_registry.csv for current table numbers.
 #
 # This project hand-transcribes every table into manuscript.tex rather than
-# \input{}-ing a generated fragment (see manuscript/TODO.md's "Reference:
-# where each table's numbers come from" note) -- this script follows that
-# convention too: it writes a reviewable .tex fragment, not a live \input.
+# \input{}-ing a generated fragment -- this script follows that convention
+# too: it writes a reviewable .tex fragment, not a live \input.
 # Paste the fragment's contents into manuscript.tex between the longtable's
 # \endhead and \end{longtable}, replacing the existing hand-transcribed rows.
 #

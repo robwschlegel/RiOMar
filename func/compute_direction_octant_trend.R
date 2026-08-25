@@ -117,7 +117,7 @@ print(octant_trend_compact_summary, n = Inf)
 
 # ggplot_theme()'s font sizes are tuned for single-panel, article-scale
 # figures; an 8-facet-per-zone grid needs its own much smaller theme (same
-# reasoning as figure.R::Figure_S_daily_flow's panel_theme).
+# reasoning as figure.R::plot_daily_flow_lagged_correlation's panel_theme).
 .octant_barplot_theme <- theme_bw(base_size = 8) +
   theme(plot.title = element_text(hjust = 0.5, size = 11, face = "bold"),
        strip.background = element_rect(fill = "grey90"),

@@ -16,8 +16,8 @@
 # for a circular quantity (it ignores the 0/360 wrap-around, so e.g. 359 deg
 # and 1 deg -- nearly identical directions -- look maximally different to a
 # linear correlation). Direction's relationship with plume area is instead
-# assessed elsewhere via a categorical (8-octant) GAM term (manuscript
-# Table 5), not a linear correlation. If a circular measure is wanted here
+# assessed elsewhere via a categorical (8-octant) GAM term (the
+# driver_stats_table), not a linear correlation. If a circular measure is wanted here
 # too, that would need a different statistic (e.g. circular-linear
 # correlation, or entering direction as sin/cos components) -- flagging
 # rather than silently approximating it with a meaningless Pearson r.

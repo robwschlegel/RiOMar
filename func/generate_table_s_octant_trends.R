@@ -3,14 +3,16 @@
 # manuscript.tex), from output/STATS/octant_trend_compact_summary.csv
 # (func/compute_direction_octant_trend.R). Mirrors
 # generate_table_s_monthly_trends.R's fmt_cell()/precision/significance-star
-# convention and Table 6's (\label{tab:monthly_trends}) "sig. months (dir.)"
-# row, here with an added row for the annual-level trend, one block of 2
-# rows per (driver, octant). Unlike Table 6 (a page-fitting table wrapped in
-# \resizebox), this is a multi-page longtable, which can't be resized the
-# same way -- the monthly min/max range that Table 6 also prints is
-# deliberately omitted here (full detail stays in the CSV only) because
-# printing it caused a genuine page-width overflow (four "min to max"
-# strings side by side), not merely a cosmetic one.
+# convention and the monthly_trends_table_main slot's
+# (\label{tab:monthly_trends}) "sig. months (dir.)" row, here with an added
+# row for the annual-level trend, one block of 2 rows per (driver, octant).
+# Unlike that slot (a page-fitting table wrapped in \resizebox), this is a
+# multi-page longtable, which can't be resized the same way -- the monthly
+# min/max range that slot also prints is deliberately omitted here (full
+# detail stays in the CSV only) because printing it caused a genuine
+# page-width overflow (four "min to max" strings side by side), not merely a
+# cosmetic one. See manuscript/figure_table_registry.csv for current table
+# numbers.
 #
 # Slopes in octant_trend_compact_summary.csv are proportion-of-days-per-day
 # (from lm(proportion ~ date)); converted here to percentage points per year

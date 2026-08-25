@@ -510,8 +510,9 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
 
 def Figure_3(where_to_save_the_figure):
     """
-    Assembles manuscript Figure 3 (plume-detection methodology): panels A-D
-    from Figure_3_panels() side by side on top, panel e) (transect_panel.png,
+    Assembles the plume_methodology_panel figure (plume-detection
+    methodology): panels A-D from Figure_3_panels() side by side on top,
+    panel e) (transect_panel.png,
     also from Figure_3_panels()) as a full-width row in the middle, and the
     per-zone plume maps panel from Figure_3_zone_maps() (zone_maps_panel.png,
     panels f-i) stacked below. All three write their intermediates straight
@@ -595,13 +596,13 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
         df['date'] = pd.to_datetime(df['date']).dt.date
         # Null every measurement column (not just area) on a screened day --
         # mirrors util.R::load_plume_ts()'s plume_area_ceiling_exceeded fix,
-        # extended here now that Figure 4 also plots SPM mass,
-        # which was previously left unscreened on the same anomalous days.
+        # extended here now that the plume_area_timeseries figure also plots
+        # SPM mass, which was previously left unscreened on the same anomalous days.
         ceiling_exceeded = df['area_of_the_plume_mask_in_km2'] > plume_area_ceiling[zone]
         df.loc[ceiling_exceeded, df.columns.difference(['date'])] = np.nan
 
-        # Fill gaps in the date range with explicit NaN rows 
-        # so Figure 4 plots real data gaps (cloud cover, etc.)
+        # Fill gaps in the date range with explicit NaN rows
+        # so the plume_area_timeseries figure plots real data gaps (cloud cover, etc.)
         # as breaks rather than geom_path/geom_point silently drawing a
         # straight line across them. This reads Results.csv directly rather
         # than going through util.R::load_plume_ts() (which already does
@@ -643,19 +644,21 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
 def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold,
                                where_are_saved_plume_results_with_static_threshold,
                                where_to_save_the_figure):
-    """manuscript Figure 5 (sec:results_seasonal): heatmap of monthly median
-    values (% of each zone's own observed range) for all four plume
-    properties and five drivers, per zone, dynamic threshold -- one small
-    zone x month heatmap per variable, 9 in total in a single 3x3 grid. 
-    All data loading (incl. the along-coast PCA projection, which needs 
+    """The seasonal_boxplot_heatmap figure (sec:results_seasonal, see
+    manuscript/figure_table_registry.csv for its current figure number):
+    heatmap of monthly median values (% of each zone's own observed range)
+    for all four plume properties and five drivers, per zone, dynamic
+    threshold -- one small zone x month heatmap per variable, 9 in total in a
+    single 3x3 grid.
+    All data loading (incl. the along-coast PCA projection, which needs
     func/multi.R) and plotting happens in R.
-    See func/figure.R::Figure_5_seasonal_analysis()
+    See func/figure.R::plot_seasonal_boxplot_heatmap()
     following the same no-Python-prep pattern already used by
     Figure_S3_seasonal_boxplots() below. Writes a shared
-    figures/ARTICLE/FIGURE_5/DATA/monthly_boxplot_data.csv (both thresholds,
+    <output_subdir>/DATA/monthly_boxplot_data.csv (both thresholds,
     full daily-level detail, not just the medians plotted here) that the
     updated Figure_S3_seasonal_boxplots() reads back in, so the dynamic/
-    static computation is only done once. Writes Figure_5.png directly (a
+    static computation is only done once. Writes its PNG directly (a
     single figure now, no Python-side compositing needed).
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
@@ -695,7 +698,7 @@ def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
 def Figure_8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
     """GAM partial-dependence curves for flow, wind, wave, and current (tide
     intentionally excluded from the plot -- it stays in the underlying
-    GAM/Table 4 stats, just not visualised), one row per zone. Refits
+    GAM/driver_stats_table stats, just not visualised), one row per zone. Refits
     func/driver_interactions.R::fit_gam() from the already-saved
     daily_driver_matrix_<zone>.csv (Stage 4 output) rather than a separate
     model or a full pipeline rerun. See manuscript/figure_table_registry.csv
@@ -753,7 +756,8 @@ def _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_
     ts_plume_dynamic_vs_static.csv that figure.R's
     compute_x11_dynamic_vs_static_plots() reads -- pairs the SAME variable
     (plume area) under the two thresholds, rather than plume area against
-    river flow (which _prep_x11_weekly_data() above does for Figures 6/S2).
+    river flow (which _prep_x11_weekly_data() above does for the
+    x11_interannual_river_flow/x11_components_dynamic figures).
     """
     os.makedirs(os.path.join(data_dir, 'DATA'), exist_ok=True)
     regions = ["BAY_OF_BISCAY", "GULF_OF_LION", "BAY_OF_SEINE", "SOUTHERN_BRITTANY"]

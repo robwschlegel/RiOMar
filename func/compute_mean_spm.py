@@ -2,8 +2,8 @@
 #
 # One-off (but reusable/re-runnable): computes the pixel-wise temporal mean
 # SPM field across the entire SEXTANT daily archive (1998-2025), for use as
-# manuscript Figure 1's national main-panel background layer (replacing the
-# single hardcoded snapshot date, 2011/02/02, that func/figure.py::Figure_1()
+# the study_zone_map figure's national main-panel background layer (replacing
+# the single hardcoded snapshot date, 2011/02/02, that func/figure.py::Figure_1()
 # used previously). Streams one daily file at a time rather than loading the
 # ~280 GB archive into memory at once, accumulating a running sum and a
 # valid-pixel count per grid cell (not every pixel has data on every day --

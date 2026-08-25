@@ -1,14 +1,14 @@
 # func/compute_wave_category_lagged_correlation.R
 #
-# Supplementary Fig. daily_flow (func/figure.R::Figure_S_daily_flow(), formerly
-# manuscript Figure 5 before the seasonal-analysis section repurposed that
-# slot) shows, per zone: (left) a scatter of daily plume area vs. river flow with an OLS
+# Supplementary Fig. daily_flow (func/figure.R::plot_daily_flow_lagged_correlation(),
+# formerly a main-text figure before the seasonal-analysis section
+# repurposed that slot) shows, per zone: (left) a scatter of daily plume area vs. river flow with an OLS
 # fit; (right) the lagged correlation between the two daily series (plume
 # lagged 0-14 days behind flow), with the lag of maximum correlation marked.
 # Robert asked for the same analysis for wave height, restricted separately
 # to onshore-wind and offshore-wind days (the calm/onshore/offshore
-# categories established for manuscript Figure 8 and reused throughout
-# func/compute_driver_x11_figures.R).
+# categories established for the gam_partial_effects figure and reused
+# throughout func/compute_driver_x11_figures.R).
 #
 # Filtering to one category's days *before* computing the lag would corrupt
 # the lag itself: func/util.R::lagged_correlation() shifts by row position
@@ -63,7 +63,7 @@ panel_theme <- theme(plot.title = element_text(hjust = 0.5, size = 20),
                      panel.grid.minor = element_blank(),
                      panel.border = element_rect(linetype = "solid", fill = NA))
 
-message("Building Figure 5-style wave-height lagged correlation, per wind category...")
+message("Building daily_flow_lagged_correlation-style wave-height lagged correlation, per wind category...")
 for(category in CATEGORIES_TO_PLOT){
   panels <- purrr::map(zones, function(zone_name){
     meta <- get_zone_meta(zone_name = zone_name)

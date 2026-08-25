@@ -145,7 +145,8 @@ plot_flow_plume_rofi_succession <- function(){
   panels <- purrr::map(rofi_zones, plot_flow_plume_rofi_panel, show_axis_titles = FALSE)
 
   # Per-panel axis titles suppressed in favour of one shared left/right label
-  # on the assembled composite (Figure 4/6 convention), via
+  # on the assembled composite (same convention as the plume_area_timeseries/
+  # x11_interannual_river_flow figures), via
   # ggpubr::annotate_figure() -- ggarrange()'s common.legend achieves the
   # same shared-legend effect patchwork::plot_layout(guides = "collect") did.
   full_plot <- ggpubr::annotate_figure(

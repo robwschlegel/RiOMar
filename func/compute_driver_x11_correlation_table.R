@@ -17,8 +17,9 @@
 #
 # Per Robert's original follow-up: the wave-height rows and the river-flow
 # reference column use whichever 0-14 day lag maximises the correlation
-# (the same lag search as manuscript Figure 5 / func/compute_wave_category_lagged_correlation.R),
-# rather than a same-day (lag 0) correlation. Wind's own category rows are
+# (the same lag search as the daily_flow_lagged_correlation figure /
+# func/compute_wave_category_lagged_correlation.R), rather than a same-day
+# (lag 0) correlation. Wind's own category rows are
 # left at lag 0 -- only wave height and river flow were asked to use best-lag.
 #
 # Run from repo root: Rscript func/compute_driver_x11_correlation_table.R
@@ -63,10 +64,10 @@ category_r_best_lag <- function(driver_name, meta, category, max_lag = MAX_LAG_D
 }
 
 # River flow reference column: the same whole-series best-lag search
-# Supplementary Fig. daily_flow itself reports (func/figure.R::Figure_S_daily_flow(),
-# formerly manuscript Figure 5 before the seasonal-analysis section
-# repurposed that slot; driver_plume_correlation() + slice_max()), not
-# restricted to any category.
+# Supplementary Fig. daily_flow itself reports
+# (func/figure.R::plot_daily_flow_lagged_correlation(), formerly a main-text
+# figure before the seasonal-analysis section repurposed that slot;
+# driver_plume_correlation() + slice_max()), not restricted to any category.
 daily_flow_r_best_lag <- function(meta, max_lag = MAX_LAG_DAILY){
   df <- combine_plume_driver("flow", meta)
   cor_df <- driver_plume_correlation(df, max_lag_daily = max_lag) |> dplyr::filter(timestep == "daily")
