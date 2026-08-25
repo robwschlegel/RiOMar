@@ -1,8 +1,8 @@
 # One-off: compute, per zone, the best-lag correlation between each driver
 # and plume area, and the driver's own AR(1)/HAC-weighted linear trend
-# (func/multi.R::fit_wls_hac_trend(), the same estimator used for Table 5's
+# (func/multi.R::fit_wls_hac_trend(), the same estimator used for Table 4's
 # plume-area/SPM-mass rows -- func/compute_area_trend.R), for manuscript
-# Table 6's River discharge / Wind / Tide / Wave height rows.
+# Table 5's River discharge / Wind / Tide / Wave height rows.
 #
 # Best-lag search over 0-14 days (func/compute_driver_x11_correlation_table.R
 # ::daily_flow_r_best_lag()/category_r_best_lag(), manuscript Figure 5) --
@@ -30,7 +30,7 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
     trend <- fit_wls_hac_trend("ar", df$value, df$date)
 
     # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
-    # matching the same convention Table 5's generators already use
+    # matching the same convention Table 4's generators already use
     # (func/compute_area_trend.R etc.), added 2026-08-11 per manuscript/TODO.md.
     value_adj <- deseason_doy(df$value, df$date)
 

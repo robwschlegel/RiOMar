@@ -37,6 +37,36 @@ france_bbox <- data.frame(zone = "FRANCE",
                           lat_max = c(51.5))
 
 
+# Manuscript figure/table registry ------------------------------------------
+# Single source of truth for "what manuscript slot is this, what number does
+# it currently have, which R function renders it" -- see
+# manuscript/figure_table_registry.csv. Renumbering a figure/table is a
+# one-row edit to that CSV; figure.R functions look up their output folder
+# via get_registry_row() instead of hardcoding a "FIGURE_N"/"TABLE_N" string.
+figure_table_registry <- read_csv("manuscript/figure_table_registry.csv", show_col_types = FALSE)
+
+get_registry_row <- function(slot_key){
+  row <- dplyr::filter(figure_table_registry, .data$slot_key == !!slot_key)
+  if(nrow(row) != 1) stop("get_registry_row(): expected exactly 1 row for slot_key '",
+                          slot_key, "', found ", nrow(row))
+  row
+}
+
+# "FIGURE_S1" -> "Figure_S1", matching every figure's filename convention
+# (Figure_1.png, Figure_S1.png, ...) from its registry output_subdir. Use
+# this for save helpers (e.g. save_plot_as_png()) that append their own
+# extension; use registry_filename() below when the full filename is needed.
+registry_basename <- function(output_subdir){
+  sub("^FIGURE_", "Figure_", output_subdir)
+}
+
+# "FIGURE_S1" -> "Figure_S1.png", matching every figure's filename convention
+# (Figure_1.png, Figure_S1.png, ...) from its registry output_subdir.
+registry_filename <- function(output_subdir, ext = "png"){
+  paste0(registry_basename(output_subdir), ".", ext)
+}
+
+
 # Tide gauge sub-daily QC ---------------------------------------------------
 # Flags calendar days whose sub-daily curve does not look tidal, so that
 # load_tide_gauge() (below) can null out tide_mean/tide_range for those days

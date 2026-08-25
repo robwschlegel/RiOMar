@@ -1,6 +1,8 @@
 # One-off: compute satellite-vs-in-situ percent error and percent bias for
-# manuscript Table 4, from the raw SOMLIT/REPHY match-up file produced by
-# func/validate.R
+# the manuscript's "validation_summary_stats" table (see
+# manuscript/figure_table_registry.csv for its current table number -- Table
+# S1 as of the validation table/figure's move to the supplement), from the
+# raw SOMLIT/REPHY match-up file produced by func/validate.R
 #
 # Covers both in-situ variables in that file: SPM (SOMLIT) and turbidity/TURB
 # (REPHY) -- REPHY does not measure SPM at all, only turbidity, which is why

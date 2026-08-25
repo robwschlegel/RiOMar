@@ -707,7 +707,7 @@ compute_monthly_octant_trend <- function(degrees, date, min_years = 10, min_occu
 # func/compute_shape_alongcoast_trend.R (which used to carry its own
 # near-identical local compute_alongcoast() before it was deduplicated onto
 # this shared version -- verified to reproduce identical output first,
-# since that script feeds a published Table 5 number).
+# since that script feeds a published Table 4 number).
 # compute_alongcoast_ts("GULF_OF_LION", get_zone_meta(zone_name = "GULF_OF_LION"), "output/panache/dynamic")
 compute_alongcoast_ts <- function(zone, meta, plume_dir){
   df <- read_csv(paste0(plume_dir, "/", zone, "/Results.csv"), show_col_types = FALSE) |>

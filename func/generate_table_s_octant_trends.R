@@ -3,11 +3,11 @@
 # manuscript.tex), from output/STATS/octant_trend_compact_summary.csv
 # (func/compute_direction_octant_trend.R). Mirrors
 # generate_table_s_monthly_trends.R's fmt_cell()/precision/significance-star
-# convention and Table 7's (\label{tab:monthly_trends}) "sig. months (dir.)"
+# convention and Table 6's (\label{tab:monthly_trends}) "sig. months (dir.)"
 # row, here with an added row for the annual-level trend, one block of 2
-# rows per (driver, octant). Unlike Table 7 (a page-fitting table wrapped in
+# rows per (driver, octant). Unlike Table 6 (a page-fitting table wrapped in
 # \resizebox), this is a multi-page longtable, which can't be resized the
-# same way -- the monthly min/max range that Table 7 also prints is
+# same way -- the monthly min/max range that Table 6 also prints is
 # deliberately omitted here (full detail stays in the CSV only) because
 # printing it caused a genuine page-width overflow (four "min to max"
 # strings side by side), not merely a cosmetic one.

@@ -1,6 +1,6 @@
 # One-off: extract the joint (all-octant) significance of the categorical
 # wind_dir_cat / wave_dir_cat / current_dir_cat parametric terms from the
-# multi-driver GAM, for manuscript Table 6's "Wind direction" / "Wave
+# multi-driver GAM, for manuscript Table 5's "Wind direction" / "Wave
 # direction" / "Current direction" rows. fit_gam()'s tensor-product smooths
 # only take numeric driver pairs, so the direction categoricals enter as
 # flat parametric main-effect terms instead

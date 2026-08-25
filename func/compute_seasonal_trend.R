@@ -6,7 +6,7 @@
 # duplicated as separate code (func/multi.R::combine_plume_driver()/
 # load_plume_ts() both take a plume_dir argument for this).
 #
-# Feeds manuscript Table 7 (compact summary: months significant out of 12,
+# Feeds manuscript Table 6 (compact summary: months significant out of 12,
 # majority direction, range of monthly trend magnitude, dynamic threshold
 # only) and the companion Supplementary table (full month-by-month detail,
 # both thresholds).
@@ -72,7 +72,7 @@ monthly_trend_detail <- purrr::map_dfr(names(thresholds), function(threshold_lab
 
 readr::write_csv(monthly_trend_detail, "output/STATS/monthly_trend_summary.csv")
 
-# Compact summary (manuscript Table 7): one row per zone x variable, dynamic
+# Compact summary (manuscript Table 6): one row per zone x variable, dynamic
 # threshold rows are what the main text shows; static rows are retained in
 # the same file for the Supplementary comparison.
 monthly_trend_compact <- monthly_trend_detail |>

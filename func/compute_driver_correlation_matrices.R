@@ -17,7 +17,7 @@
 # and 1 deg -- nearly identical directions -- look maximally different to a
 # linear correlation). Direction's relationship with plume area is instead
 # assessed elsewhere via a categorical (8-octant) GAM term (manuscript
-# Table 6), not a linear correlation. If a circular measure is wanted here
+# Table 5), not a linear correlation. If a circular measure is wanted here
 # too, that would need a different statistic (e.g. circular-linear
 # correlation, or entering direction as sin/cos components) -- flagging
 # rather than silently approximating it with a meaningless Pearson r.

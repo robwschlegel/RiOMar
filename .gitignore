@@ -29,8 +29,8 @@ output/ETANG_DE_BERRE
 output/panache
 
 # Figures
-figures/ARTICLE/FIGURES/*/DATA
-figures/ARTICLE/FIGURE_S7/monthly/
+figures/ARTICLE/*/DATA
+figures/ARTICLE/gam_monthly_breakdown/
 
 # Other content
 notebooks

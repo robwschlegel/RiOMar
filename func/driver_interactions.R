@@ -167,17 +167,37 @@ fit_gam <- function(df, response = "plume_area"){
   mgcv::gam(form, data = df_valid, method = "REML")
 }
 
-# Full GAM output figures
-plot_gam_figure <- function(gam_models, fig_path){
-  if (!dir.exists(dirname(fig_path))) dir.create(dirname(fig_path), recursive = TRUE)
-  ext <- tools::file_ext(fig_path)
-  base <- tools::file_path_sans_ext(fig_path)
+# Full GAM output figures. Each zone is a separate manuscript slot
+# (gam_monthly_dominance_<zone> in manuscript/figure_table_registry.csv, e.g.
+# fig:s7_bay_of_seine = Figure S11) since one call here produces all four at
+# once -- pass fig_paths, a named list keyed by zone_name, for that case.
+# fig_path (single shared base, zone name appended) is kept for the
+# static-threshold companion run, which isn't individually manuscript-
+# referenced and so has no per-zone registry slot.
+plot_gam_figure <- function(gam_models, fig_path = NULL, fig_paths = NULL){
+  if (is.null(fig_paths)) {
+    if (!dir.exists(dirname(fig_path))) dir.create(dirname(fig_path), recursive = TRUE)
+    ext <- tools::file_ext(fig_path)
+    base <- tools::file_path_sans_ext(fig_path)
+
+    zone_files <- purrr::imap_chr(gam_models, function(m, zone_name){
+      p <- gratia::draw(m, ncol = 5, caption = FALSE) +
+        patchwork::plot_annotation(title = zone_title(zone_name),
+                                   theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 24, face = "bold", hjust = 0.5)))
+      out_file <- paste0(base, "_", zone_name, ".", ext)
+      ggplot2::ggsave(out_file, p, width = 20, height = 9, dpi = 200)
+      out_file
+    })
+
+    return(invisible(zone_files))
+  }
 
   zone_files <- purrr::imap_chr(gam_models, function(m, zone_name){
+    out_file <- fig_paths[[zone_name]]
+    if (!dir.exists(dirname(out_file))) dir.create(dirname(out_file), recursive = TRUE)
     p <- gratia::draw(m, ncol = 5, caption = FALSE) +
       patchwork::plot_annotation(title = zone_title(zone_name),
                                  theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 24, face = "bold", hjust = 0.5)))
-    out_file <- paste0(base, "_", zone_name, ".", ext)
     ggplot2::ggsave(out_file, p, width = 20, height = 9, dpi = 200)
     out_file
   })
@@ -290,7 +310,7 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
 
 # Runner: execute all steps for one set of plume results ---------------------
 
-run_full_analysis <- function(plume_dir, stats_dir, fig_path, month_filter = NULL){
+run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths = NULL, month_filter = NULL){
 
   if(!dir.exists(stats_dir)) dir.create(stats_dir, recursive = TRUE)
 
@@ -327,7 +347,7 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path, month_filter = NUL
                    r_sq_adj = s$r.sq, deviance_explained = s$dev.expl)
   })
   readr::write_csv(gam_summary, file.path(stats_dir, "driver_gam_summary.csv"))
-  if(length(gam_models) > 0) plot_gam_figure(gam_models, fig_path)
+  if(length(gam_models) > 0) plot_gam_figure(gam_models, fig_path = fig_path, fig_paths = fig_paths)
 
   message("[", Sys.time(), "] Step 4/6: refitting GLMs by discharge/wind/tide regime...")
 
@@ -393,18 +413,31 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path, month_filter = NUL
 
 run_driver_interactions_analysis <- function(){
 
+  # Each zone is its own manuscript slot (gam_monthly_dominance_<zone> in
+  # manuscript/figure_table_registry.csv, e.g. fig:s7_bay_of_seine =
+  # Figure S11) -- build the per-zone output path for each from the registry
+  # rather than hardcoding a shared "FIGURE_S7" base.
+  dynamic_fig_paths <- purrr::set_names(zones) |>
+    purrr::map(function(zone_name){
+      slot_key <- paste0("gam_monthly_dominance_", tolower(zone_name))
+      row <- get_registry_row(slot_key)
+      file.path("figures/ARTICLE", row$output_subdir, registry_filename(row$output_subdir))
+    })
+
   message("== Driver interactions: dynamic threshold (main results) ==")
   run_full_analysis(
     plume_dir = "output/panache/dynamic",
     stats_dir = "output/STATS",
-    fig_path  = "figures/ARTICLE/FIGURE_S7/Figure_S7.png"
+    fig_paths = dynamic_fig_paths
   )
 
   message("== Driver interactions: static threshold (supplementary) ==")
+  # Not individually manuscript-referenced (no per-zone registry slot) --
+  # kept in one shared, descriptively named folder instead of a numbered one.
   run_full_analysis(
     plume_dir = "output/panache/static",
     stats_dir = "output/STATS/static",
-    fig_path  = "figures/ARTICLE/FIGURE_S7/Figure_S7_static.png"
+    fig_path  = "figures/ARTICLE/gam_monthly_dominance_static/Figure_S7_static.png"
   )
 
   message("func/driver_interactions.R::run_driver_interactions_analysis() complete.")
@@ -431,7 +464,7 @@ run_monthly_driver_interactions_analysis <- function(){
     run_full_analysis(
       plume_dir    = "output/panache/dynamic",
       stats_dir    = file.path("output/STATS/monthly", mm),
-      fig_path     = file.path("figures/ARTICLE/FIGURE_S7/monthly", paste0("Figure_S7_month_", mm, ".png")),
+      fig_path     = file.path("figures/ARTICLE/gam_monthly_breakdown", paste0("Figure_S7_month_", mm, ".png")),
       month_filter = m
     )
   })

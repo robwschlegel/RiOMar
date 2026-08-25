@@ -154,9 +154,11 @@ plot_flow_plume_rofi_succession <- function(){
     left = ggpubr::text_grob("Plume area / ROFI extent (km²)", rot = 90, size = 14),
     right = ggpubr::text_grob("River flow (m³ s⁻¹)", rot = -90, size = 14, color = "blue"))
 
-  # manuscript Figure S8 (flow -> plume -> ROFI succession)
-  if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
-  ggsave(filename = "figures/ARTICLE/FIGURE_S4/flow_plume_rofi_succession.png", plot = full_plot, width = 12, height = 10, dpi = 300)
+  # Manuscript slot "rofi_succession" -- see manuscript/figure_table_registry.csv
+  output_subdir <- get_registry_row("rofi_succession")$output_subdir
+  out_dir <- file.path("figures/ARTICLE", output_subdir)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  ggsave(filename = file.path(out_dir, "flow_plume_rofi_succession.png"), plot = full_plot, width = 12, height = 10, dpi = 300)
   invisible(full_plot)
 }
 
@@ -200,9 +202,11 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
          subtitle = "Daily resolution; estuary excluded from plume area; red = lag of maximum r") +
     theme_bw()
 
-  # manuscript Figure S9
-  if (!dir.exists("figures/ARTICLE/FIGURE_S4")) dir.create("figures/ARTICLE/FIGURE_S4", recursive = TRUE)
-  ggsave(filename = "figures/ARTICLE/FIGURE_S4/rofi_plume_lagged_correlation.png", plot = pl, width = 12, height = 9, dpi = 300)
+  # Manuscript slot "rofi_lagged_correlation" -- see manuscript/figure_table_registry.csv
+  output_subdir <- get_registry_row("rofi_lagged_correlation")$output_subdir
+  out_dir <- file.path("figures/ARTICLE", output_subdir)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  ggsave(filename = file.path(out_dir, "rofi_plume_lagged_correlation.png"), plot = pl, width = 12, height = 9, dpi = 300)
   invisible(pl)
 }
 

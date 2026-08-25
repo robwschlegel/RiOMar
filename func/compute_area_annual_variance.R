@@ -1,10 +1,10 @@
-# One-off: compute manuscript Table 5's "Variance" row (previously an
+# One-off: compute manuscript Table 4's "Variance" row (previously an
 # unfilled \tocheck{} placeholder, per Robert's exact specification -- mean
 # plume area per year per zone, then the standard deviation of that annual
 # time series). Uses the same daily plume-area series as
 # func/compute_area_trend.R (combine_plume_driver("flow", meta), default
 # metric_col = area_of_the_plume_mask_in_km2, so the annual means are
-# consistent with Table 5's existing "Surface area mean (km^2)" row and its
+# consistent with Table 4's existing "Surface area mean (km^2)" row and its
 # ceiling-screened outlier handling (util.R::load_plume_ts()).
 #
 # Run from repo root: Rscript func/compute_area_annual_variance.R

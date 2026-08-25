@@ -55,7 +55,7 @@ Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold = "o
 # and drivers, per zone, dynamic threshold; also writes the shared
 # dynamic+static data that Figure_S3_seasonal_boxplots() below re-reads, so
 # it must run before that call. Per-month trends themselves are computed
-# separately by func/compute_seasonal_trend.R (feeds manuscript Table 7),
+# separately by func/compute_seasonal_trend.R (feeds manuscript Table 6),
 # not by this figure.
 Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
                            where_are_saved_plume_results_with_static_threshold = "output/panache/static",

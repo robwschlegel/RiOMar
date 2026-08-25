@@ -2,7 +2,7 @@
 # month-by-month linear trend detail" table (\label{tab:s_monthly_trends} in
 # manuscript.tex), from output/STATS/monthly_trend_summary.csv
 # (func/compute_seasonal_trend.R). Dynamic threshold only, AR(1)/HAC-weighted
-# ("ar") trend -- matching the compact main-text Table 7
+# ("ar") trend -- matching the compact main-text Table 6
 # (\label{tab:monthly_trends}) convention this table is the full detail
 # behind.
 #

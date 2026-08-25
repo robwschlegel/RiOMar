@@ -19,7 +19,7 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
-from util import (load_csv_files, order_zones)
+from util import (load_csv_files, order_zones, get_registry_row, registry_filename)
 from panache.plume_algorithm import (Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask,
                                      derive_masks_from_bathymetry, estimate_near_mouth_bounds)
 from panache.utils import define_parameters, align_bathymetry
@@ -65,10 +65,10 @@ def build_plume_parameters(Zone):
 def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     """
     Convert a panache Create_the_plume_mask instance's SPM map and plume mask
-    to a CSV for Figure_3_panel() (func/figure.R) to plot later. The R call
+    to a CSV for plot_methodology_worked_example_panel() (func/figure.R) to plot later. The R call
     itself is deferred to a single batched Rscript subprocess in
     Figure_3_panels() (run_figure_3_panels.R) rather than done here
-    in-process, since Figure_3_panel() now renders a high-res coastline via
+    in-process, since plot_methodology_worked_example_panel() now renders a high-res coastline via
     sf, which conflicts with the conda geospatial stack already loaded in
     this process via panache -- same workaround as Figure_1().
     """
@@ -87,7 +87,7 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     })
 
     # Same shallow-water criterion remove_shallow_waters() applies to the
-    # plume mask: lets Figure_3_panel() draw
+    # plume mask: lets plot_methodology_worked_example_panel() draw
     # the bathymetric exclusion boundary actually used to produce this
     # panel. bathymetric_threshold is 0 at the three zones that don't use
     # this general exclusion (only the Gulf of Lion does), so this column is
@@ -111,7 +111,7 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
 
         # Export the SPM value found at every point tested along the
         # search-direction transects, plus the near-mouth min/max bounds and
-        # the final derived SPM_threshold, so Figure_3_panel() can draw a
+        # the final derived SPM_threshold, so plot_methodology_worked_example_panel() can draw a
         # panel showing how the gradient-cutoff filtering (kept vs. rejected
         # transect points) and the near-mouth quantile bounds combine to
         # pick the plume-edge threshold.
@@ -312,17 +312,24 @@ def regional_zone_maps(where_to_save_the_figure, include_station_points=True):
 
 
 def Figure_2(where_to_save_the_figure):
+    # Manuscript slot "validation_scatterplot_panel" -- see
+    # manuscript/figure_table_registry.csv (util.get_registry_row()) for its
+    # current figure number/output folder and the R function that renders it.
+    # This Python entry point's own name is an unchanging handle and is not
+    # kept in sync with the manuscript number.
 
     spm_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
                                         'SEXTANT_SPM_SPM_Standard_OC5_3x3.png')
     turb_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
                                          'SEXTANT_TUR_SPM_Standard_OC5_3x3.png')
 
+    registry_row = get_registry_row('validation_scatterplot_panel')
+
     # Source the R script
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    r_function = robjects.r['Figure_2']
+    r_function = robjects.r[registry_row['r_function']]
 
     # Call the R function
     r_function(spm_scatterplot_path=robjects.StrVector([spm_scatterplot_path]),
@@ -365,8 +372,10 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
 
     inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
 
-    # Panels A-E feed the Figure 3 composite
-    where_to_save_the_figure_3 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
+    # Panels A-E feed the plume_methodology_panel composite -- see
+    # manuscript/figure_table_registry.csv for its current figure number.
+    where_to_save_the_figure_3 = os.path.join(
+        where_to_save_the_figure, "ARTICLE", get_registry_row("plume_methodology_panel")['output_subdir'])
 
     the_plume = Create_the_plume_mask(ds_reduced,
                                       bathymetry_data_aligned_to_reduced_map,
@@ -428,7 +437,7 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
               name_of_the_plot='E')
 
     # Run as a standalone Rscript process rather than via in-process rpy2:
-    # Figure_3_panel() (func/figure.R) now renders a high-res coastline via
+    # plot_methodology_worked_example_panel() (func/figure.R) now renders a high-res coastline via
     # sf, which conflicts with the conda geospatial stack already loaded in
     # this process via panache -- same workaround as Figure_1().
     subprocess.run(
@@ -442,9 +451,10 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
 
     the_dates_for_each_zone = dates_for_each_zone()
 
-    # Folded into Figure 3 (methodology composite)
+    # Folded into the plume_methodology_panel composite
 
-    where_to_save_the_figure_3 = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
+    where_to_save_the_figure_3 = os.path.join(
+        where_to_save_the_figure, "ARTICLE", get_registry_row("plume_methodology_panel")['output_subdir'])
     os.makedirs(os.path.join(where_to_save_the_figure_3, "DATA"), exist_ok=True)
 
     for Zone, Date in the_dates_for_each_zone.items():
@@ -475,7 +485,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
 
         # Same shallow-water criterion remove_shallow_waters() applies to
         # the plume mask: lets
-        # Figure_3_zone_maps() draw the bathymetric exclusion boundary.
+        # plot_methodology_zone_maps_panel() draw the bathymetric exclusion boundary.
         # bathymetric_threshold is 0 at the three zones that don't use this
         # general exclusion (only the Gulf of Lion does), so this column is
         # all-False and draws nothing there.
@@ -485,7 +495,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         SPM_map.to_csv(where_to_save_the_figure_3 + f"/DATA/{Zone}.csv")
 
     # Run as a standalone Rscript process rather than via in-process rpy2:
-    # Figure_3_zone_maps() (func/figure.R) now renders a high-res coastline
+    # plot_methodology_zone_maps_panel() (func/figure.R) now renders a high-res coastline
     # via sf, which conflicts with the conda geospatial stack already loaded
     # in this process via panache -- same workaround as Figure_1().
     subprocess.run(
@@ -505,16 +515,19 @@ def Figure_3(where_to_save_the_figure):
     also from Figure_3_panels()) as a full-width row in the middle, and the
     per-zone plume maps panel from Figure_3_zone_maps() (zone_maps_panel.png,
     panels f-i) stacked below. All three write their intermediates straight
-    into FIGURE_3/ (none is a standalone manuscript figure itself), so this
-    just reads them back out and composites -- must be called after both
-    Figure_3_panels() and Figure_3_zone_maps().
+    into the plume_methodology_panel slot's output folder (none is a
+    standalone manuscript figure itself), so this just reads them back out
+    and composites -- must be called after both Figure_3_panels() and
+    Figure_3_zone_maps(). See manuscript/figure_table_registry.csv for the
+    slot's current figure number.
 
     Panels A-D and e) are resized down to the zone-maps panel's native width
     (preserving aspect ratio) before the horizontal/vertical stack, rather
     than upscaling the zone-maps panel to match a wider top row -- avoids
     blurring the source PNGs.
     """
-    figure_3_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_3")
+    output_subdir = get_registry_row("plume_methodology_panel")['output_subdir']
+    figure_3_dir = os.path.join(where_to_save_the_figure, "ARTICLE", output_subdir)
     os.makedirs(figure_3_dir, exist_ok=True)
 
     panel_paths = [os.path.join(figure_3_dir, f"{letter}.png") for letter in "ABCD"]
@@ -550,14 +563,15 @@ def Figure_3(where_to_save_the_figure):
     composite.paste(transect_row, (0, top_row.height))
     composite.paste(zone_maps_panel, (0, top_row.height + transect_row.height))
 
-    composite.save(os.path.join(figure_3_dir, "Figure_3.png"))
+    composite.save(os.path.join(figure_3_dir, registry_filename(output_subdir)))
 
 
 def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
                            where_are_saved_plume_results_with_fixed_threshold,
                            where_to_save_the_figure):
 
-    figure_4_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_4")
+    plume_area_timeseries_row = get_registry_row("plume_area_timeseries")
+    figure_4_dir = os.path.join(where_to_save_the_figure, "ARTICLE", plume_area_timeseries_row['output_subdir'])
     os.makedirs(figure_4_dir + '/DATA', exist_ok=True)
 
     # Source util.R (via figure.R) to grab the same zone-specific
@@ -619,10 +633,11 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
 
     # Both R functions take the top-level "figures" path and build their own
     # ARTICLE/FIGURE_* subfolder internally (matching every other figure
-    # function's convention) -- Figure_S1_thresholds() reads the same
-    # ts_data.csv from FIGURE_4/DATA/ that Figure_4_timeseries() just wrote.
-    robjects.r['Figure_4_timeseries'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-    robjects.r['Figure_S1_thresholds'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+    # function's convention, looked up from the registry) -- the
+    # thresholds_comparison slot's R function reads the same ts_data.csv from
+    # this slot's DATA/ that plot_plume_area_timeseries() just wrote.
+    robjects.r[plume_area_timeseries_row['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+    robjects.r[get_registry_row("thresholds_comparison")['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
 def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold,
@@ -645,7 +660,7 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
-    robjects.r['Figure_5_seasonal_analysis'](
+    robjects.r[get_registry_row("seasonal_boxplot_heatmap")['r_function']](
         where_are_saved_plume_results_with_dynamic_threshold=robjects.StrVector([where_are_saved_plume_results_with_dynamic_threshold]),
         where_are_saved_plume_results_with_static_threshold=robjects.StrVector([where_are_saved_plume_results_with_static_threshold]),
         where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
@@ -658,35 +673,38 @@ def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    r_function = robjects.r['Figure_S_daily_flow']
+    r_function = robjects.r[get_registry_row("daily_flow_lagged_correlation")['r_function']]
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
                max_lag_daily=robjects.IntVector([max_lag_daily]))
 
 
 def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
-    """manuscript Figure 7: wind/wave direction-magnitude roses, coloured by
-    the flow-controlled plume-area response, one row per zone.
+    """manuscript figure: wind/wave direction-magnitude roses, coloured by
+    the flow-controlled plume-area response, one row per zone. See
+    manuscript/figure_table_registry.csv (slot "driver_rose_diagram") for
+    its current figure number.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    r_function = robjects.r['Figure_7_driver_rose']
+    r_function = robjects.r[get_registry_row("driver_rose_diagram")['r_function']]
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
                n_sectors=robjects.IntVector([n_sectors]))
 
 
 def Figure_8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
-    """Figure 8: GAM partial-dependence curves for flow, wind,
-    wave, and current (tide intentionally excluded from the plot -- it stays
-    in the underlying GAM/Table 6 stats, just not visualised), one row per
-    zone. Refits func/driver_interactions.R::fit_gam() from the already-saved
+    """GAM partial-dependence curves for flow, wind, wave, and current (tide
+    intentionally excluded from the plot -- it stays in the underlying
+    GAM/Table 4 stats, just not visualised), one row per zone. Refits
+    func/driver_interactions.R::fit_gam() from the already-saved
     daily_driver_matrix_<zone>.csv (Stage 4 output) rather than a separate
-    model or a full pipeline rerun.
+    model or a full pipeline rerun. See manuscript/figure_table_registry.csv
+    (slot "gam_partial_effects") for its current figure number.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    r_function = robjects.r['Figure_8_gam_partial']
+    r_function = robjects.r[get_registry_row("gam_partial_effects")['r_function']]
     r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
                stats_dir=robjects.StrVector([stats_dir]))
 
@@ -761,40 +779,46 @@ def _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_
 def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static,
                               where_to_save_the_figure):
     """
-    Wires all 5 real manuscript figures: Figure 6 + Figure S2 (dynamic
-    threshold, plume area vs. river flow), Figure S5 + Figure S6 +
-    Figure S6_residual (interannual/seasonal/residual, dynamic vs. static
-    threshold comparison of plume area itself).
+    Wires all 5 real manuscript figures (slot_key -> current number, see
+    manuscript/figure_table_registry.csv): x11_interannual_river_flow +
+    x11_components_dynamic (dynamic threshold, plume area vs. river flow),
+    x11_interannual_dynamic_vs_static + x11_seasonal_dynamic_vs_static +
+    x11_residual_dynamic_vs_static (interannual/seasonal/residual, dynamic
+    vs. static threshold comparison of plume area itself).
     """
-    figure_6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_6")
-    figure_s5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", "FIGURE_S5")
+    x11_river_flow_subdir = get_registry_row("x11_interannual_river_flow")['output_subdir']
+    x11_dyn_vs_static_subdir = get_registry_row("x11_interannual_dynamic_vs_static")['output_subdir']
+    figure_6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", x11_river_flow_subdir)
+    figure_s5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", x11_dyn_vs_static_subdir)
     _prep_x11_weekly_data(where_are_saved_X11_results_dynamic, figure_6_dir)
     _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static, figure_s5_dir)
 
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    for r_func_name in ['Figure_6_x11_interannual', 'Figure_S2_x11_components',
-                       'Figure_S5_x11_interannual_dynamic_vs_static',
-                       'Figure_S6_x11_seasonal_dynamic_vs_static',
-                       'Figure_S6_x11_residual_dynamic_vs_static']:
+    for slot_key in ['x11_interannual_river_flow', 'x11_components_dynamic',
+                     'x11_interannual_dynamic_vs_static',
+                     'x11_seasonal_dynamic_vs_static',
+                     'x11_residual_dynamic_vs_static']:
+        r_func_name = get_registry_row(slot_key)['r_function']
         try:
             robjects.r[r_func_name](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
         except Exception as e:
-            print(f"Warning: {r_func_name} R plot failed: {e}. Skipping.")
+            print(f"Warning: {r_func_name} ({slot_key}) R plot failed: {e}. Skipping.")
 
 
 def Figure_S3_seasonal_boxplots(where_to_save_the_figure):
     """
     Migrated from manuscript/make_figures_tables.R's
     generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
-    writes straight to figures/ARTICLE/FIGURE_S3/ instead of via the
+    writes straight to the seasonal_boxplots_dynamic_vs_static slot's output
+    folder (see manuscript/figure_table_registry.csv) instead of via the
     manuscript/figures/ copy step. No Python-side data prep needed -- the R
     function reads output/panache/{dynamic,static}/{zone}/Results.csv directly.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
-    robjects.r['Figure_S3_seasonal_boxplots'](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
+    robjects.r[get_registry_row("seasonal_boxplots_dynamic_vs_static")['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
 # =============================================================================

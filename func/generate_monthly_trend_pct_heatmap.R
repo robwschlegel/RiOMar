@@ -6,7 +6,7 @@
 #
 # Trend: output/STATS/monthly_trend_summary.csv (func/compute_seasonal_trend.R),
 # dynamic threshold, AR(1)/HAC-weighted per-calendar-month slope
-# (compute_monthly_trend(), func/multi.R) -- the same slope behind Table 7 and
+# (compute_monthly_trend(), func/multi.R) -- the same slope behind Table 6 and
 # the Supplementary month-by-month table. Percent-per-year here is
 # 100 * (slope * 365.25) / mean, where mean is that zone x variable's overall
 # mean value pooled across all months and years (dynamic threshold), not a

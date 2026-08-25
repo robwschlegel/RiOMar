@@ -29,7 +29,39 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 def exit_program():
     print("Exiting the program...")
     sys.exit(0)
-    
+
+
+def get_registry_row(slot_key):
+    """
+    Look up one row of manuscript/figure_table_registry.csv by slot_key.
+
+    Single source of truth for which output folder ("FIGURE_N"/"TABLE_N") and
+    which R function currently render a given manuscript figure/table. Every
+    figure.py entry point looks up its output_subdir/r_function here instead
+    of hardcoding a "FIGURE_N" string, so renumbering a figure/table is a
+    one-row edit to that CSV.
+    """
+    registry_path = os.path.join(proj_dir, 'manuscript', 'figure_table_registry.csv')
+    registry = pd.read_csv(registry_path)
+    row = registry[registry['slot_key'] == slot_key]
+    if len(row) != 1:
+        raise ValueError(f"get_registry_row(): expected exactly 1 row for slot_key "
+                         f"'{slot_key}', found {len(row)}")
+    return row.iloc[0]
+
+
+def registry_basename(output_subdir):
+    """"FIGURE_S1" -> "Figure_S1", matching every figure's filename
+    convention (Figure_1.png, Figure_S1.png, ...) from its registry
+    output_subdir. Use registry_filename() below when the extension is
+    needed too."""
+    return output_subdir.replace('FIGURE_', 'Figure_', 1)
+
+
+def registry_filename(output_subdir, ext='png'):
+    """"FIGURE_S1" -> "Figure_S1.png" -- see registry_basename() above."""
+    return f"{registry_basename(output_subdir)}.{ext}"
+
 
 def degrees_to_km(lat_deg, lon_deg, latitude):
     """
@@ -629,7 +661,8 @@ def daily_integral(file_dir, overwrite=False):
             subprocess.run(['cdo', 'daymean', '-delname,VMDR', hourly_path, other_vars_file], check=True)
             subprocess.run(['cdo', 'daymean', '-expr,wave_dir_sin=sin(rad(VMDR));wave_dir_cos=cos(rad(VMDR))',
                             hourly_path, components_file], check=True)
-            subprocess.run(['cdo', 'expr,VMDR=mod(deg(atan2(wave_dir_sin,wave_dir_cos))+360,360)',
+            subprocess.run(['cdo', 'setattribute,VMDR@units=degree',
+                            '-expr,VMDR=mod(deg(atan2(wave_dir_sin,wave_dir_cos))+360,360)',
                             components_file, vmdr_file], check=True)
             subprocess.run(['cdo', 'merge', other_vars_file, vmdr_file, daily_path], check=True)
 
