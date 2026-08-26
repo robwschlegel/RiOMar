@@ -203,7 +203,7 @@ load_driver <- function(driver_name, meta){
 # interannual columns for both. This is the core object every comparison
 # function below operates on.
 # combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"))
-# combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"), metric_col = "mass_SPM_in_the_plume_area_in_g_m", outlier_max = NULL)
+# combine_plume_driver("flow", get_zone_meta(mouth_name = "Seine"), metric_col = "mass_SPM_in_the_plume_area_in_t", outlier_max = NULL)
 combine_plume_driver <- function(driver_name, meta, metric_col = "area_of_the_plume_mask_in_km2", outlier_max = NULL,
                                  plume_dir = "output/panache/dynamic"){
 

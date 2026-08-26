@@ -42,7 +42,7 @@ source("func/driver_interactions.R")  # brings in multi.R (zones, zone_title, bu
 VARS <- c(
   plume_area                          = "Plume area",
   mean_SPM_in_the_plume_area          = "Mean SPM",
-  mass_SPM_in_the_plume_area_in_g_m   = "SPM mass",
+  mass_SPM_in_the_plume_area_in_t     = "SPM mass",
   flow                                = "River discharge",
   wind_spd                            = "Wind speed",
   tide_range                          = "Tidal range",

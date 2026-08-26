@@ -635,7 +635,7 @@ plume_area_ceiling <- c(BAY_OF_BISCAY = 12000, BAY_OF_SEINE = 2500,
 # column becomes `plume_area` downstream (every driver_plume_* function in
 # multi.R is written against that column name regardless of what it holds,
 # so this is the one place a different plume metric -- e.g. mass_SPM_in_the_
-# plume_area_in_g_m -- needs to be wired in). `outlier_max` screens the
+# plume_area_in_t -- needs to be wired in). `outlier_max` screens the
 # `plume_area` column only, dropping values above the threshold as NA; it
 # defaults to NULL (no screening). Pass an explicit value (e.g. 20000, a
 # physically implausible km^2 area for these zones) at call sites that need

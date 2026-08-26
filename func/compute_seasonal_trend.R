@@ -18,7 +18,7 @@ source("func/multi.R")
 source("func/tide.R")
 
 thresholds <- c(dynamic = "output/panache/dynamic", static = "output/panache/static")
-mass_col <- "mass_SPM_in_the_plume_area_in_g_m"  # kg, see compute_mass_spm_trend.R
+mass_col <- "mass_SPM_in_the_plume_area_in_t"  # tonnes, see compute_mass_spm_trend.R
 drivers <- c("flow", "wind", "tide", "wave", "current")
 
 monthly_trend_detail <- purrr::map_dfr(names(thresholds), function(threshold_label){

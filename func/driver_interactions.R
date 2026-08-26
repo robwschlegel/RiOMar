@@ -282,7 +282,7 @@ fit_metric_models <- function(df, response){
   )
 }
 
-metric_responses <- c("plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_the_plume_area_in_g_m",
+metric_responses <- c("plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_the_plume_area_in_t",
                       "lon_weighted_centroid_of_the_plume_area", "lat_weighted_centroid_of_the_plume_area")
 
 

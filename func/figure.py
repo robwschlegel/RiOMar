@@ -783,24 +783,27 @@ def _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_
 def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static,
                               where_to_save_the_figure):
     """
-    Wires all 5 real manuscript figures (slot_key -> current number, see
+    Wires all 6 real manuscript figures (slot_key -> current number, see
     manuscript/figure_table_registry.csv): x11_interannual_river_flow +
-    x11_components_dynamic (dynamic threshold, plume area vs. river flow),
-    x11_interannual_dynamic_vs_static + x11_seasonal_dynamic_vs_static +
-    x11_residual_dynamic_vs_static (interannual/seasonal/residual, dynamic
+    x11_seasonal_river_flow + x11_residual_river_flow (dynamic threshold,
+    plume area vs. river flow, split into interannual/seasonal/residual --
+    each its own standalone 4-zone-panel figure, never combined into one
+    image), x11_interannual_dynamic_vs_static + x11_seasonal_dynamic_vs_static
+    + x11_residual_dynamic_vs_static (interannual/seasonal/residual, dynamic
     vs. static threshold comparison of plume area itself).
     """
     x11_river_flow_subdir = get_registry_row("x11_interannual_river_flow")['output_subdir']
     x11_dyn_vs_static_subdir = get_registry_row("x11_interannual_dynamic_vs_static")['output_subdir']
-    figure_6_dir = os.path.join(where_to_save_the_figure, "ARTICLE", x11_river_flow_subdir)
+    x11_river_flow_dir = os.path.join(where_to_save_the_figure, "ARTICLE", x11_river_flow_subdir)
     figure_s5_dir = os.path.join(where_to_save_the_figure, "ARTICLE", x11_dyn_vs_static_subdir)
-    _prep_x11_weekly_data(where_are_saved_X11_results_dynamic, figure_6_dir)
+    _prep_x11_weekly_data(where_are_saved_X11_results_dynamic, x11_river_flow_dir)
     _prep_x11_dynamic_vs_static_data(where_are_saved_X11_results_dynamic, where_are_saved_X11_results_static, figure_s5_dir)
 
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
 
-    for slot_key in ['x11_interannual_river_flow', 'x11_components_dynamic',
+    for slot_key in ['x11_interannual_river_flow', 'x11_seasonal_river_flow',
+                     'x11_residual_river_flow',
                      'x11_interannual_dynamic_vs_static',
                      'x11_seasonal_dynamic_vs_static',
                      'x11_residual_dynamic_vs_static']:

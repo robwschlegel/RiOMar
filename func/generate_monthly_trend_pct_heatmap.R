@@ -1,13 +1,17 @@
-# One-off exploratory figure: zone x month heatmap of each plume property's
-# and driver's per-calendar-month linear trend, expressed as a percent-of-
-# mean change per year rather than raw units -- lets properties/drivers on
-# very different scales (e.g. plume area in km^2 vs. tidal range in m) sit on
-# one shared colour scale. Red = increasing, blue = decreasing.
+# Manuscript slot "monthly_trend_pct_heatmap" -- see
+# manuscript/figure_table_registry.csv for its current figure number. Zone x
+# month heatmap of each plume property's and driver's per-calendar-month
+# linear trend, expressed as a percent-of-mean change per year rather than
+# raw units -- lets properties/drivers on very different scales (e.g. plume
+# area in km^2 vs. tidal range in m) sit on one shared colour scale. Red =
+# increasing, blue = decreasing. Replaces the former main-text Table 5
+# (monthly_trends_table_main, a compact "N/12 significant months + range"
+# summary) as of 2026-08-26.
 #
 # Trend: output/STATS/monthly_trend_summary.csv (func/compute_seasonal_trend.R),
 # dynamic threshold, AR(1)/HAC-weighted per-calendar-month slope
 # (compute_monthly_trend(), func/multi.R) -- the same slope behind the
-# monthly_trends_table_main slot and the Supplementary month-by-month table.
+# Supplementary month-by-month table (monthly_trends_table slot).
 # Percent-per-year here is
 # 100 * (slope * 365.25) / mean, where mean is that zone x variable's overall
 # mean value pooled across all months and years (dynamic threshold), not a
@@ -18,13 +22,11 @@
 # The mean is recomputed here from the same source loaders
 # (load_plume_ts()/load_driver()/PlumeShape.csv/compute_alongcoast_ts())
 # compute_seasonal_trend.R used to produce the slopes, rather than read from
-# the seasonal_boxplot_heatmap slot's monthly_boxplot_data.csv -- that file
-# stores SPM mass in tonnes (plot_seasonal_boxplot_heatmap's plume_area/1000
-# conversion) while
-# monthly_trend_summary.csv's SPM_mass slope is fit on raw kg, and it may not
+# the seasonal_boxplot_heatmap slot's monthly_boxplot_data.csv, and it may not
 # include every variable (e.g. compactness) if it predates a PlumeShape.csv
 # run. Recomputing the mean directly from the same raw series as the slope
-# guarantees matching units and full variable coverage.
+# guarantees matching units and full variable coverage. Both SPM mass sources
+# are tonnes-native as of panache v5.2.0, so no unit mismatch between them.
 #
 # Run from repo root: Rscript func/generate_monthly_trend_pct_heatmap.R
 source("func/multi.R")
@@ -32,7 +34,7 @@ source("func/multi.R")
 source("func/tide.R")
 
 YR <- 365.25
-mass_col <- "mass_SPM_in_the_plume_area_in_g_m"  # kg, see compute_mass_spm_trend.R
+mass_col <- "mass_SPM_in_the_plume_area_in_t"  # tonnes, see compute_mass_spm_trend.R
 drivers <- c("flow", "wind", "tide", "wave", "current")
 
 variable_display <- c(
@@ -56,7 +58,7 @@ overall_mean <- purrr::pmap_dfr(zone_meta, function(...){
     dplyr::transmute(variable = "plume_area", value = plume_area)
 
   df_mass <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = mass_col, outlier_max = NULL) |>
-    dplyr::transmute(variable = "SPM_mass", value = plume_area)  # kg, matches monthly_trend_summary.csv's unconverted slope
+    dplyr::transmute(variable = "SPM_mass", value = plume_area)  # tonnes, matches monthly_trend_summary.csv's slope units
 
   shape_path <- paste0(plume_dir, "/", meta$zone, "/PlumeShape.csv")
   df_shape <- if(file.exists(shape_path)){
@@ -108,6 +110,9 @@ p_heatmap <- ggplot(trend, aes(x = month, y = zone, fill = pct_per_year)) +
   theme(strip.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
        axis.text.y = element_text(size = 10), panel.grid = element_blank())
 
-if(!dir.exists("figures/driver_comparison")) dir.create("figures/driver_comparison", recursive = TRUE)
-ggsave(filename = "figures/driver_comparison/monthly_trend_pct_heatmap.png", plot = p_heatmap, width = 12, height = 10, dpi = 300)
-message("Wrote figures/driver_comparison/monthly_trend_pct_heatmap.png")
+output_subdir <- get_registry_row("monthly_trend_pct_heatmap")$output_subdir
+main_folder <- file.path("figures", "ARTICLE", output_subdir)
+if(!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+out_path <- file.path(main_folder, registry_filename(output_subdir))
+ggsave(filename = out_path, plot = p_heatmap, width = 12, height = 10, dpi = 300)
+message("Wrote ", out_path)

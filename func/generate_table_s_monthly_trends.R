@@ -19,12 +19,12 @@ YR <- 365.25
 
 # variable key -> (row label as it appears in manuscript.tex, decimal
 # precision, unit conversion factor applied to the annualised slope).
-# SPM_mass is stored in kg (see func/compute_mass_spm_trend.R's comment);
-# manuscript tables report it in tonnes.
+# SPM_mass is stored in tonnes already (see func/compute_mass_spm_trend.R's
+# comment), matching the manuscript tables' units.
 variables <- tibble::tribble(
   ~variable,        ~label,                                  ~precision, ~unit_convert,
   "plume_area",     "Plume area (km$^2$ yr$^{-1}$)",          1,          1,
-  "SPM_mass",       "SPM mass (t yr$^{-1}$)",                 1,          1 / 1000,
+  "SPM_mass",       "SPM mass (t yr$^{-1}$)",                 1,          1,
   "compactness",    "Compactness (yr$^{-1}$)",                4,          1,
   "alongcoast_km",  "Along-coast (km yr$^{-1}$)",             3,          1,
   "flow",           "Discharge (m$^3$ s$^{-1}$ yr$^{-1}$)",   1,          1,

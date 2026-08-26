@@ -690,7 +690,7 @@ plot_plume_area_timeseries <- function(where_to_save_the_figure){
     if (index_to_remove |> length() > 0) {df_zone <- df_zone[-index_to_remove,]}
 
     df_merged <- df_zone |> filter(Satellite_sensor == "merged") |>
-      mutate(mass_t = mass_SPM_in_the_plume_area_in_g_m / 1000)  # despite the column name, source values are kg
+      mutate(mass_t = mass_SPM_in_the_plume_area_in_t)  # already tonnes
 
     # Mass plotted on a secondary axis, scaled into area's own range --
     # same dual-axis pattern as multi.R::plot_x11_river_and_plume().
@@ -788,12 +788,13 @@ plot_plume_area_timeseries <- function(where_to_save_the_figure){
 
 
 # Monthly heatmap (sec:results_seasonal) of all four plume properties and
-# five drivers, per zone, dynamic threshold. Rescaling each zone's values to
-# 0-100% of that zone's own observed dynamic-threshold range so zones of very
-# different raw magnitude (see the panache_stats_table slot) are comparable
-# in one figure; real
-# (unscaled) interquartile values are annotated as text. Also writes the
-# shared long-format data (both thresholds) that
+# five drivers, per zone, dynamic threshold. Each tile is that month's median
+# value divided by the zone's own all-time median (dynamic threshold only) --
+# i.e. how a typical day in that month compares to a typical day across the
+# full record for that zone x variable -- so zones of very different raw
+# magnitude (see the panache_stats_table slot) are comparable in one figure
+# on a scale centred on 1 (= typical). Real (unscaled) interquartile values
+# are annotated as text. Also writes the shared long-format data (both thresholds) that
 # plot_seasonal_boxplots_dynamic_vs_static() below reads back in, so the
 # static-threshold pass is computed once rather than twice. Manuscript slot
 # "seasonal_boxplot_heatmap" -- see manuscript/figure_table_registry.csv for
@@ -807,7 +808,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
   data_dir <- file.path(figure_5_dir, "DATA")
   if(!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
 
-  mass_col <- "mass_SPM_in_the_plume_area_in_g_m"  # kg, see compute_mass_spm_trend.R
+  mass_col <- "mass_SPM_in_the_plume_area_in_t"  # tonnes, see compute_mass_spm_trend.R
   drivers <- c("flow", "wind", "tide", "wave", "current")
   variable_display <- c(
     plume_area    = "Plume area (km²)",
@@ -834,7 +835,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
         dplyr::transmute(date, variable = "plume_area", value = plume_area)
 
       df_mass <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = mass_col, outlier_max = NULL) |>
-        dplyr::transmute(date, variable = "SPM_mass", value = plume_area / 1000)  # kg -> t
+        dplyr::transmute(date, variable = "SPM_mass", value = plume_area)  # already tonnes
 
       # func/compute_plume_shape.py now covers both thresholds
       # so this file should always exist -- the guard is kept as defensive
@@ -867,32 +868,16 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
 
   readr::write_csv(long_data, file.path(data_dir, "monthly_boxplot_data.csv"))
 
-  # Each zone x variable's 0-100% scale is fixed from the *dynamic*-threshold
-  # values only, then applied to both thresholds when the
-  # seasonal_boxplots_dynamic_vs_static figure (below) re-reads this same
-  # data -- so a static-threshold box sitting outside
-  # 0-100% there is a real, visible signal that the two thresholds disagree,
-  # not scaling noise.
-  #
-  # Bounds are the 2nd/98th percentile, not the literal min/max (fixed
-  # 2026-08-11, per Robert): several variables are heavy-tailed by nature
-  # (SPM mass, river flow -- a handful of flood/resuspension days carry far
-  # more mass/discharge than any typical day) or have their range set by a
-  # short run of genuine extreme-event days (Bay of Seine along-coast drift,
-  # dominated by the Feb-2014 storm cluster). A literal min/max range let
-  # those rare days set the whole 28-year scale, compressing every month's
-  # median toward one end regardless of real seasonal variation -- e.g. the
-  # Gulf of Lion's SPM mass median sat at 1.9% of its literal range. The
-  # ~4% of days beyond the 2nd/98th percentile now saturate at the colour
-  # scale's ends instead of dominating it; the monthly *median* pct plotted
-  # by plot_seasonal_boxplot_heatmap() was already robust to this on its own,
-  # but the fix has to apply here (to `value` before pct is computed) so the
-  # seasonal_boxplots_dynamic_vs_static figure's boxplot whiskers -- which do
-  # use extreme per-day pct values -- see it too.
-  scale_range <- long_data |>
+  # Zone x variable's own all-time median (dynamic threshold only) -- the
+  # "typical day" denominator each month's median is compared against below.
+  # A ratio, unlike the old 2nd/98th-percentile-of-range scaling this
+  # replaced, is naturally robust to heavy-tailed variables (SPM mass, river
+  # flow) and rare extreme-event runs (e.g. Bay of Seine along-coast drift,
+  # dominated by the Feb-2014 storm cluster) without needing any winsorising:
+  # the median denominator itself already ignores those days.
+  overall_median <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
-    dplyr::summarise(range_min = stats::quantile(value, 0.02, na.rm = TRUE),
-                     range_max = stats::quantile(value, 0.98, na.rm = TRUE),
+    dplyr::summarise(overall_median = stats::median(value, na.rm = TRUE),
                      .by = c(zone, variable))
 
   # geom_tile's discrete y-axis places the first factor level at the bottom,
@@ -906,28 +891,31 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
   zone_labels <- zone_title(rev(zones))
   zone_labels[zone_labels == "Southern Brittany"] <- "S. Brittany"
 
-  df <- long_data |>
-    dplyr::filter(threshold == "dynamic") |>
-    dplyr::left_join(scale_range, by = c("zone", "variable")) |>
-    dplyr::mutate(pct = 100 * (value - range_min) / (range_max - range_min),
-                  zone = factor(zone, levels = rev(zones), labels = zone_labels),
-                  month = factor(month, levels = 1:12, labels = month.abb),
-                  variable = factor(variable, levels = names(variable_display), labels = unname(variable_display)))
-
   # Heatmap of monthly medians. One small zone x
   # month heatmap per variable, all 9 (4 properties + 5 drivers) in a single
   # 3x3 panel grid ; the full distributional detail (this exact
   # median plus IQR/range) is still in monthly_boxplot_data.csv (written
-  # above) and, per month/zone/property/driver, in the
-  # monthly_trends_table_main slot's source
-  # (output/STATS/monthly_trend_compact_summary.csv) for anyone who needs it.
-  heat_stats <- df |>
-    dplyr::summarise(median_pct = stats::median(pct, na.rm = TRUE), .by = c(zone, variable, month))
+  # above), and the per-month linear trend (as opposed to the median shown
+  # here) is in the monthly_trend_pct_heatmap slot's figure
+  # (func/generate_monthly_trend_pct_heatmap.R) for anyone who needs it.
+  heat_stats <- long_data |>
+    dplyr::filter(threshold == "dynamic") |>
+    dplyr::summarise(month_median = stats::median(value, na.rm = TRUE), .by = c(zone, variable, month)) |>
+    dplyr::left_join(overall_median, by = c("zone", "variable")) |>
+    dplyr::mutate(ratio = month_median / overall_median,
+                  zone = factor(zone, levels = rev(zones), labels = zone_labels),
+                  month = factor(month, levels = 1:12, labels = month.abb),
+                  variable = factor(variable, levels = names(variable_display), labels = unname(variable_display)))
 
-  p_heatmap <- ggplot(heat_stats, aes(x = month, y = zone, fill = median_pct)) +
+  # Diverging scale centred on 1 (= that month matches the zone's own
+  # all-time typical day); purple/orange rather than the blue/red diverging
+  # scale used by the monthly_trend_pct_heatmap slot's %-change-per-year
+  # figure (func/generate_monthly_trend_pct_heatmap.R), so the two are not
+  # visually conflated.
+  p_heatmap <- ggplot(heat_stats, aes(x = month, y = zone, fill = ratio)) +
     geom_tile(colour = "white", linewidth = 0.4) +
     facet_wrap(~variable, ncol = 3) +
-    scale_fill_viridis_c(name = "Median\n% of range") +
+    scale_fill_gradient2(name = "Month / overall\nmedian", low = "#7b3294", mid = "white", high = "#e66101", midpoint = 1) +
     labs(x = NULL, y = NULL) +
     theme_bw(base_size = 13) +
     theme(strip.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
@@ -1166,22 +1154,6 @@ stack_x11_component <- function(zone_plots, component){
   ggarrange(plotlist = zone_plots |> plyr::llply(function(x) x[[component]]), ncol = 1, nrow = 4, align = "v")
 }
 
-# Renders each of two X11-component stacks (e.g. Seasonal + Residual) to its
-# own PNG first, then composites them with magick::image_append(stack=TRUE)
-# -- nesting a second ggarrange() around two already-4-row ggarrange() stacks
-# instead corrupts the rotated secondary-axis text (checked visually: the
-# y-axis labels overlap into an unreadable smear). Compositing at the image
-# level, like the pre-2026-08-01 Figure_8/Figure_10 assembly did, avoids this.
-save_x11_component_composite <- function(zone_plots, components, name, path){
-  panel_files <- purrr::map_chr(components, function(component){
-    save_plot_as_png(stack_x11_component(zone_plots, component), paste0(name, "_", tolower(component)),
-                     width = 20, height = 16, path = path)
-    file.path(path, paste0(name, "_", tolower(component), ".png"))
-  })
-  composite <- magick::image_append(magick::image_read(panel_files), stack = TRUE)
-  magick::image_write(composite, file.path(path, paste0(name, ".png")))
-}
-
 # Plume-area time series, fixed vs. dynamic threshold comparison, one panel
 # per zone. Reads the same ts_data.csv plot_plume_area_timeseries() does
 # (both share one Python-side data prep), but writes to its own folder.
@@ -1335,24 +1307,40 @@ compute_x11_dynamic_vs_static_plots <- function(data_dir){
   })
 }
 
-# X11 seasonal + residual components, dynamic threshold, all four zones --
-# the two components not shown in main x11_interannual_river_flow. Shares
-# that slot's DATA/ prep. Restored 2026-08-11: accidentally deleted from this
-# file on 2026-08-10 (commit c76fe1f) while
-# figure.py::Figure_X11_weekly_results() still called it -- silently broken
-# since then, the R call wrapped in a try/except that only prints a warning,
-# so no pipeline run surfaced the failure. Body unchanged from the
-# pre-deletion version; compute_x11_zone_plots() and
-# save_x11_component_composite() (used below) were untouched by the
-# deletion. Manuscript slot "x11_components_dynamic" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
-plot_x11_components_dynamic <- function(where_to_save_the_figure){
+# X11 seasonal component of plume area vs. river flow, dynamic threshold,
+# all four zones. Shares x11_interannual_river_flow's DATA/ prep. Manuscript
+# slot "x11_seasonal_river_flow" -- see manuscript/figure_table_registry.csv
+# for its current figure number. Split 2026-08-26 out of the former
+# plot_x11_components_dynamic(), which rendered this and the residual
+# component as one stacked seasonal-on-top-of-residual composite image via
+# save_x11_component_composite() (now deleted) -- that stacked two already
+# 4-zone-panel figures into one 8-panel image, causing page overflow in the
+# compiled PDF. Each component now gets its own standalone 4-panel figure,
+# same as every other X11 figure in this file.
+plot_x11_seasonal_river_flow <- function(where_to_save_the_figure){
   data_dir <- file.path(where_to_save_the_figure, "ARTICLE", get_registry_row("x11_interannual_river_flow")$output_subdir)
-  output_subdir <- get_registry_row("x11_components_dynamic")$output_subdir
+  output_subdir <- get_registry_row("x11_seasonal_river_flow")$output_subdir
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
   zone_plots <- compute_x11_zone_plots(data_dir)
-  save_x11_component_composite(zone_plots, c("Seasonal", "Residual"), registry_basename(output_subdir), main_folder)
+  save_plot_as_png(stack_x11_component(zone_plots, "Seasonal"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
+}
+
+# X11 residual (short-term) component of plume area vs. river flow, dynamic
+# threshold, all four zones. Shares x11_interannual_river_flow's DATA/ prep.
+# Manuscript slot "x11_residual_river_flow" -- see
+# manuscript/figure_table_registry.csv for its current figure number.
+# Renamed/split 2026-08-26 from plot_x11_components_dynamic() (see
+# plot_x11_seasonal_river_flow() above for why); this function renders
+# residual only, matching the slot's narrowed role now that seasonal has
+# moved to the new main-text x11_seasonal_river_flow slot.
+plot_x11_residual_river_flow <- function(where_to_save_the_figure){
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", get_registry_row("x11_interannual_river_flow")$output_subdir)
+  output_subdir <- get_registry_row("x11_residual_river_flow")$output_subdir
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+  zone_plots <- compute_x11_zone_plots(data_dir)
+  save_plot_as_png(stack_x11_component(zone_plots, "Residual"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 
 # X11 interannual signal of plume area, dynamic vs. static threshold, all
@@ -1436,12 +1424,14 @@ plot_seasonal_boxplots_dynamic_vs_static <- function(where_to_save_the_figure){
 
   long_data <- readr::read_csv(data_path, show_col_types = FALSE)
 
-  # Same dynamic-threshold-only scale as plot_seasonal_boxplot_heatmap() --
-  # incl. the 2nd/98th-percentile bounds fixed there 2026-08-11 -- so the two
-  # figures' y-axes are directly comparable. Boxplot whiskers below use
-  # per-day pct extremes directly, so this fix matters here even more than
-  # in the seasonal_boxplot_heatmap figure (which only plots the
-  # more-robust monthly median).
+  # Own dynamic-threshold-only 2nd/98th-percentile-of-range scale (fixed
+  # 2026-08-11): boxplot whiskers below use per-day pct extremes directly, so
+  # a robust-but-fixed range matters here to keep rare extreme-event days
+  # from setting the whole 28-year scale. plot_seasonal_boxplot_heatmap()
+  # above now uses a different scale (month median / zone's own all-time
+  # median, since it only plots that single more-robust summary per tile),
+  # so the two figures' scales are no longer directly comparable -- this one
+  # stands alone.
   scale_range <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
     dplyr::summarise(range_min = stats::quantile(value, 0.02, na.rm = TRUE),
