@@ -45,6 +45,13 @@ france_bbox <- data.frame(zone = "FRANCE",
 # via get_registry_row() instead of hardcoding a "FIGURE_N"/"TABLE_N" string.
 figure_table_registry <- read_csv("manuscript/figure_table_registry.csv", show_col_types = FALSE)
 
+# Single source of truth for "which script/data file produced the numbers in
+# this manuscript paragraph" -- see manuscript/paragraph_source_registry.csv.
+# Checked by make_figures_tables.R's check_all_paragraph_sources(); read here
+# rather than there so the checklist script can source() this file the same
+# way it already does for figure_table_registry above.
+paragraph_source_registry <- read_csv("manuscript/paragraph_source_registry.csv", show_col_types = FALSE)
+
 get_registry_row <- function(slot_key){
   row <- dplyr::filter(figure_table_registry, .data$slot_key == !!slot_key)
   if(nrow(row) != 1) stop("get_registry_row(): expected exactly 1 row for slot_key '",
