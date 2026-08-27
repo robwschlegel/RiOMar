@@ -37,23 +37,21 @@ monthly_trend_detail <- purrr::map_dfr(names(thresholds), function(threshold_lab
     trend_mass <- compute_monthly_trend(df_mass$plume_area, df_mass$date) |>
       dplyr::mutate(variable = "SPM_mass", category = "property")
 
-    # func/compute_plume_shape.py now covers both thresholds (2026-08-07), so
-    # this file should always exist -- the guard is kept as defensive
-    # robustness (skip compactness rather than failing the whole script) in
-    # case that script is ever re-run for only one threshold in the future.
+    # func/compute_plume_shape.py must be run (now wired into
+    # code/4_time_series.py) before this script -- compactness is a required
+    # property, not an optional one, so a missing file is a hard error
+    # rather than a silently dropped variable.
     shape_path <- paste0(plume_dir, "/", meta$zone, "/PlumeShape.csv")
-    if(file.exists(shape_path)){
-      df_shape <- read_csv(shape_path, show_col_types = FALSE) |>
-        dplyr::mutate(date = as.Date(date)) |>
-        complete(date = seq(min(date), max(date), by = "day")) |>
-        zoo::na.trim()
-      trend_shape <- compute_monthly_trend(df_shape$compactness, df_shape$date) |>
-        dplyr::mutate(variable = "compactness", category = "property")
-    } else {
-      message("compute_seasonal_trend: no PlumeShape.csv for ", threshold_label, "/", meta$zone,
-             " -- skipping compactness for this threshold.")
-      trend_shape <- NULL
+    if(!file.exists(shape_path)){
+      stop("compute_seasonal_trend: missing ", shape_path,
+           " -- run func/compute_plume_shape.py before regenerating this table.")
     }
+    df_shape <- read_csv(shape_path, show_col_types = FALSE) |>
+      dplyr::mutate(date = as.Date(date)) |>
+      complete(date = seq(min(date), max(date), by = "day")) |>
+      zoo::na.trim()
+    trend_shape <- compute_monthly_trend(df_shape$compactness, df_shape$date) |>
+      dplyr::mutate(variable = "compactness", category = "property")
 
     df_coast <- compute_alongcoast_ts(meta$zone, meta, plume_dir)
     trend_coast <- compute_monthly_trend(df_coast$value, df_coast$date) |>

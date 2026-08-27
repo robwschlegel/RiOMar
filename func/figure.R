@@ -837,19 +837,18 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
       df_mass <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = mass_col, outlier_max = NULL) |>
         dplyr::transmute(date, variable = "SPM_mass", value = plume_area)  # already tonnes
 
-      # func/compute_plume_shape.py now covers both thresholds
-      # so this file should always exist -- the guard is kept as defensive
-      # robustness, same as func/compute_seasonal_trend.R.
+      # func/compute_plume_shape.py must be run (now wired into
+      # code/4_time_series.py) before this figure -- compactness is a
+      # required panel, not an optional one, so a missing file is a hard
+      # error rather than a silently dropped panel.
       shape_path <- paste0(plume_dir, "/", meta$zone, "/PlumeShape.csv")
-      if(file.exists(shape_path)){
-        df_shape <- read_csv(shape_path, show_col_types = FALSE) |>
-          dplyr::mutate(date = as.Date(date)) |>
-          dplyr::transmute(date, variable = "compactness", value = compactness)
-      } else {
-        message("plot_seasonal_boxplot_heatmap: no PlumeShape.csv for ", threshold_label, "/", meta$zone,
-               " -- skipping compactness for this threshold.")
-        df_shape <- NULL
+      if(!file.exists(shape_path)){
+        stop("plot_seasonal_boxplot_heatmap: missing ", shape_path,
+             " -- run func/compute_plume_shape.py before regenerating this figure.")
       }
+      df_shape <- read_csv(shape_path, show_col_types = FALSE) |>
+        dplyr::mutate(date = as.Date(date)) |>
+        dplyr::transmute(date, variable = "compactness", value = compactness)
 
       df_coast <- compute_alongcoast_ts(meta$zone, meta, plume_dir) |>
         dplyr::transmute(date, variable = "alongcoast_km", value = value)

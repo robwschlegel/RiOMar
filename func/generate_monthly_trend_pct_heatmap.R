@@ -60,11 +60,16 @@ overall_mean <- purrr::pmap_dfr(zone_meta, function(...){
   df_mass <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = mass_col, outlier_max = NULL) |>
     dplyr::transmute(variable = "SPM_mass", value = plume_area)  # tonnes, matches monthly_trend_summary.csv's slope units
 
+  # compactness is a required panel, not an optional one -- a missing
+  # PlumeShape.csv (func/compute_plume_shape.py) is a hard error rather
+  # than a silently dropped panel.
   shape_path <- paste0(plume_dir, "/", meta$zone, "/PlumeShape.csv")
-  df_shape <- if(file.exists(shape_path)){
-    readr::read_csv(shape_path, show_col_types = FALSE) |>
-      dplyr::transmute(variable = "compactness", value = compactness)
-  } else NULL
+  if(!file.exists(shape_path)){
+    stop("generate_monthly_trend_pct_heatmap: missing ", shape_path,
+         " -- run func/compute_plume_shape.py before regenerating this figure.")
+  }
+  df_shape <- readr::read_csv(shape_path, show_col_types = FALSE) |>
+    dplyr::transmute(variable = "compactness", value = compactness)
 
   df_coast <- compute_alongcoast_ts(meta$zone, meta, plume_dir) |>
     dplyr::transmute(variable = "alongcoast_km", value = value)

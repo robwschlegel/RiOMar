@@ -99,3 +99,39 @@ r_function()
 r_function_monthly = robjects.r['run_monthly_driver_interactions_analysis']
 r_function_monthly()
 
+
+# =============================================================================
+# ### Plume shape (compactness), both thresholds
+# =============================================================================
+
+# Derives PlumeShape.csv per zone/threshold from panache's PlumeMasks.nc (see
+# func/compute_plume_shape.py); read by func/figure.R's compactness panels
+# and func/compute_shape_alongcoast_trend.R.
+import compute_plume_shape  # noqa: F401
+
+
+# =============================================================================
+# ### Manuscript stats scripts
+# =============================================================================
+
+# These are one-off scripts that generate stats used in the manuscript; 
+# wiring them in here keeps their outputs (output/STATS/*.csv) in sync 
+# with the panache/X11/ driver-interactions data above. 
+# Order matters: generate_monthly_trend_pct_heatmap.R and 
+# generate_table_s_monthly_trends.R read compute_seasonal_trend.R's output; 
+# generate_table_s_octant_trends.R reads compute_direction_octant_trend.R's output.
+stats_scripts = [
+    'compute_area_trend.R',
+    'compute_mass_spm_trend.R',
+    'compute_shape_alongcoast_trend.R',
+    'compute_driver_correlation_trend.R',
+    'compute_seasonal_trend.R',
+    'generate_monthly_trend_pct_heatmap.R',
+    'generate_table_s_monthly_trends.R',
+    'compute_direction_octant_trend.R',
+    'generate_table_s_octant_trends.R',
+    'compute_driver_correlation_matrices.R',
+]
+for script in stats_scripts:
+    robjects.r['source'](os.path.join(func_dir, script))
+
