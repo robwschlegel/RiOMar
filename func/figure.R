@@ -1085,7 +1085,7 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
 
   full_plot <- ggpubr::ggarrange(col_labels_row, row_and_panel_grid, nrow = 2, heights = c(0.04, 1))
 
-  save_plot_as_png(full_plot, registry_basename(output_subdir), width = 24, height = 20, path = main_folder)
+  save_plot_as_png(full_plot, registry_basename(output_subdir), width = 20, height = 22, path = main_folder)
 }
 
 
