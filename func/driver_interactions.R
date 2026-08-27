@@ -288,7 +288,7 @@ metric_responses <- c("plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_t
 
 # Step 6: exploratory random forest + H-statistic ----------------------------
 
-fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area"){
+fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area", n_repeats = 10){
   df <- driver_matrices[[zone_name]]
   drivers <- available_drivers(df)
   df_complete <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
@@ -297,14 +297,32 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
     return(NULL)
   }
 
-  rf <- ranger::ranger(stats::as.formula(paste(response, "~", paste(drivers, collapse = " + "))),
-                       data = df_complete[, c(response, drivers)],
-                       importance = "permutation", num.trees = 500)
+  rf_formula <- stats::as.formula(paste(response, "~", paste(drivers, collapse = " + ")))
+
+  # Permutation importance is known to redistribute unpredictably among
+  # correlated predictors and vary between repeated fits of the same forest
+  # (Strobl et al. 2007; Nicodemus et al. 2010; Wang et al. 2016), worse the
+  # smaller the sample -- refit n_repeats times with different seeds and
+  # report the mean and SD across repeats, rather than trusting a single fit,
+  # so a driver whose ranking is unstable shows a large importance_sd instead
+  # of silently looking as solid as a stable one.
+  importance_repeats <- purrr::map(seq_len(n_repeats), function(i){
+    ranger::ranger(rf_formula, data = df_complete[, c(response, drivers)],
+                   importance = "permutation", num.trees = 500, seed = i)$variable.importance
+  })
+  importance_mat <- do.call(rbind, importance_repeats)
+  importance_mean <- colMeans(importance_mat)
+  importance_sd <- apply(importance_mat, 2, stats::sd)
+
+  # One fit (seed 1) is kept for the H-statistic interaction diagnostic,
+  # which is too expensive to repeat n_repeats times as well.
+  rf <- ranger::ranger(rf_formula, data = df_complete[, c(response, drivers)],
+                       importance = "permutation", num.trees = 500, seed = 1)
 
   predictor <- iml::Predictor$new(rf, data = df_complete[, drivers], y = df_complete[[response]])
   interaction_hstat <- iml::Interaction$new(predictor)$results
 
-  list(model = rf, importance = rf$variable.importance, interaction = interaction_hstat)
+  list(model = rf, importance = importance_mean, importance_sd = importance_sd, interaction = interaction_hstat)
 }
 
 
@@ -391,7 +409,8 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
     purrr::set_names(zones) |> purrr::compact()
 
   rf_importance <- purrr::imap_dfr(rf_results, function(res, zone_name){
-    tibble::tibble(zone = zone_name, driver = names(res$importance), importance = res$importance)
+    tibble::tibble(zone = zone_name, driver = names(res$importance), importance = res$importance,
+                   importance_sd = res$importance_sd[names(res$importance)])
   })
   readr::write_csv(rf_importance, file.path(stats_dir, "driver_rf_importance.csv"))
 
