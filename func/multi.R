@@ -378,12 +378,15 @@ flow_controlled_residual <- function(df){
   residuals(lm(plume_area ~ flow, data = df))
 }
 
-# Direction/magnitude rose for wind or wave or currents, 
-# coloured by the flow-controlled plume-area response.
-plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
+# Data prep shared by plot_driver_rose() below and by
+# plot_driver_rose_diagram()'s shared-colour-scale computation (figure.R):
+# join driver direction/magnitude onto the flow-controlled plume series, bin
+# into compass sectors, and winsorize the per-sector mean residual. Returns
+# a zero-row tibble (same columns) when direction data isn't available for
+# this zone/driver, so callers can detect that case uniformly.
+compute_driver_rose_summary <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
   driver_name <- match.arg(driver_name, c("wind", "wave", "current"))
   dir_col <- paste0(driver_name, "_dir")
-  disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
 
   if(is.null(df_flow)){
     df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
@@ -395,19 +398,10 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
     tidyr::drop_na(plume_area, flow, dplyr::all_of(dir_col))
 
   # Defensive fallback for a zone/driver missing direction entirely.
-  # A blank rose would be misleading (looks like "no data collected" 
-  # rather than "direction not available"), so say so explicitly instead.
   if(nrow(df) == 0){
-    pl <- ggplot() +
-      annotate("text", x = 0.5, y = 0.5, label = paste0(toupper(driver_name), " direction\nnot available\nfor this zone"),
-               size = 5, colour = "grey40") +
-      xlim(0, 1) + ylim(0, 1) +
-      labs(title = paste0(zone_title(meta$zone), ": ", tolower(disp$driver_label))) +
-      theme_void() + theme(plot.title = element_text(hjust = 0.5))
-
-    ggsave(filename = paste0("figures/driver_comparison/rose_", driver_name, "_plume_", meta$mouth_name, ".png"),
-          plot = pl, width = 7, height = 6, dpi = 300)
-    return(invisible(pl))
+    return(tibble::tibble(sector = numeric(0), n_days = integer(0),
+                          mean_area_resid = numeric(0), pct_days = numeric(0),
+                          mean_area_resid_plot = numeric(0)))
   }
 
   df$area_resid <- flow_controlled_residual(df)
@@ -432,8 +426,8 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
   # (100/n_sectors, e.g. 12.5% for 8 sectors), not a fixed 5% -- a fixed 5%
   # cutoff let a sector just above it (e.g. 7% of days) both define the
   # clamp range *and* be exempt from clamping, even when far less sampled
-  # than the actually-dominant sectors. Using the same threshold both 
-  # ways is symmetric: every sector below it is subject to clamping, 
+  # than the actually-dominant sectors. Using the same threshold both
+  # ways is symmetric: every sector below it is subject to clamping,
   # every sector at or above it both defines the range and is left unclamped.
   uniform_share <- 100 / n_sectors
   well_sampled_range <- df_summary |>
@@ -450,7 +444,7 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
   # the non-finite case) and fall back to each sector's own raw value.
   well_sampled_range_valid <- all(is.finite(well_sampled_range)) && diff(well_sampled_range) > 0
 
-  df_summary <- df_summary |>
+  df_summary |>
     dplyr::mutate(mean_area_resid_plot = if (well_sampled_range_valid) {
       dplyr::case_when(
         pct_days < uniform_share & mean_area_resid > well_sampled_range[2] ~ well_sampled_range[2],
@@ -460,7 +454,35 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
     } else {
       mean_area_resid
     })
+}
 
+# Direction/magnitude rose for wind or wave or currents,
+# coloured by the flow-controlled plume-area response.
+# fill_limits lets a caller (plot_driver_rose_diagram()) impose a shared
+# colour scale across several calls (e.g. one zone's wind/wave/current
+# roses); NULL keeps this call's own auto-scaled range. show_legend = FALSE
+# suppresses this panel's own legend, for callers that draw one shared
+# legend externally instead.
+plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL, fill_limits = NULL, show_legend = TRUE){
+  driver_name <- match.arg(driver_name, c("wind", "wave", "current"))
+
+  df_summary <- compute_driver_rose_summary(driver_name, meta, n_sectors, df_flow)
+
+  # A blank rose would be misleading (looks like "no data collected" rather
+  # than "direction not available"), so say so explicitly instead.
+  if(nrow(df_summary) == 0){
+    pl <- ggplot() +
+      annotate("text", x = 0.5, y = 0.5, label = paste0(toupper(driver_name), " direction\nnot available\nfor this zone"),
+               size = 7, colour = "grey40") +
+      xlim(0, 1) + ylim(0, 1) +
+      theme_void()
+
+    ggsave(filename = paste0("figures/driver_comparison/rose_", driver_name, "_plume_", meta$mouth_name, ".png"),
+          plot = pl, width = 7, height = 6, dpi = 300)
+    return(invisible(pl))
+  }
+
+  sector_width <- 360 / n_sectors
   compass_breaks <- seq(0, 360 - sector_width, by = max(sector_width, 45))
   compass_labels <- c("N", "NE", "E", "SE", "S", "SW", "W", "NW")[seq_along(compass_breaks)]
 
@@ -477,10 +499,16 @@ plot_driver_rose <- function(driver_name, meta, n_sectors = 8, df_flow = NULL){
     coord_polar(start = 0) +
     scale_x_continuous(breaks = compass_breaks, labels = compass_labels, limits = c(0, 360)) +
     scale_fill_gradient2(low = "steelblue", mid = "grey90", high = "firebrick", midpoint = 0,
-                        name = "Plume-area\nresidual (km²)") +
-    labs(x = NULL, y = "% of days", title = paste0(zone_title(meta$zone), ": ", tolower(disp$driver_label))) +
+                        name = "Plume-area\nresidual (km²)", limits = fill_limits) +
+    labs(x = NULL, y = NULL) +
     theme_minimal() +
-    theme(panel.grid.major = element_line(colour = "grey85"), plot.title = element_text(hjust = 0.5))
+    theme(panel.grid.major = element_line(colour = "grey85"),
+          axis.text.y = element_blank(),
+          axis.text.x = element_text(size = 16),
+          legend.title = element_text(size = 16),
+          legend.text = element_text(size = 14),
+          legend.key.size = unit(1.1, "cm"),
+          legend.position = if (show_legend) "right" else "none")
 
   ggsave(filename = paste0("figures/driver_comparison/rose_", driver_name, "_plume_", meta$mouth_name, ".png"),
         plot = pl, width = 7, height = 6, dpi = 300)

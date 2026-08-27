@@ -1029,21 +1029,61 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
 
-  plotlist <- purrr::pmap(zone_meta, function(...){
+  zone_results <- purrr::pmap(zone_meta, function(...){
     meta <- tibble::tibble(...)
     # One flow join/STL per zone, shared across the wind/wave/current roses
     # below (plot_driver_rose() would otherwise recompute the identical
     # df_flow three times).
     df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
-    list(wind = plot_driver_rose("wind", meta, n_sectors, df_flow),
-        wave = plot_driver_rose("wave", meta, n_sectors, df_flow),
-        current = plot_driver_rose("current", meta, n_sectors, df_flow))
-  }) |> purrr::map(function(p) list(p$wind, p$wave, p$current)) |> purrr::flatten()
+
+    summaries <- purrr::map(c("wind", "wave", "current"), compute_driver_rose_summary,
+                            meta = meta, n_sectors = n_sectors, df_flow = df_flow) |>
+      purrr::keep(~ nrow(.x) > 0)
+
+    # Shared, symmetric colour scale across this zone's wind/wave/current
+    # roses, so the same colour means the same residual magnitude in every
+    # panel of the row -- each panel would otherwise auto-scale to its own
+    # data independently. Falls back to a fixed range only if all three
+    # drivers are missing direction data for this zone.
+    lim <- if (length(summaries) > 0) max(abs(unlist(purrr::map(summaries, ~ range(.x$mean_area_resid_plot, na.rm = TRUE))))) else 1
+    fill_limits <- c(-lim, lim)
+
+    panels <- list(wind = plot_driver_rose("wind", meta, n_sectors, df_flow, fill_limits = fill_limits, show_legend = FALSE),
+                  wave = plot_driver_rose("wave", meta, n_sectors, df_flow, fill_limits = fill_limits, show_legend = FALSE),
+                  current = plot_driver_rose("current", meta, n_sectors, df_flow, fill_limits = fill_limits, show_legend = FALSE))
+
+    # A legend-only grob for this zone's shared scale, extracted from a
+    # throwaway plot built with the same scale -- becomes the row's single
+    # colourbar, replacing the 3 per-panel legends suppressed above.
+    legend_plot <- ggplot(data.frame(x = 0, y = fill_limits), aes(x = x, y = y, fill = y)) +
+      geom_point() +
+      scale_fill_gradient2(low = "steelblue", mid = "grey90", high = "firebrick", midpoint = 0,
+                          name = "Plume-area\nresidual (km²)", limits = fill_limits) +
+      theme(legend.title = element_text(size = 16), legend.text = element_text(size = 14),
+            legend.key.size = unit(1.1, "cm"))
+    colorbar <- ggpubr::as_ggplot(cowplot::get_legend(legend_plot))
+
+    list(panels = panels, colorbar = colorbar)
+  })
+
+  plotlist <- purrr::map(zone_results, ~ list(.x$panels$wind, .x$panels$wave, .x$panels$current)) |> purrr::flatten()
 
   panel_labels <- paste0(letters[seq_along(plotlist)], ")")
-  full_plot <- ggpubr::ggarrange(plotlist = plotlist, ncol = 3, nrow = nrow(zone_meta), align = "v",
+  panel_grid <- ggpubr::ggarrange(plotlist = plotlist, ncol = 3, nrow = nrow(zone_meta), align = "v",
                                  labels = panel_labels, font.label = list(size = 18, face = "bold"),
                                  hjust = -0.3, vjust = 1.3)
+
+  row_labels <- ggpubr::ggarrange(plotlist = purrr::map(zone_meta$zone, ~ ggpubr::text_grob(zone_title(.x), face = "bold", size = 18, rot = 90)),
+                                  ncol = 1, nrow = nrow(zone_meta))
+  colorbars <- ggpubr::ggarrange(plotlist = purrr::map(zone_results, "colorbar"), ncol = 1, nrow = nrow(zone_meta))
+  row_and_panel_grid <- ggpubr::ggarrange(row_labels, colorbars, panel_grid, ncol = 3, widths = c(0.04, 0.13, 1))
+
+  col_labels <- ggpubr::ggarrange(plotlist = purrr::map(c("wind", "wave", "current"),
+                                                        ~ ggpubr::text_grob(dplyr::filter(driver_display, driver_name == .x)$driver_label, face = "bold", size = 18)),
+                                  ncol = 3, nrow = 1)
+  col_labels_row <- ggpubr::ggarrange(ggpubr::text_grob(""), col_labels, ncol = 2, widths = c(0.17, 1))
+
+  full_plot <- ggpubr::ggarrange(col_labels_row, row_and_panel_grid, nrow = 2, heights = c(0.04, 1))
 
   save_plot_as_png(full_plot, registry_basename(output_subdir), width = 24, height = 20, path = main_folder)
 }
