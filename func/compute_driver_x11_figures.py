@@ -45,10 +45,10 @@ OUT_DIR = os.path.join(proj_dir, "figures", "driver_x11_comparison")
 # Same driver_name -> (label, colour) mapping as func/multi.R's driver_display
 # tribble, restricted to the 4 drivers used here.
 DRIVER_DISPLAY = {
-    "wind":    ("Wind speed (m s-1)",     "purple"),
+    "wind":    ("Wind speed (m s⁻¹)",     "purple"),
     "tide":    ("Tidal range (m)",        "darkgreen"),
     "wave":    ("Wave height (m)",        "steelblue"),
-    "current": ("Current speed (m s-1)",  "orchid"),
+    "current": ("Current speed (m s⁻¹)",  "orchid"),
 }
 
 

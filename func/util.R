@@ -1328,14 +1328,14 @@ validation_lm_plots <- function(var_combi, sat_name, median_base, df, df_stats){
     y_lim <- c(4, 32)
     var_sat <- "SST"
   } else if(df_var_sub$variable[1] == "CHLA"){
-    y_lab <- "Chlorophyll-a (mg m-3)"
+    y_lab <- "Chlorophyll-a (mg m⁻³)"
     y_lim <- c(0, 20)
     var_sat <- "CHL"
   } else if(df_var_sub$variable[1] == "TUR"){
     y_lab <- "Turbidity (NTU)"
     y_lim <- c(0, 20)
   } else if(df_var_sub$variable[1] == "SPM"){
-    y_lab <- "SPM (g m-3)"
+    y_lab <- "SPM (g m⁻³)"
     y_lim <- c(0, 20)
   } else {
     # Not worried about other variables for the moment

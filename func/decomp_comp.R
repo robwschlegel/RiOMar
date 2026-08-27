@@ -33,7 +33,7 @@ X_11_plume_flow_stats_all <- X_11_plume_flow |>
   summarise(r = round(cor(plume_inter, flow_inter, use = "pairwise.complete.obs"), 2), .by = "zone")
 
 # Interannual comparison plots
-comparison_plot_save(X_11_plume_flow, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "trend_diagnostics_stale/comparison_plume_flow_inter_X11")
+comparison_plot_save(X_11_plume_flow, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km²)", "River flow (m³ s⁻¹)", "trend_diagnostics_stale/comparison_plume_flow_inter_X11")
 
 # STL
 load("output/STATS/stl_all.RData")
@@ -92,7 +92,7 @@ plume_inter <- decomp_df |>
 line_plume_inter <- ggplot(plume_inter, aes(x = date, y = value)) +
   geom_path(aes(colour = name), linewidth = 2) +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)") +
+  labs(colour = NULL, x = NULL, y = "Plume area (km²)") +
   # scale_colour_manual(key_glyph = "point") +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -135,7 +135,7 @@ plume_seas <- decomp_df |>
 line_plume_seas <- ggplot(plume_seas, aes(x = date, y = value)) +
   geom_path(aes(colour = name), alpha = 0.8, linewidth = 2) +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)") +
+  labs(colour = NULL, x = NULL, y = "Plume area (km²)") +
   # scale_colour_manual(key_glyph = "point") +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -178,7 +178,7 @@ line_plume_doy <- ggplot(plume_doy, aes(x = doy, y = val_mean)) +
   geom_ribbon(aes(fill = name, ymin = val_min, ymax = val_max), alpha = 0.2, show.legend = FALSE) +
   geom_path(aes(colour = name), linewidth = 2)  +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = "day-of-year", y = "Plume area (km^2)") +
+  labs(colour = NULL, x = "day-of-year", y = "Plume area (km²)") +
   # scale_colour_manual(key_glyph = "point") +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -221,7 +221,7 @@ plume_resid <- decomp_df |>
 line_plume_resid <- ggplot(plume_resid, aes(x = date, y = value)) +
   geom_path(aes(colour = name), linewidth = 2) +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)") +
+  labs(colour = NULL, x = NULL, y = "Plume area (km²)") +
   # scale_colour_manual(key_glyph = "point") +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -289,8 +289,8 @@ line_trend_base_all <- ggplot(plume_trend_daily_all, aes(x = date, y = plume_are
   geom_smooth(data = plume_trend_annual_all, method = "lm", colour = "blue", linewidth = 2) +
   geom_label(data = trend_labels_all, show.legend = FALSE,
              aes(x = x, y = y, colour = time_step, size = 6, hjust = 0,
-                 label = paste0(time_step," data slope = ", round(slope, 2), " km^2 yr-1", sep = ""))) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for daily, monthly, and annual mean plume data") +
+                 label = paste0(time_step," data slope = ", round(slope, 2), " km² yr⁻¹", sep = ""))) +
+  labs(x = NULL, y = "Plume area (km²)", title = "Trend for daily, monthly, and annual mean plume data") +
   scale_color_manual(name = "Time step",
                      values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
                      breaks = c("daily", "monthly", "annual")) +
@@ -336,9 +336,9 @@ line_trend_base <- ggplot(plume_trend_daily, aes(x = date, y = plume_area)) +
   geom_smooth(data = plume_trend_monthly, method = "lm", colour = "darkblue", linewidth = 2) +
   geom_point(data = plume_trend_annual, size = 7, alpha = 0.5, aes(colour = "annual")) +
   geom_smooth(data = plume_trend_annual, method = "lm", colour = "blue", linewidth = 2) +
-  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " km² yr⁻¹", sep = "")),
              colour = c("black", "darkblue", "blue"), size = 6, hjust = 0) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for daily, monthly, and annual mean plume data") +
+  labs(x = NULL, y = "Plume area (km²)", title = "Trend for daily, monthly, and annual mean plume data") +
   scale_color_manual(name = "Time step",
                      values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
                      breaks = c("daily", "monthly", "annual")) +
@@ -373,8 +373,8 @@ trend_seas_labels <- data.frame(
 line_trend_seas <- ggplot(plume_seas, aes(x = date, y = value)) +
   geom_path(alpha = 0.5, aes(colour = name)) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume seasonal components") +
-  geom_label(data = trend_seas_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+  labs(x = NULL, y = "Plume area (km²)", title = "Trend for plume seasonal components") +
+  geom_label(data = trend_seas_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km² yr⁻¹", sep = "")),
              colour = c("turquoise4", "chartreuse4", "indianred4"), size = 6, hjust = 0) +
   scale_color_manual(name = "Decomposition method",
                      values = c("STL seasonal" = "turquoise4", "X11 seasonal" = "chartreuse4", "smoothed seasonal" = "indianred4"),
@@ -407,8 +407,8 @@ trend_resid_labels <- data.frame(
 line_trend_resid <- ggplot(plume_resid, aes(x = date, y = value)) +
   geom_path(alpha = 0.5, aes(colour = name)) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume residual components") +
-  geom_label(data = trend_resid_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+  labs(x = NULL, y = "Plume area (km²)", title = "Trend for plume residual components") +
+  geom_label(data = trend_resid_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km² yr⁻¹", sep = "")),
              colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
   scale_color_manual(name = "Decomposition method",
                      values = c("STL residual" = "turquoise4", "X11 residual" = "chartreuse4"),
@@ -465,8 +465,8 @@ line_trend_inter <- ggplot(plume_inter_timesteps, aes(x = date, y = value)) +
   geom_line(data = filter(plume_inter_timesteps, timestep == "annual"),
             aes(colour = name, linetype = timestep), alpha = 0.9, linewidth = 2.0) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "Plume area (km^2)", title = "Trend for plume interannual components") +
-  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km^2 yr-1", sep = "")),
+  labs(x = NULL, y = "Plume area (km²)", title = "Trend for plume interannual components") +
+  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " km² yr⁻¹", sep = "")),
              colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
   scale_color_manual(name = "Decomposition",
                      values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
@@ -507,7 +507,7 @@ plume_ts <- decomp_df |>
 # Plot the time series' of values
 line_plume_comp_vs_raw <-ggplot(plume_ts, aes(x = date, y = value, colour = component_group, linetype = decomp_group)) +
   geom_path(linewidth = 1.0) +
-  labs(colour = NULL, x = NULL, y = "Plume area (km^2)",
+  labs(colour = NULL, x = NULL, y = "Plume area (km²)",
        title = "Decomposition components compared to base plume area (average mean values)") +
   scale_colour_brewer(palette = "Dark2") +
   scale_linetype_manual(name = "Decomposition",
@@ -573,7 +573,7 @@ line_plume_prop <- ggplot(filter(plume_prop, component_group != "total"), aes(x 
   scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00"),
     name = "Proportion of total plume area",
     sec.axis = sec_axis(transform = ~ {. - scaling_factor_plume_prop$adjust} / scaling_factor_plume_prop$diff,
-                        name = "Average annual plume area (km^2)", breaks = c(600, 800, 1000), labels = c("600", "800", "1000"))
+                        name = "Average annual plume area (km²)", breaks = c(600, 800, 1000), labels = c("600", "800", "1000"))
   ) +
   scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +
   labs(x = NULL, colour = "Decomposition", fill = "Component",
@@ -601,7 +601,7 @@ flow_inter <- decomp_df |>
 line_flow_inter <- ggplot(flow_inter, aes(x = date, y = value)) +
   geom_path(aes(colour = name), linewidth = 2) +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "River flow (m^3 s-1)") +
+  labs(colour = NULL, x = NULL, y = "River flow (m³ s⁻¹)") +
   scale_colour_brewer(palette = "Dark2") +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -642,7 +642,7 @@ flow_seas <- decomp_df |>
 line_flow_seas <- ggplot(flow_seas, aes(x = date, y = value)) +
   geom_path(aes(colour = name)) +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "River flow (m^3 s-1)") +
+  labs(colour = NULL, x = NULL, y = "River flow (m³ s⁻¹)") +
   scale_colour_brewer(palette = "Dark2") +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -689,7 +689,7 @@ line_flow_doy <- ggplot(flow_doy, aes(x = doy_adj, y = val_mean)) +
   geom_ribbon(aes(fill = name, ymin = val_min, ymax = val_max), alpha = 0.2, show.legend = FALSE) +
   geom_path(aes(colour = name), linewidth = 2)  +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = "day-of-year", y = "River flow (m^3 s-1)") +
+  labs(colour = NULL, x = "day-of-year", y = "River flow (m³ s⁻¹)") +
   scale_colour_brewer(palette = "Dark2", aesthetics = c("colour", "fill")) +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -731,7 +731,7 @@ flow_resid <- decomp_df |>
 line_flow_resid <- ggplot(flow_resid, aes(x = date, y = value)) +
   geom_path(aes(colour = name), linewidth = 2) +
   facet_wrap(~plot_title, ncol = 1, scales = "free_y") +
-  labs(colour = NULL, x = NULL, y = "flow area (km^2)") +
+  labs(colour = NULL, x = NULL, y = "River flow residual (m³ s⁻¹)") +
   scale_colour_brewer(palette = "Dark2", aesthetics = c("colour", "fill")) +
   guides(colour = guide_legend(override.aes = list(linewidth = 5))) +
   ggplot_theme() +
@@ -798,9 +798,9 @@ line_trend_base <- ggplot(flow_trend_daily, aes(x = date, y = flow)) +
   geom_smooth(data = flow_trend_monthly, method = "lm", colour = "darkblue", linewidth = 2) +
   geom_point(data = flow_trend_annual, size = 7, alpha = 0.5, aes(colour = "annual")) +
   geom_smooth(data = flow_trend_annual, method = "lm", colour = "blue", linewidth = 2) +
-  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
+  geom_label(data = trend_labels, aes(x = x, y = y, label = paste0(time_step," data slope = ", round(slope, 2), " m³ s⁻¹ yr⁻¹", sep = "")),
              colour = c("black", "darkblue", "blue"), size = 6, hjust = 0) +
-  labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for daily, monthly, and annual mean river flow data") +
+  labs(x = NULL, y = "River flow (m³ s⁻¹)", title = "Trend for daily, monthly, and annual mean river flow data") +
   scale_color_manual(name = "Time step",
                      values = c("daily" = "black", "monthly" = "darkblue", "annual" = "blue"),
                      breaks = c("daily", "monthly", "annual")) +
@@ -856,8 +856,8 @@ line_trend_inter <- ggplot(flow_inter_timesteps, aes(x = date, y = value)) +
   geom_line(data = filter(flow_inter_timesteps, timestep == "annual"),
             aes(colour = name, linetype = timestep), alpha = 0.9, linewidth = 2.0) +
   geom_smooth(method = "lm", linewidth = 2, aes(colour = name)) +
-  labs(x = NULL, y = "River flow (m^3 s-1)", title = "Trend for river flow interannual components") +
-  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " m^3 s-1 y-1", sep = "")),
+  labs(x = NULL, y = "River flow (m³ s⁻¹)", title = "Trend for river flow interannual components") +
+  geom_label(data = trend_inter_labels, aes(x = x, y = y, label = paste0(name," data slope = ", round(slope, 2), " m³ s⁻¹ yr⁻¹", sep = "")),
              colour = c("turquoise4", "chartreuse4"), size = 6, hjust = 0) +
   scale_color_manual(name = "Decomposition method",
                      values = c("STL interannual" = "turquoise4", "X11 interannual" = "chartreuse4"),
@@ -929,7 +929,7 @@ line_flow_prop <- ggplot(filter(flow_prop, component_group != "total"), aes(x = 
   scale_y_continuous(breaks = c(0.0, 0.25, 0.5, 0.75, 1.0), labels = c("0.00", "0.25", "0.50", "0.75", "1.00"),
                      name = "Proportion of total river flow",
                      sec.axis = sec_axis(transform = ~ {. - scaling_factor_flow_prop$adjust} / scaling_factor_flow_prop$diff,
-                                         name = "Average annual river flow (m^3 s-1)",
+                                         name = "Average annual river flow (m³ s⁻¹)",
                                          breaks = c(1000, 1500, 2000), labels = c("1000", "1500", "2000"))
   ) +
   scale_x_date(date_labels = "%Y", date_breaks = "2 years", expand = c(0, 0)) +

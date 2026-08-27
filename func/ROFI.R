@@ -126,9 +126,9 @@ plot_flow_plume_rofi_panel <- function(zone_name, show_axis_titles = TRUE){
     geom_line(aes(y = rofi, colour = "ROFI extent"), alpha = 0.8) +
     geom_line(aes(y = flow_scaled, colour = "River flow"), alpha = 0.8) +
     scale_colour_manual(name = NULL, values = c("Plume area" = "sienna", "ROFI extent" = "goldenrod", "River flow" = "blue")) +
-    scale_y_continuous(name = if(show_axis_titles) "Plume area / ROFI extent (km^2)" else NULL,
+    scale_y_continuous(name = if(show_axis_titles) "Plume area / ROFI extent (km²)" else NULL,
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
-                                           name = if(show_axis_titles) "River flow (m^3 s-1)" else NULL)) +
+                                           name = if(show_axis_titles) "River flow (m³ s⁻¹)" else NULL)) +
     labs(x = NULL, title = zone_title(zone_name)) +
     theme(panel.border = element_rect(fill = NA, colour = "black"),
           axis.title.y.right = element_text(color = "blue"),

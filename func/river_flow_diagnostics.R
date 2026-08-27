@@ -37,7 +37,7 @@ plot_gauge_extension <- function(river_name) {
   p_series <- combined |>
     ggplot(aes(x = date, y = debit, colour = flag)) +
     geom_line() +
-    labs(title = paste(river_name, "- combined series"), y = "debit (m3/s)")
+    labs(title = paste(river_name, "- combined series"), y = "River flow (m³ s⁻¹)")
 
   list(scatter = p_scatter, series = p_series, joined = joined, combined = combined)
 }

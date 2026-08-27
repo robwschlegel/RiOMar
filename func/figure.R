@@ -195,7 +195,7 @@ plot_x11_river_and_plume <- function(X11_data, type_of_signal, show_axis_titles 
     scale_y_continuous(name = if(show_axis_titles) "Plume area (km²)" else NULL,
                        breaks = scales::breaks_pretty(n = 3),
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
-                                           name = if(show_axis_titles) "River flow (m³/s)" else NULL,
+                                           name = if(show_axis_titles) "River flow (m³ s⁻¹)" else NULL,
                                            breaks = scales::breaks_pretty(n = 3))) +
 
     labs(title = paste(type_of_signal, "signal")) +
@@ -815,7 +815,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
     SPM_mass      = "SPM mass (t)",
     compactness   = "Compactness",
     alongcoast_km = "Along-coast drift (km)",
-    flow          = "River discharge (m³ s⁻¹)",
+    flow          = "River flow (m³ s⁻¹)",
     wind          = "Wind speed (m s⁻¹)",
     tide          = "Tidal range (m)",
     wave          = "Wave height (m)",
@@ -1414,7 +1414,7 @@ plot_seasonal_boxplots_dynamic_vs_static <- function(where_to_save_the_figure){
     SPM_mass      = "SPM mass (t)",
     compactness   = "Compactness",
     alongcoast_km = "Along-coast drift (km)",
-    flow          = "River discharge (m³ s⁻¹)",
+    flow          = "River flow (m³ s⁻¹)",
     wind          = "Wind speed (m s⁻¹)",
     tide          = "Tidal range (m)",
     wave          = "Wave height (m)",

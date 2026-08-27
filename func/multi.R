@@ -270,11 +270,11 @@ driver_plume_correlation <- function(df, max_lag_daily = 30){
 # below so callers only need to pass a driver_name.
 driver_display <- tibble::tribble(
   ~driver_name, ~driver_label,             ~driver_colour,
-  "flow",       "River flow (m^3 s-1)",    "blue",
+  "flow",       "River flow (m³ s⁻¹)",     "blue",
   "tide",       "Tidal range (m)",         "darkgreen",
-  "wind",       "Wind speed (m s-1)",      "purple",
-  "current",    "Current speed (m s-1)",   "orchid",
-  "rofi",       "ROFI extent (km^2)",      "goldenrod",
+  "wind",       "Wind speed (m s⁻¹)",      "purple",
+  "current",    "Current speed (m s⁻¹)",   "orchid",
+  "rofi",       "ROFI extent (km²)",       "goldenrod",
   "wave",       "Wave height (m)",         "steelblue"
 )
 
@@ -297,14 +297,14 @@ plot_driver_comparison <- function(df, driver_name, zone_name){
 
   panache_plot <- ggplot(df, aes(x = date, y = plume_area)) +
     geom_line() +
-    labs(y = "plume area (km^2)", x = NULL) +
+    labs(y = "plume area (km²)", x = NULL) +
     scale_x_date(expand = c(0, 0)) +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
 
   driver_plume_cor_plot <- ggplot(df, aes(x = value, y = plume_area)) +
     geom_point(alpha = 0.7) +
     geom_smooth(method = "lm", se = FALSE, colour = "black", linewidth = 2) +
-    labs(y = "plume area (km^2)", x = disp$driver_label) +
+    labs(y = "plume area (km²)", x = disp$driver_label) +
     theme(panel.border = element_rect(fill = NA, colour = "black"), legend.position = "bottom")
 
   driver_plume_cor_lag_plot <- ggplot(cor_df, aes(x = lag, y = cor)) +
@@ -501,12 +501,12 @@ plot_category_scatter <- function(meta){
   df$area_resid <- flow_controlled_residual(df)
 
   df$wind_category <- dplyr::case_when(
-    df$wind_spd < 3       ~ "calm (<3 m/s)",
+    df$wind_spd < 3       ~ "calm (<3 m s⁻¹)",
     df$direction == "off" ~ "offshore",
     TRUE                  ~ "onshore"
   )
-  df$wind_category <- factor(df$wind_category, levels = c("calm (<3 m/s)", "onshore", "offshore"))
-  category_colours <- c("calm (<3 m/s)" = "grey50", "onshore" = "steelblue", "offshore" = "firebrick")
+  df$wind_category <- factor(df$wind_category, levels = c("calm (<3 m s⁻¹)", "onshore", "offshore"))
+  category_colours <- c("calm (<3 m s⁻¹)" = "grey50", "onshore" = "steelblue", "offshore" = "firebrick")
 
   ggplot(df, aes(x = wave_height, y = area_resid, colour = wind_category)) +
     geom_point(alpha = 0.25, size = 0.8) +
@@ -817,12 +817,12 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL, sav
       geom_abline(data = dplyr::filter(trend_labels_plume, timestep == "monthly"),
                   aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkred") +
       geom_label(data = dplyr::filter(trend_labels_plume, timestep == "monthly"), size = 5, hjust = 0, colour = "darkred",
-                aes(x = x_daily, y = y_plume, label = paste0("Plume area slope = ", round(slope_annualised, 2), " km^2 yr-1\n",
+                aes(x = x_daily, y = y_plume, label = paste0("Plume area slope = ", round(slope_annualised, 2), " km² yr⁻¹\n",
                                                               "p-value = ", round(slope_p, 2)))) +
       geom_label(data = dplyr::filter(trend_labels_plume, timestep == "daily"), size = 5, hjust = 0, colour = "darkblue",
-                aes(x = x_monthly, y = y_plume, label = paste0("Plume area slope = ", round(slope_annualised, 2), " km^2 yr-1\n",
+                aes(x = x_monthly, y = y_plume, label = paste0("Plume area slope = ", round(slope_annualised, 2), " km² yr⁻¹\n",
                                                                 "p-value = ", round(slope_p, 2)))) +
-      labs(x = NULL, y = "Plume area [km^2]",
+      labs(x = NULL, y = "Plume area [km²]",
           title = paste0(plot_label, " : plume area after statistical treatment (vs. ", driver_name, ")"),
           subtitle = "Red = adjusted monthly values; blue = adjusted daily values; brown = original data") +
       theme(panel.border = element_rect(fill = NA, colour = "black"))
@@ -837,10 +837,10 @@ driver_plume_trend <- function(df, driver_name, mouth_name, end_date = NULL, sav
       geom_abline(data = dplyr::filter(trend_labels_driver, timestep == "monthly"),
                   aes(intercept = intercept, slope = slope), linewidth = 2, colour = "darkred") +
       geom_label(data = dplyr::filter(trend_labels_driver, timestep == "monthly"), size = 5, hjust = 0, colour = "darkred",
-                aes(x = x_daily, y = y_driver, label = paste0(disp$driver_label, " slope = ", round(slope_annualised, 2), " yr-1\n",
+                aes(x = x_daily, y = y_driver, label = paste0(disp$driver_label, " slope = ", round(slope_annualised, 2), " yr⁻¹\n",
                                                               "p-value = ", round(slope_p, 2)))) +
       geom_label(data = dplyr::filter(trend_labels_driver, timestep == "daily"), size = 5, hjust = 0, colour = "darkblue",
-                aes(x = x_monthly, y = y_driver, label = paste0(disp$driver_label, " slope = ", round(slope_annualised, 2), " yr-1\n",
+                aes(x = x_monthly, y = y_driver, label = paste0(disp$driver_label, " slope = ", round(slope_annualised, 2), " yr⁻¹\n",
                                                                 "p-value = ", round(slope_p, 2)))) +
       labs(x = NULL, y = disp$driver_label,
           title = paste0(plot_label, " : ", driver_name, " after statistical treatment"),
@@ -1043,29 +1043,29 @@ multi_plot <- function(df_stl){
   }
 
   # Daily time series
-  plot_daily(df_pretty, "plume_area", "brown", "Plume area (km^2)", "driver_comparison/plume")
+  plot_daily(df_pretty, "plume_area", "brown", "Plume area (km²)", "driver_comparison/plume")
 
   # Seasonal time series
-  plot_seas(df_seas, "plume_seas", "brown", "Plume area (km^2)", "driver_comparison/plume")
-  plot_seas(df_seas, "flow_seas", "blue", "River flow (m^3 s-1)", "driver_comparison/flow")
+  plot_seas(df_seas, "plume_seas", "brown", "Plume area (km²)", "driver_comparison/plume")
+  plot_seas(df_seas, "flow_seas", "blue", "River flow (m³ s⁻¹)", "driver_comparison/flow")
   plot_seas(df_seas, "tide_seas", "darkgreen", "Tidal range (m)", "driver_comparison/tide")
-  plot_seas(df_seas, "wind_seas", "purple", "Wind speed (m s-1)", "driver_comparison/wind")
+  plot_seas(df_seas, "wind_seas", "purple", "Wind speed (m s⁻¹)", "driver_comparison/wind")
 
   # Interannual time series
-  plot_inter(df_pretty, "plume_inter", "brown", "Plume area (km^2)", "driver_comparison/plume")
-  plot_inter(df_pretty, "flow_inter", "blue", "River flow (m^3 s-1)", "driver_comparison/flow")
+  plot_inter(df_pretty, "plume_inter", "brown", "Plume area (km²)", "driver_comparison/plume")
+  plot_inter(df_pretty, "flow_inter", "blue", "River flow (m³ s⁻¹)", "driver_comparison/flow")
   plot_inter(df_pretty, "tide_inter", "darkgreen", "Tidal range (m)", "driver_comparison/tide")
-  plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s-1)", "driver_comparison/wind")
+  plot_inter(df_pretty, "wind_inter", "purple", "Wind speed (m s⁻¹)", "driver_comparison/wind")
 
   # Seasonal comparison plots
-  comparison_plot_save(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "driver_comparison/comparison_plume_flow_seas")
-  comparison_plot_save(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "driver_comparison/comparison_plume_wind_seas")
-  comparison_plot_save(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "driver_comparison/comparison_plume_tide_seas")
+  comparison_plot_save(df_seas, "plume_seas", "flow_seas", "brown", "blue", "Plume area (km²)", "River flow (m³ s⁻¹)", "driver_comparison/comparison_plume_flow_seas")
+  comparison_plot_save(df_seas, "plume_seas", "wind_seas", "brown", "purple", "Plume area (km²)", "Wind speed (m s⁻¹)", "driver_comparison/comparison_plume_wind_seas")
+  comparison_plot_save(df_seas, "plume_seas", "tide_seas", "brown", "darkgreen", "Plume area (km²)", "Tidal range (m)", "driver_comparison/comparison_plume_tide_seas")
 
   # Interannual comparison plots
-  comparison_plot_save(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km^2)", "River flow (m^3 s-1)", "driver_comparison/comparison_plume_flow_inter")
-  comparison_plot_save(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km^2)", "Tidal range (m)", "driver_comparison/comparison_plume_tide_inter")
-  comparison_plot_save(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km^2)", "Wind speed (m s-1)", "driver_comparison/comparison_plume_wind_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "flow_inter", "brown", "blue", "Plume area (km²)", "River flow (m³ s⁻¹)", "driver_comparison/comparison_plume_flow_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "tide_inter", "brown", "darkgreen", "Plume area (km²)", "Tidal range (m)", "driver_comparison/comparison_plume_tide_inter")
+  comparison_plot_save(df_pretty, "plume_inter", "wind_inter", "brown", "purple", "Plume area (km²)", "Wind speed (m s⁻¹)", "driver_comparison/comparison_plume_wind_inter")
 
   # Everything on one plot
   df_all_scaled <- df_pretty |>
@@ -1323,7 +1323,7 @@ rhone_detrend_test <- function(){
     geom_point(aes(y = plume_area_conc_adj), colour = "darkblue", alpha = 0.15) +
     geom_abline(intercept = fit_area_raw[1], slope = fit_area_raw[2], colour = "sienna", linewidth = 1.2) +
     geom_abline(intercept = fit_area_adj[1], slope = fit_area_adj[2], colour = "darkblue", linewidth = 1.2) +
-    labs(x = NULL, y = "Plume area (km^2)",
+    labs(x = NULL, y = "Plume area (km²)",
          title = "Grand Rhone: plume area, raw vs. concentration-adjusted",
          subtitle = "Brown = raw area (+ OLS trend); blue = area with the concentration-trend contribution removed (+ OLS trend)") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
@@ -1502,7 +1502,7 @@ rhone_wind_wave_effect <- function(){
   #    is blowing FROM.
   df$area_resid <- residuals(m_flow)
   df$wind_category <- dplyr::case_when(
-    df$wind_spd < 3                          ~ "calm (<3 m/s)",
+    df$wind_spd < 3                          ~ "calm (<3 m s⁻¹)",
     df$wind_dir >= 300 & df$wind_dir <= 350  ~ "Mistral (NNW-N)",
     df$wind_dir >= 90  & df$wind_dir <= 150  ~ "onshore/easterly",
     TRUE                                     ~ "other"
@@ -1512,8 +1512,8 @@ rhone_wind_wave_effect <- function(){
   # hypothesis), rather than the alphabetical default, so this order is
   # what every plot legend, boxplot axis, and summarise() output below uses.
   df$wind_category <- factor(df$wind_category,
-                              levels = c("calm (<3 m/s)", "onshore/easterly", "Mistral (NNW-N)", "other"))
-  wind_category_colours <- c("calm (<3 m/s)" = "grey50", "onshore/easterly" = "steelblue",
+                              levels = c("calm (<3 m s⁻¹)", "onshore/easterly", "Mistral (NNW-N)", "other"))
+  wind_category_colours <- c("calm (<3 m s⁻¹)" = "grey50", "onshore/easterly" = "steelblue",
                               "Mistral (NNW-N)" = "firebrick", "other" = "goldenrod")
 
   category_summary <- df |>
@@ -1527,7 +1527,7 @@ rhone_wind_wave_effect <- function(){
   pl_terms <- ggplot(df, aes(x = wind_spd, y = plume_area)) +
     geom_point(alpha = 0.2) +
     geom_smooth(method = "lm", colour = "purple") +
-    labs(x = "Wind speed (m/s)", y = "Plume area (km^2)",
+    labs(x = "Wind speed (m s⁻¹)", y = "Plume area (km²)",
          title = "Grand Rhone: plume area vs. wind speed",
          subtitle = "Raw relationship, not controlled for flow (see model_comparison)") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))
@@ -1541,7 +1541,7 @@ rhone_wind_wave_effect <- function(){
     geom_point(alpha = 0.25, size = 0.8) +
     geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
     scale_colour_manual(values = wind_category_colours) +
-    labs(x = "Wind speed (m/s)", y = "Plume area residual after removing the flow effect (km^2)",
+    labs(x = "Wind speed (m s⁻¹)", y = "Plume area residual after removing the flow effect (km²)",
          colour = NULL, title = "Grand Rhone: flow-controlled area vs. wind, by category") +
     theme(panel.border = element_rect(fill = NA, colour = "black"), legend.position = "none")
 
@@ -1553,7 +1553,7 @@ rhone_wind_wave_effect <- function(){
     geom_point(alpha = 0.25, size = 0.8) +
     geom_smooth(method = "lm", se = FALSE, linewidth = 1.2) +
     scale_colour_manual(values = wind_category_colours) +
-    labs(x = "Wave height (m)", y = "Plume area (km^2)", colour = NULL,
+    labs(x = "Wave height (m)", y = "Plume area (km²)", colour = NULL,
          title = "Grand Rhone: plume area vs. wave height, by wind category",
          subtitle = "Raw relationship, not controlled for flow") +
     theme(panel.border = element_rect(fill = NA, colour = "black"))

@@ -85,7 +85,7 @@ make_the_plot <- function(X11_data, type_of_signal) {
     
     scale_y_continuous(name = "Plume area (km²)",
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff, 
-                                           name = "River flow (m³/s)")) +
+                                           name = "River flow (m³ s⁻¹)")) +
     
     labs(title = paste(type_of_signal, "signal")) +
     ggplot_theme() +
