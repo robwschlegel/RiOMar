@@ -10,14 +10,17 @@
 #
 # Trend: output/STATS/monthly_trend_summary.csv (func/compute_seasonal_trend.R),
 # dynamic threshold, AR(1)/HAC-weighted per-calendar-month slope
-# (compute_monthly_trend(), func/multi.R) -- the same slope behind the
-# Supplementary month-by-month table (monthly_trends_table slot).
+# (compute_monthly_trend(), func/multi.R).
 # Percent-per-year here is
-# 100 * (slope * 365.25) / mean, where mean is that zone x variable's overall
-# mean value pooled across all months and years (dynamic threshold), not a
-# per-month mean -- so all 12 monthly cells for a given zone x variable share
-# one baseline and stay comparable to each other in absolute, not just
-# relative, terms.
+# 100 * (slope * 365.25) / abs(mean), where mean is that zone x variable's
+# overall mean value pooled across all months and years (dynamic threshold),
+# not a per-month mean -- so all 12 monthly cells for a given zone x variable
+# share one baseline and stay comparable to each other in absolute, not just
+# relative, terms. abs() is required for along-coast drift specifically,
+# whose zone mean is signed (negative at the Bay of Seine and Gulf of Lion,
+# Table 3) -- dividing by a signed mean would flip the percentage's sign
+# relative to the raw slope for those two zones, making the heatmap colour
+# contradict the actual trend direction.
 #
 # The mean is recomputed here from the same source loaders
 # (load_plume_ts()/load_driver()/PlumeShape.csv/compute_alongcoast_ts())
@@ -93,7 +96,7 @@ zone_labels[zone_labels == "Southern Brittany"] <- "S. Brittany"
 trend <- readr::read_csv("output/STATS/monthly_trend_summary.csv", show_col_types = FALSE) |>
   dplyr::filter(threshold == "dynamic", weight_choice == "ar") |>
   dplyr::left_join(overall_mean, by = c("zone", "variable")) |>
-  dplyr::mutate(pct_per_year = 100 * (slope * YR) / mean_value,
+  dplyr::mutate(pct_per_year = 100 * (slope * YR) / abs(mean_value),
                 # geom_tile's discrete y-axis places the first factor level at the
                 # bottom, so levels are reversed from ZONE_ORDER here to read
                 # north (Bay of Seine) at top -> south (Gulf of Lion) at bottom,
