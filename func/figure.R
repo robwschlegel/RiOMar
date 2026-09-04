@@ -257,6 +257,14 @@ Figure_1 <- function(where_to_save_the_figure) {
     geom_rect(data = RIOMAR_limits, aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max),
               fill = "transparent", color = "red", linetype = "dashed", size = 2) +
 
+    # Open-water sea/ocean labels, positioned clear of the zone bboxes and
+    # zoomed insets above (Atlantic: open water west of Southern Brittany/
+    # Gironde shelf; Mediterranean: open water south of the Rhône shelf coast).
+    annotate("text", x = -4.6, y = 45.5, label = "Atlantic\nOcean",
+             colour = "white", fontface = "italic", size = 15, hjust = 0.5) +
+    annotate("text", x = 6.6, y = 42.6, label = "Mediterranean\nSea",
+             colour = "white", fontface = "italic", size = 15, hjust = 0.5) +
+
     geom_point(data = points_for_the_legend, aes(x = longitude, y = latitude, shape = SOURCE), size = 0.1) +
 
     scale_shape_manual(values = c('SOMLIT' = 21, "REPHY" = 24), breaks=c('SOMLIT', 'REPHY'),
@@ -281,10 +289,7 @@ Figure_1 <- function(where_to_save_the_figure) {
   # `primary` marks the river carrying the bulk of each zone's discharge
   # (Seine: only river in its zone; Loire vs. Vilaine and Gironde vs.
   # Charente/Sevre: the named river the manuscript treats as the zone's main
-  # discharge series throughout; Grand vs. Petit Rhone: Grand Rhone carries
-  # ~90% of the Rhone's combined discharge, see the Rhone-apportionment note
-  # in CLAUDE.md) -- used below to bold/enlarge the primary river's label
-  # and de-emphasise the others.
+  # discharge series throughout.
   zone_river_mouths <- tibble::tribble(
     ~zone,               ~river,         ~lat,   ~lon,    ~primary,
     "BAY_OF_SEINE",       "Seine",        49.43,  0.145,  TRUE,
@@ -299,42 +304,30 @@ Figure_1 <- function(where_to_save_the_figure) {
 
   # One geom_label() call per river (not vectorised per zone) so each
   # label's position can be tuned individually against the actual coastline
-  # geometry, rather than sharing a single per-zone offset (2026-08-10; the
-  # old shared-offset approach clipped the Seine label against its inset's
-  # right edge and crowded the two Rhone labels together).
+  # geometry, rather than sharing a single per-zone offset.
   mouth <- function(river_name) dplyr::filter(zone_river_mouths, river == river_name)
-  # fill/alpha added 2026-08-11 (per TODO.md): the labels had no background
-  # fill at all (geom_label()'s box border was visible but its interior was
-  # effectively transparent), making text hard to read against the busy SPM
-  # colour raster underneath. fill is the opposite of the label's own text
-  # colour (dark fill behind white text, light fill behind black text) so
-  # each stays legible against its own box, at a shared alpha = 0.2 so the
-  # coastline/SPM data is still visible through it.
   river_label_style <- function(river_name, primary, colour, ...){
     geom_label(data = mouth(river_name), aes(x = lon, y = lat, label = river),
-              fontface = if(primary) "bold" else "plain", size = if(primary) 8 else 6,
-              colour = colour, fill = if(colour == "white") "black" else "white", alpha = 0.2, ...)
+              fontface = if(primary) "bold" else "plain", size = if(primary) 9 else 7,
+              colour = colour, fill = if(colour == "white") "black" else "white", alpha = 0.4, ...)
   }
 
   river_labels_by_zone <- list(
     BAY_OF_SEINE = list(
-      river_label_style("Seine", primary = TRUE, colour = "white", hjust = 1, nudge_x = -0.05, nudge_y = 0.08)
+      river_label_style("Seine", primary = TRUE, colour = "white", hjust = 0, nudge_x = 0.0, nudge_y = 0.12)
     ),
     SOUTHERN_BRITTANY = list(
       river_label_style("Loire", primary = TRUE, colour = "white", hjust = 0, nudge_x = 0.08, nudge_y = 0.00),
       river_label_style("Vilaine", primary = FALSE, colour = "white", hjust = 0, nudge_x = 0.08, nudge_y = 0.05)
     ),
     BAY_OF_BISCAY = list(
-      river_label_style("Gironde", primary = TRUE, colour = "black", hjust = 1, nudge_x = -0.30, nudge_y = 0.05),
-      river_label_style("Charente", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.30, nudge_y = 0.05),
-      river_label_style("Sevre", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.30, nudge_y = 0.05)
+      river_label_style("Gironde", primary = TRUE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = -0.02),
+      river_label_style("Charente", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = 0.11),
+      river_label_style("Sevre", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = 0.05)
     ),
     GULF_OF_LION = list(
       river_label_style("Grand\nRhône", primary = TRUE, colour = "black", hjust = 0, nudge_x = -0.08, nudge_y = -0.22),
-      # Nudged down/left rather than up: the Gulf of Lion inset's data only
-      # extends to lat 43.6 (0.15 above this river's own mouth), so an
-      # upward nudge clips the label against the panel's top edge.
-      river_label_style("Petit\nRhône", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.05, nudge_y = -0.10)
+      river_label_style("Petit\nRhône", primary = FALSE, colour = "black", hjust = 0, nudge_x = -0.14, nudge_y = -0.20)
     )
   )
 
@@ -363,10 +356,10 @@ Figure_1 <- function(where_to_save_the_figure) {
   # coloured SPM pixels (checked against zones_bbox's true-box fractions).
   inset_layout <- tibble::tribble(
     ~Zone,               ~x,    ~y,    ~w,    ~h,
-    "BAY_OF_SEINE",       0.66,  0.62,  0.24,  0.20,
-    "SOUTHERN_BRITTANY",  0.43,  0.50,  0.22,  0.23,
-    "BAY_OF_BISCAY",      0.46,  0.25,  0.23,  0.21,
-    "GULF_OF_LION",       0.72,  0.34,  0.24,  0.20
+    "BAY_OF_SEINE",       0.68,  0.64,  0.23,  0.20,
+    "SOUTHERN_BRITTANY",  0.41,  0.50,  0.25,  0.21,
+    "BAY_OF_BISCAY",      0.45,  0.26,  0.24,  0.21,
+    "GULF_OF_LION",       0.72,  0.34,  0.23,  0.20
   )
 
   Figure_1 <- ggdraw() + draw_plot(national_map, x = 0, y = 0, width = 1, height = 1)
@@ -581,7 +574,7 @@ plot_methodology_transect_panel <- function(where_to_save_the_figure) {
     theme(plot.tag = element_text(size = 35, face = "bold"), plot.tag.position = c(0.01, 0.98),
           legend.position = "inside", legend.position.inside = c(0.88, 0.8),
           legend.background = element_rect(fill = "white", colour = "grey70"),
-          legend.text = element_text(size = 18), legend.title = element_text(size = 18),
+          legend.text = element_text(size = 24), legend.title = element_text(size = 24),
           text = element_text(size = 20, colour = "black"),
           axis.text = element_text(size = 18, colour = "black"))
 
@@ -620,9 +613,11 @@ plot_methodology_zone_maps_panel <- function(where_to_save_the_figure) {
             plot.tag.position = c(0.02, 0.98)) +
       labs(tag = letter)
 
-    # 20 m bathymetric exclusion boundary:
-    # `shallow` is all-False outside the Gulf of Lion (the only zone using
-    # this general exclusion), so geom_contour() draws nothing at e)-g).
+    # Bathymetric exclusion boundary matching panache's actual per-zone
+    # resuspension-removal depth (`shallow` computed in figure.py from
+    # maximal_bathymetric_for_zone_with_resuspension: Seine 20 m,
+    # Gironde/Charente/Sevre 10 m, Loire/Vilaine 10 m, Grand/Petit Rhone
+    # 20 m -- see figure.py for detail).
     if (any(SPM_map$shallow)) {
       the_map <- the_map +
         geom_contour(data = SPM_map, aes(x = lon, y = lat, z = as.numeric(shallow)),
@@ -1361,8 +1356,12 @@ plot_x11_seasonal_river_flow <- function(where_to_save_the_figure){
   output_subdir <- get_registry_row("x11_seasonal_river_flow")$output_subdir
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-  zone_plots <- compute_x11_zone_plots(data_dir)
-  save_plot_as_png(stack_x11_component(zone_plots, "Seasonal"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
+  zone_plots <- compute_x11_zone_plots(data_dir, show_axis_titles = FALSE)
+  save_plot_as_png(annotate_figure(
+                     stack_x11_component(zone_plots, "Seasonal"),
+                     left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "brown"),
+                     right = text_grob("River flow (m³ s⁻¹)", rot = -90, size = 30, color = "blue")),
+                   registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 
 # X11 residual (short-term) component of plume area vs. river flow, dynamic
@@ -1378,8 +1377,12 @@ plot_x11_residual_river_flow <- function(where_to_save_the_figure){
   output_subdir <- get_registry_row("x11_residual_river_flow")$output_subdir
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-  zone_plots <- compute_x11_zone_plots(data_dir)
-  save_plot_as_png(stack_x11_component(zone_plots, "Residual"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
+  zone_plots <- compute_x11_zone_plots(data_dir, show_axis_titles = FALSE)
+  save_plot_as_png(annotate_figure(
+                     stack_x11_component(zone_plots, "Residual"),
+                     left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "brown"),
+                     right = text_grob("River flow (m³ s⁻¹)", rot = -90, size = 30, color = "blue")),
+                   registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 
 # X11 interannual signal of plume area, dynamic vs. static threshold, all

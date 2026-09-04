@@ -134,7 +134,7 @@ in_situ_site_list <- bind_rows(dplyr::select(REPHY, source, lon, lat, site),
                             lat >= zones_bbox$lat_min[zones_bbox$zone == "SOUTHERN_BRITTANY"] & lat <= zones_bbox$lat_max[zones_bbox$zone == "SOUTHERN_BRITTANY"] ~ "SOUTHERN_BRITTANY")) |>
   mutate(zone_pretty = factor(zone,
                               levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                              labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
+                              labels = c("Bay of Seine", "S. Brittany", "Gironde shelf", "Rhône shelf")), .after = "zone") |>
   mutate(source = factor(source, levels = c("SOMLIT", "REPHY")))
 write_csv(in_situ_site_list, "metadata/in_situ_site_list.csv")
 

@@ -528,9 +528,9 @@ def flatten_and_dedupe(lst_comprehension, return_the_unique_values) :
 
 ZONE_DISPLAY_NAMES = {
     'BAY_OF_SEINE': 'Bay of Seine',
-    'BAY_OF_BISCAY': 'Bay of Biscay',
+    'BAY_OF_BISCAY': 'Gironde shelf',
     'SOUTHERN_BRITTANY': 'Southern Brittany',
-    'GULF_OF_LION': 'Gulf of Lion',
+    'GULF_OF_LION': 'Rhône shelf',
 }
 
 

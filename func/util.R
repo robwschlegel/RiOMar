@@ -25,8 +25,8 @@ zones_bbox <- panache_zone_metadata |>
   dplyr::select(zone, lon_min, lon_max, lat_min, lat_max) |>
   mutate(zone_pretty = factor(zone,
                               levels = ZONE_ORDER,
-                              labels = c("Bay of Seine", "S. Brittany", 
-                                         "Bay of Biscay", "Gulf of Lion")), .after = "zone") |>
+                              labels = c("Bay of Seine", "S. Brittany",
+                                         "Gironde shelf", "Rhône shelf")), .after = "zone") |>
   dplyr::arrange(match(zone, ZONE_ORDER))
 
 # Create FRANCE bounding box with same structure as zones_bbox
@@ -1037,10 +1037,10 @@ make_pretty_title <- function(df){
   df <- df |> 
     mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
                                   zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
-                                  zone == "BAY_OF_BISCAY" ~ "Bay of Biscay",
-                                  zone == "GULF_OF_LION" ~ "Gulf of Lion"), .after = "zone") |> 
-    mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany", 
-                                                      "Bay of Biscay", "Gulf of Lion")))
+                                  zone == "BAY_OF_BISCAY" ~ "Gironde shelf",
+                                  zone == "GULF_OF_LION" ~ "Rhône shelf"), .after = "zone") |>
+    mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany",
+                                                      "Gironde shelf", "Rhône shelf")))
   return(df)
 }
 
@@ -1302,8 +1302,8 @@ colours_of_stations <- function(){
   #                  'GULF OF LION' = viridis::rocket(n = 1, begin = 0.80,end = 0.80))
   colour_values = c('Bay of Seine' = viridis::mako(n = 1, begin = 0.8,end = 0.8),
                     'S. Brittany' = viridis::viridis(n = 1, begin = 0.9,end = 0.9),
-                    'Bay of Biscay' = viridis::plasma(n = 1, begin = 0.05,end = 0.05),
-                    'Gulf of Lion' = viridis::rocket(n = 1, begin = 0.80,end = 0.80))
+                    'Gironde shelf' = viridis::plasma(n = 1, begin = 0.05,end = 0.05),
+                    'Rhône shelf' = viridis::rocket(n = 1, begin = 0.80,end = 0.80))
   
   return(colour_values)
 }
@@ -1320,7 +1320,7 @@ validation_lm_plots <- function(var_combi, sat_name, median_base, df, df_stats){
            name = gsub("insitu", "in situ", name)) |> 
     mutate(zone_pretty = factor(zone,
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                                labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")))
+                                labels = c("Bay of Seine", "S. Brittany", "Gironde shelf", "Rhône shelf")))
   
   # Get y-axis label and units
   if(df_var_sub$variable[1] == "TEMP"){
@@ -1349,7 +1349,7 @@ validation_lm_plots <- function(var_combi, sat_name, median_base, df, df_stats){
     mutate(y = max(y_lim)-2) |> 
     mutate(zone_pretty = factor(zone,
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                                labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")))
+                                labels = c("Bay of Seine", "S. Brittany", "Gironde shelf", "Rhône shelf")))
   
   # Create title and subtitle
   var_name_sat <- df_var_sub$variable_sat[1]
@@ -1402,7 +1402,7 @@ validation_plots <- function(var_combi, sat_name, median_base, match_up_df, matc
     filter(variable_combi == var_combi) |>
     mutate(zone_pretty = factor(zone,
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                                labels = c("Bay of Seine", "S. Brittany", "Bay of Biscay", "Gulf of Lion")))
+                                labels = c("Bay of Seine", "S. Brittany", "Gironde shelf", "Rhône shelf")))
   match_up_stats_var <- match_up_stats |> 
     filter(variable_combi == var_combi,
            zone == "GLOBAL",

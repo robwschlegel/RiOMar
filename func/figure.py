@@ -483,14 +483,19 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         SPM_map = SPM_map_da.to_dataframe().reset_index()
         SPM_map['plume'] = plume_mask.values.astype(bool).flatten()
 
-        # Same shallow-water criterion remove_shallow_waters() applies to
-        # the plume mask: lets
-        # plot_methodology_zone_maps_panel() draw the bathymetric exclusion boundary.
-        # bathymetric_threshold is 0 at the three zones that don't use this
-        # general exclusion (only the Gulf of Lion does), so this column is
-        # all-False and draws nothing there.
+        # Lets plot_methodology_zone_maps_panel() draw the bathymetric
+        # exclusion boundary that actually matches panache's algorithm at
+        # each zone. `bathymetric_threshold` (remove_shallow_waters()'s
+        # general exclusion) is 0 at three of the four zones, so it would
+        # draw nothing there -- instead this uses
+        # maximal_bathymetric_for_zone_with_resuspension, the depth
+        # remove_resuspension_pixels() actually applies at every zone
+        # (uniform across all rivers within a given zone: Seine 20 m,
+        # Gironde/Charente/Sevre 10 m, Loire/Vilaine 10 m, Grand/Petit
+        # Rhone 20 m), so any one river's value represents its zone.
         bathymetry_map = align_bathymetry(SPM_map_da, f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
-        SPM_map['shallow'] = (bathymetry_map.values.flatten() > -parameters['bathymetric_threshold'])
+        resuspension_threshold = next(iter(parameters['maximal_bathymetric_for_zone_with_resuspension'].values()))
+        SPM_map['shallow'] = (bathymetry_map.values.flatten() > -resuspension_threshold)
 
         SPM_map.to_csv(where_to_save_the_figure_3 + f"/DATA/{Zone}.csv")
 
