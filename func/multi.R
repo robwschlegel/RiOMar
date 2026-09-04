@@ -1211,8 +1211,15 @@ write_csv(chla_files_NA, "output/STATS/missing_chla.csv")
 #      surface density/stratification product to test it against even if
 #      it were. Left as a discussion point for the reply, not a script.
 #
-# All three functions below are GULF_OF_LION / Grand Rhone only,
-# they are not generalised to the other three zones.
+# Her reply to that first round raised two more, smaller follow-ups, handled
+# below as their own functions rather than folded into the numbered list
+# above: does the wind effect (item 3) show a winter-vs-summer nuance
+# (rhone_wind_wave_seasonal_effect()), and has the flow trend itself moved
+# differently across the flow distribution rather than just at the mean
+# (rhone_flow_quantile_trend()).
+#
+# All functions below are GULF_OF_LION / Grand Rhone only, they are not
+# generalised to the other three zones.
 
 
 ## 1. Concentration-detrending sensitivity test -------------------------------
@@ -1598,8 +1605,176 @@ rhone_wind_wave_effect <- function(){
 }
 
 
+## Follow-up: does the wind effect on plume area differ between winter and the stratified season? ----
+# Follow-up to rhone_wind_wave_effect() above: her reply asked whether the
+# wind effect (Mistral vs onshore/calm, item 3 above) shows "nuances" between
+# winter and "la periode stratifiee". RiOMar has no near-mouth
+# density/stratification product to test this against directly (GLORYS MLD
+# exists but is too coarse/open-ocean for a coastal plume, per her own
+# reservation about item 4 in the original e-mail) -- calendar season is
+# used here as a climatological proxy for stratification state, not a
+# per-day measurement of it. Winter (DJF) stands in for a well-mixed water
+# column, summer (JJA) for a stratified one, using the same meteorological
+# season definitions already used in rhone_flood_timing_shift() above.
+# Spring/autumn (MAM/SON) are transitional -- Gulf of Lion stratification
+# builds and breaks down gradually through those months -- so they are
+# dropped from this comparison rather than folded into either state, which
+# would blur exactly the contrast being tested.
+# Caveat worth keeping alongside the result: Mistral itself is a mechanism
+# that can erode near-surface stratification on the day it blows, so a
+# Mistral day tagged JJA is not guaranteed to be under stratified conditions
+# that day -- season is a proxy for the *typical* state, not a direct
+# per-day measurement.
+# rhone_wind_wave_seasonal_effect()
+rhone_wind_wave_seasonal_effect <- function(){
+
+  meta <- get_zone_meta(mouth_name = "Grand Rhone")
+  df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
+  df_wind <- load_driver("wind", meta) |> dplyr::select(date, wind_spd = value, wind_dir)
+
+  df <- df_flow |>
+    dplyr::left_join(df_wind, by = "date") |>
+    tidyr::drop_na(plume_area, flow, wind_spd)
+
+  # Flow-only baseline model fit on the full record (not per season), so the
+  # residual below isolates wind's effect alone -- fitting a separate flow
+  # model per season would let any season-specific area-flow relationship
+  # contaminate what is meant to be a wind-only comparison.
+  m_flow <- lm(plume_area ~ flow, data = df)
+  df$area_resid <- residuals(m_flow)
+
+  # Same wind categories, ordering, and colours as rhone_wind_wave_effect()
+  # above, so the two analyses stay directly comparable.
+  df$wind_category <- dplyr::case_when(
+    df$wind_spd < 3                          ~ "calm (<3 m s⁻¹)",
+    df$wind_dir >= 300 & df$wind_dir <= 350  ~ "Mistral (NNW-N)",
+    df$wind_dir >= 90  & df$wind_dir <= 150  ~ "onshore/easterly",
+    TRUE                                     ~ "other"
+  )
+  df$wind_category <- factor(df$wind_category,
+                              levels = c("calm (<3 m s⁻¹)", "onshore/easterly", "Mistral (NNW-N)", "other"))
+  wind_category_colours <- c("calm (<3 m s⁻¹)" = "grey50", "onshore/easterly" = "steelblue",
+                              "Mistral (NNW-N)" = "firebrick", "other" = "goldenrod")
+
+  # Meteorological DJF/JJA, same definition as rhone_flood_timing_shift()
+  # above. MAM/SON are dropped from this comparison (see header comment).
+  df$month <- lubridate::month(df$date)
+  df$season <- dplyr::case_when(
+    df$month %in% c(12, 1, 2) ~ "winter (DJF)",
+    df$month %in% 6:8         ~ "summer (JJA)",
+    TRUE                      ~ NA_character_
+  )
+  df <- dplyr::filter(df, !is.na(season))
+  df$season <- factor(df$season, levels = c("winter (DJF)", "summer (JJA)"))
+
+  # a) The actual test of "does the wind effect differ by season": the
+  #    wind_category:season interaction term in a two-way ANOVA on the
+  #    flow-controlled residual. Two separate within-season ANOVAs (one for
+  #    DJF, one for JJA) would only support an informal eyeball comparison;
+  #    the interaction term is the formal test of whether the categories'
+  #    effect actually differs between the two seasons.
+  fit_interaction <- aov(area_resid ~ wind_category * season, data = df)
+  interaction_table <- broom::tidy(fit_interaction)
+  write_csv(interaction_table, "output/STATS/rhone_wind_wave_seasonal_models.csv")
+
+  # b) By-season, by-category summary -- the interpretable companion to (a).
+  category_summary <- df |>
+    dplyr::summarise(n_days = dplyr::n(),
+                      mean_area_resid = mean(area_resid, na.rm = TRUE),
+                      sd_area_resid = sd(area_resid, na.rm = TRUE), .by = c("season", "wind_category")) |>
+    dplyr::arrange(season, wind_category)  # .by = doesn't preserve factor level order, arrange() does
+  write_csv(category_summary, "output/STATS/rhone_wind_wave_seasonal_categories.csv")
+
+  # c) Flow-controlled area by wind category, faceted by season -- the
+  #    visual companion to the interaction test above.
+  interaction_row <- dplyr::filter(interaction_table, term == "wind_category:season")
+  pl <- ggplot(df, aes(x = wind_category, y = area_resid, fill = wind_category)) +
+    geom_boxplot(outlier.alpha = 0.2) +
+    scale_fill_manual(values = wind_category_colours) +
+    facet_wrap(~season, ncol = 2) +
+    labs(x = NULL, y = "Plume area residual after removing the flow effect (km²)",
+         title = "Grand Rhone: does the wind effect on plume area differ between winter and summer?",
+         subtitle = paste0("wind_category x season interaction: F = ", round(interaction_row$statistic, 2),
+                            ", p = ", signif(interaction_row$p.value, 3)),
+         fill = NULL) +
+    theme(panel.border = element_rect(fill = NA, colour = "black"),
+          axis.text.x = element_text(angle = 30, hjust = 1), legend.position = "none")
+  ggsave(filename = "figures/rhone_side_analyses/rhone_wind_wave_seasonal.png", plot = pl, width = 10, height = 6)
+
+  return(list(interaction_table = interaction_table, category_summary = category_summary, data = df, plot = pl))
+}
+
+
+## Follow-up: has the Rhone flow trend moved differently across the flow distribution? ----
+# Raised as pure curiosity in her reply, not a work request: particle
+# concentration seems to rise non-linearly with flow, so does the flow
+# trend itself look different depending on where in the flow distribution
+# you look, rather than only at the mean? The single trend reported
+# elsewhere in this file and in the e-mail (-3.3 to -3.4 m3/s/yr, p~0.6-0.65)
+# is a mean/OLS-style trend and would miss a shape change, e.g. a declining
+# flood tail masked by a flat median. Quantile regression (quantreg::rq())
+# fits a separate linear trend at each of several percentiles of the flow
+# distribution so that shape change, if present, is visible directly --
+# this only characterises the flow distribution's own trend, it does not
+# model the concentration-vs-flow relationship itself.
+# rhone_flow_quantile_trend()
+rhone_flow_quantile_trend <- function(taus = c(0.1, 0.25, 0.5, 0.75, 0.9, 0.95)){
+
+  meta <- get_zone_meta(mouth_name = "Grand Rhone")
+  df <- load_driver("flow", meta) |> tidyr::drop_na(value)
+  # rq() needs a numeric regressor; Date's own numeric encoding is already
+  # days-since-epoch, so the fitted slope is directly per-day (matching the
+  # slope/slope_annualised convention used by fit_wls_hac_trend() elsewhere
+  # in this file).
+  df$date_num <- as.numeric(df$date)
+
+  # se = "boot": quantile regression has no closed-form standard error, so a
+  # bootstrap is used for the CI/p-value at every quantile.
+  fit <- quantreg::rq(value ~ date_num, data = df, tau = taus)
+  fit_summary <- summary(fit, se = "boot")
+
+  stats <- purrr::map2_dfr(fit_summary, taus, function(s, tau){
+    coefs <- s$coefficients
+    tibble::tibble(tau = tau,
+                   slope = coefs["date_num", "Value"],
+                   slope_annualised = coefs["date_num", "Value"] * 365.25,
+                   slope_se = coefs["date_num", "Std. Error"],
+                   slope_p = coefs["date_num", "Pr(>|t|)"])
+  })
+  write_csv(stats, "output/STATS/rhone_flow_quantile_trend.csv")
+
+  # a) Trend point estimate +/- 95% CI at each quantile -- shows directly
+  #    whether the trend's sign/magnitude changes across the distribution.
+  pl_trend <- ggplot(stats, aes(x = tau, y = slope_annualised)) +
+    geom_hline(yintercept = 0, colour = "grey60", linetype = "dashed") +
+    geom_pointrange(aes(ymin = slope_annualised - 1.96 * slope_se * 365.25,
+                         ymax = slope_annualised + 1.96 * slope_se * 365.25)) +
+    scale_x_continuous(breaks = taus, labels = scales::percent) +
+    labs(x = "Flow quantile", y = "Flow trend (m³ s⁻¹ yr⁻¹)",
+         title = "Grand Rhone: does the flow trend differ across the flow distribution?",
+         subtitle = "Point = quantile regression slope, error bars = 95% CI (bootstrap SE)") +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  # b) Same fits shown against the raw daily flow series, for context.
+  pl_lines <- ggplot(df, aes(x = date, y = value)) +
+    geom_point(alpha = 0.08, size = 0.5, colour = "grey40") +
+    geom_quantile(quantiles = taus, formula = y ~ x, colour = "firebrick", linewidth = 0.7) +
+    labs(x = NULL, y = "Grand Rhone flow (m³ s⁻¹)",
+         title = "Grand Rhone: flow with per-quantile trend lines",
+         subtitle = paste0("Quantiles shown: ", paste0(taus * 100, "%", collapse = ", "))) +
+    theme(panel.border = element_rect(fill = NA, colour = "black"))
+
+  pl_combi <- ggpubr::ggarrange(pl_lines, pl_trend, ncol = 2, nrow = 1)
+  ggsave(filename = "figures/rhone_side_analyses/rhone_flow_quantile_trend.png", plot = pl_combi, width = 14, height = 6)
+
+  return(list(stats = stats, data = df, plot = pl_combi))
+}
+
+
 # NB: not run automatically on source() -- call explicitly
 # rhone_detrend_test()
 # rhone_flood_timing_shift()
 # rhone_wind_wave_effect()
+# rhone_wind_wave_seasonal_effect()
+# rhone_flow_quantile_trend()
 
