@@ -308,7 +308,7 @@ Figure_1 <- function(where_to_save_the_figure) {
   mouth <- function(river_name) dplyr::filter(zone_river_mouths, river == river_name)
   river_label_style <- function(river_name, primary, colour, ...){
     geom_label(data = mouth(river_name), aes(x = lon, y = lat, label = river),
-              fontface = if(primary) "bold" else "plain", size = if(primary) 9 else 7,
+              fontface = if(primary) "bold" else "plain", size = if(primary) 11 else 9,
               colour = colour, fill = if(colour == "white") "black" else "white", alpha = 0.4, ...)
   }
 
@@ -915,7 +915,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
     theme(strip.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
          axis.text.y = element_text(size = 10), panel.grid = element_blank())
 
-  save_plot_as_png(p_heatmap, registry_basename(figure_5_output_subdir), width = 12, height = 10, path = figure_5_dir)
+  save_plot_as_png(p_heatmap, registry_basename(figure_5_output_subdir), width = 12, height = 8, path = figure_5_dir)
   message("Wrote ", registry_filename(figure_5_output_subdir))
   invisible(TRUE)
 }

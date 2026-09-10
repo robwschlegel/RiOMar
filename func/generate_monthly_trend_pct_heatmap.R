@@ -45,7 +45,7 @@ variable_display <- c(
   SPM_mass      = "SPM mass (t)",
   compactness   = "Compactness",
   alongcoast_km = "Along-coast drift (km)",
-  flow          = "River discharge (m³ s⁻¹)",
+  flow          = "River flow (m³ s⁻¹)",
   wind          = "Wind speed (m s⁻¹)",
   tide          = "Tidal range (m)",
   wave          = "Wave height (m)",
@@ -122,5 +122,5 @@ output_subdir <- get_registry_row("monthly_trend_pct_heatmap")$output_subdir
 main_folder <- file.path("figures", "ARTICLE", output_subdir)
 if(!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
 out_path <- file.path(main_folder, registry_filename(output_subdir))
-ggsave(filename = out_path, plot = p_heatmap, width = 12, height = 10, dpi = 300)
+ggsave(filename = out_path, plot = p_heatmap, width = 12, height = 8, dpi = 300)
 message("Wrote ", out_path)
