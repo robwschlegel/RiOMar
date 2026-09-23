@@ -1,9 +1,9 @@
 {
   "zone": "BAY_OF_BISCAY",
-  "input_path": "/home/calanus/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/",
-  "output_dir": "/home/calanus/RiOMar/output/panache/dynamic/BAY_OF_BISCAY",
-  "bathymetry_path": "/home/calanus/RiOMar/output/panache/dynamic/BAY_OF_BISCAY/Bathy_data.pkl",
-  "coast_shapefile": "/home/calanus/RiOMar/data/FRANCE_shapefile/gadm41_FRA_0.shp",
+  "input_path": "/Volumes/Toshi/data/SEXTANT/SPM/",
+  "output_dir": "/Users/rws/RiOMar/output/panache/dynamic/BAY_OF_BISCAY",
+  "bathymetry_path": "/Users/rws/RiOMar/output/panache/dynamic/BAY_OF_BISCAY/Bathy_data.pkl",
+  "coast_shapefile": "/Users/rws/RiOMar/data/FRANCE_shapefile/gadm41_FRA_0.shp",
   "dynamic_threshold": true,
   "gradient_steepness_fraction": 0.30,
   "near_mouth_lower_quantile": 0.20,
