@@ -8,8 +8,7 @@
 #### Modules
 # =============================================================================
 
-import os, sys
-import rpy2.robjects as robjects
+import os, sys, subprocess
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
@@ -21,7 +20,7 @@ sys.path.append( func_dir )
 # =============================================================================
 
 # The full validation pipeline (pixel extraction, match-up stats, scatterplots,
-# and tables) is implemented as a sequential R script. Run it directly.
+# and tables) is implemented as a sequential R script.
 validate_R_path = os.path.join(func_dir, 'validate.R')
-robjects.r['source'](validate_R_path)
+subprocess.run(['Rscript', validate_R_path], cwd=proj_dir, check=True)
 

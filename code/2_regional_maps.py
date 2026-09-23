@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# The code needed to create the regional maps used in the RiOMar project.
+# The code needed to create regional maps of the SEXTANT data used in this project.
+# Note that these are only for visual QC purposes and are not used in further analyses.
+# This script may be skipped as desired.
 
 
 # =============================================================================

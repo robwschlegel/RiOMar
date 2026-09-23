@@ -503,19 +503,46 @@ process_pixels <- function(sat_name, var_name){
 
     file_name_var <- paste0("output/MATCH_UP_DATA/FRANCE/zone_data_",file_stub,".csv")
 
-    if(!file.exists(file_name_var)){
+    # Resume support: pCloud Drive's virtual filesystem periodically detaches
+    # under sustained reads, killing long extraction runs partway through.
+    # Skip files whose date is already saved in file_name_var, and append in
+    # batches so a crash only loses the in-progress batch, not the whole run.
+    # NB: extract_pixels() catches a failed file read and fills that file's
+    # rows with value = NA rather than raising, so a date where *every* row
+    # is NA means the read failed (not just normal cloud/land masking, which
+    # only ever hits some of the ~2477 pixel/site rows for a date) and must
+    # be re-extracted, not skipped.
+    dates_done <- character(0)
+    if(file.exists(file_name_var)){
+      cached <- data.table::fread(file_name_var, select = c("date", "value"))
+      dates_done <- cached[, .(all_na = all(is.na(value))), by = date][all_na == FALSE, as.character(date)]
+    }
+    file_dates <- if(sat_name == "SEXTANT"){
+      purrr::map_chr(files_var, ~ str_split(basename(.x), "-")[[1]][1])
+    } else {
+      purrr::map_chr(files_var, ~ str_split(basename(.x), "_")[[1]][2])
+    }
+    file_dates <- as.character(as.Date(file_dates, format = "%Y%m%d"))
+    files_remaining <- files_var[!(file_dates %in% dates_done)]
 
-      # Extract data from all pixels
-      message("Started ",var_name," extraction at : ", Sys.time())
+    if(length(files_remaining) > 0){
+
+      message("Started ",var_name," extraction at : ", Sys.time(), " (",
+              length(files_remaining)," of ",length(files_var)," files remaining)")
       zone_pixels <- read_csv(paste0("metadata/zone_pixels_",file_stub,".csv"), show_col_types = FALSE)
 
-      plan(multisession, workers = parallel::detectCores() - 2)
-      zone_data_var <- future_map_dfr(files_var, extract_pixels, df = zone_pixels,
-                                      .options = furrr_options(seed = TRUE))
-      
-      # Save results
-      message("Saving ",var_name," extraction at : ", Sys.time())
-      data.table::fwrite(zone_data_var, file_name_var)
+      # pCloud Drive's virtual filesystem detaches periodically regardless of
+      # worker count (observed at 10, 8, and 2) -- resumable batching handles
+      # that cheaply now, so favour throughput between crashes instead
+      plan(multisession, workers = 8)
+      batch_size <- 200
+      batches <- split(files_remaining, ceiling(seq_along(files_remaining) / batch_size))
+      for(batch in batches){
+        zone_data_batch <- future_map_dfr(batch, extract_pixels, df = zone_pixels,
+                                          .options = furrr_options(seed = TRUE))
+        data.table::fwrite(zone_data_batch, file_name_var, append = file.exists(file_name_var))
+        message("  Saved ",var_name," batch of ",length(batch)," files at : ", Sys.time())
+      }
       plan(sequential)
     }
 
@@ -539,7 +566,7 @@ process_pixels <- function(sat_name, var_name){
                   n = n(), 
                   .by = c("zone", "source", "site", "date", "variable"))
       data.table::fwrite(zone_median_all, file_name_median_all)
-      rm(zone_data_var, file_name_var, file_name_median_all, zone_median_all); gc()
+      rm(zone_data_var, file_name_median_all, zone_median_all); gc()
     }
 
     # Create medians etc. from 'small' pixels
@@ -1573,10 +1600,19 @@ validate_sensor <- function(sat_name, median_base){
   }
   
   # Load prepped data
-  sat_files <- dir("output/MATCH_UP_DATA/FRANCE", full.names = TRUE, 
+  sat_files <- dir("output/MATCH_UP_DATA/FRANCE", full.names = TRUE,
                    pattern = paste0("zone_median_",sat_name))
   sat_files <- sat_files[grepl(paste0("_",median_base), sat_files)]
-  zone_median <- map_dfr(sat_files, data.table::fread) |> mutate(date = as.Date(date)) |> 
+
+  # No zone_median files means process_pixels() was never run for this sensor
+  # (currently true for MODIS/MERIS/OLCI-A/OLCI-B, whose ODATIS-MR source data
+  # lives only on the old machine's local mount) -- skip rather than crash.
+  if(length(sat_files) == 0){
+    message("Skipping validate_sensor(\"",sat_name,"\", \"",median_base,"\"): no zone_median files found.")
+    return(invisible(NULL))
+  }
+
+  zone_median <- map_dfr(sat_files, data.table::fread) |> mutate(date = as.Date(date)) |>
     # Remove all rows that are below the pixel cutoff and CV cutoff of 20%
     mutate(sd = case_when(n <= 2 ~ 0, TRUE ~ sd), # Necessary for CV for 1 pixel count matchups for SEXTANT 'small'
            cv = sd / median) |> 

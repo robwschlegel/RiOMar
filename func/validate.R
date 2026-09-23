@@ -368,5 +368,6 @@ zone_all_stats_top <- zone_all_stats |>
   filter(site == "ALL", season == "ALL")
 
 # Fancy tables
-validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
+# NB: No longer needed and has a lot of dependencies
+# validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
 
