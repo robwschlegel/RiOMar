@@ -962,8 +962,9 @@ def Plot_and_Save_the_map(core_arguments,
                           nb_of_cores_to_use,
                           where_are_saved_satellite_data,
                           start_day_of_maps_to_plot,
-                          end_day_of_maps_to_plot) : 
-        
+                          end_day_of_maps_to_plot,
+                          overwrite = False) :
+
     cases_to_process = get_all_cases_to_process(core_arguments)
 
     dates_to_plot = pd.date_range(start=start_day_of_maps_to_plot, end=end_day_of_maps_to_plot, freq="D")
@@ -971,17 +972,27 @@ def Plot_and_Save_the_map(core_arguments,
     # pool = multiprocess.Pool(nb_of_cores_to_use)
     with multiprocess.Pool(nb_of_cores_to_use) as pool:
 
-        for i, info in cases_to_process.iterrows() : 
-                    
+        for i, info in cases_to_process.iterrows() :
+
             # info = cases_to_process.iloc[i]
-            
-            init = download_satellite_data(info, start_day_of_maps_to_plot, end_day_of_maps_to_plot, 
-                                           where_are_saved_satellite_data, nb_of_cores_to_use) 
-    
-            paths_to_sat_data = fill_the_sat_paths(info.replace({info.Temporal_resolution : "DAILY"}), init.destination_path_to_fill, 
-                                                   local_path = True, 
+
+            init = download_satellite_data(info, start_day_of_maps_to_plot, end_day_of_maps_to_plot,
+                                           where_are_saved_satellite_data, nb_of_cores_to_use)
+
+            paths_to_sat_data = fill_the_sat_paths(info.replace({info.Temporal_resolution : "DAILY"}), init.destination_path_to_fill,
+                                                   local_path = True,
                                                    dates = dates_to_plot)
-            
+
+            if not overwrite :
+                # Only keep folders that still have at least one .nc file without a matching .png
+                paths_to_sat_data = [
+                    path for path in paths_to_sat_data
+                    if os.path.exists(path) and any(
+                        not os.path.exists(os.path.join(path, f.replace('.nc', '.png')))
+                        for f in os.listdir(path) if f.endswith('.nc')
+                    )
+                ]
+
             pool.map(plot_maps_in_folder, paths_to_sat_data)
 
 def download_cmems_subset(

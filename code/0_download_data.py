@@ -17,6 +17,9 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
+# Use 2 fewer cores than available, so the machine stays usable during long runs
+nb_of_cores_to_use = max(1, os.cpu_count() - 2)
+
 import util, dl
 from util import daily_integral
 from dl import Download_satellite_data, download_cmems_subset, download_hubeau_flow, Plot_and_Save_the_map
@@ -45,7 +48,7 @@ sextant_chla_all = {'Data_sources':['SEXTANT'],
                     'start_day':'1998/01/01',
                     'end_day':'2025/12/31'}
 Download_satellite_data(sextant_chla_all,
-                        nb_of_cores_to_use = 14,
+                        nb_of_cores_to_use = nb_of_cores_to_use,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = '../pCloudDrive/data')
 
@@ -65,7 +68,7 @@ sextant_spm_all = {'Data_sources':['SEXTANT'],
                    'start_day':'1998/01/01',
                    'end_day':'2025/12/31'}
 Download_satellite_data(sextant_spm_all,
-                        nb_of_cores_to_use = 14,
+                        nb_of_cores_to_use = nb_of_cores_to_use,
                         overwrite_existing_satellite_files = False,
                         where_to_save_satellite_data = '../pCloudDrive/data')
 
@@ -151,11 +154,11 @@ for zone in zones_list[0:1]:
 # =============================================================================
 
 for zone in zones_list:
-    daily_integral(f'/home/calanus/pCloudDrive/data/WIND/{zone}',
+    daily_integral(f'../pCloudDrive/data/WIND/{zone}',
                    overwrite = False) # Change to True if running for the first time
 
 for zone in zones_list:
-    daily_integral(f'/home/calanus/pCloudDrive/data/WAVE/{zone}',
+    daily_integral(f'../pCloudDrive/data/WAVE/{zone}',
                    overwrite = False) # Change to True if running for the first time
 
 
@@ -218,7 +221,7 @@ for zone in zones_list:
 for year in range(1998, 2026):
     Plot_and_Save_the_map(
         sextant_chla_all,
-        nb_of_cores_to_use = 14,
+        nb_of_cores_to_use = nb_of_cores_to_use,
         where_are_saved_satellite_data = '../pCloudDrive/data',
         start_day_of_maps_to_plot = f'{year}/01/01',
         end_day_of_maps_to_plot = f'{year}/12/31'
@@ -229,7 +232,7 @@ for year in range(1998, 2026):
 for year in range(1998, 2026):
     Plot_and_Save_the_map(
         sextant_spm_all,
-        nb_of_cores_to_use = 14,
+        nb_of_cores_to_use = nb_of_cores_to_use,
         where_are_saved_satellite_data = '../pCloudDrive/data',
         start_day_of_maps_to_plot = f'{year}/01/01',
         end_day_of_maps_to_plot = f'{year}/12/31'
