@@ -103,7 +103,7 @@ is the standard argument passed to every major pipeline function. `util.define_p
 
 ## Future work ideas
 
-- An SST (sea surface temperature) analysis of river plumes — how the plume footprint appears in a high-resolution SST product — is still an idea worth pursuing, not yet scoped or started. A stub subsection for this in `manuscript.tex` (§ Results, "Sea surface temperature") was removed 2026-08-12 since it held no content; revisit as a possible future-work mention or a follow-up study, not a manuscript gap to fill now.
+- An SST (sea surface temperature) analysis of river plumes — how the plume footprint appears in a high-resolution SST product — is no longer a possible RiOMar analysis (2026-09-23: Robert no longer has access to the server hosting the hi-res SST data). A stub subsection for this in `manuscript.tex` (§ Results, "Sea surface temperature") was removed 2026-08-12 since it held no content; as of 2026-09-23 it's kept alive only as a one-sentence future-work mention at the end of the Conclusion (§`sec:conclusion`, third paragraph) — not a manuscript gap, and not scoped as a follow-up study for this project.
 
 ## Bug history
 
