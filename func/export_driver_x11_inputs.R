@@ -1,7 +1,7 @@
 # func/export_driver_x11_inputs.R
 #
 # Writes the daily plume-area + driver series func/compute_driver_x11_correlation_table.py
-# and func/compute_driver_x11_figures.py need, so the Python-side weekly
+# and func/compute_x11_driver_signals.py need, so the Python-side weekly
 # Census-X11 decomposition (func/X11.py) can run without a Python port of
 # func/multi.R's driver-loading/joining pipeline (combine_plume_driver(),
 # load_driver(), get_zone_meta(), etc.) -- those stay R-only and unmodified,

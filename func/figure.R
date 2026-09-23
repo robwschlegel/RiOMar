@@ -1385,43 +1385,53 @@ plot_x11_residual_river_flow <- function(where_to_save_the_figure){
                    registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 
-# X11 interannual signal of plume area, dynamic vs. static threshold, all
-# four zones. Manuscript slot "x11_interannual_dynamic_vs_static" -- see
+# X11 signal of plume area, dynamic vs. static threshold, all four zones --
+# one component (interannual/seasonal/residual) per call. Refactored
+# 2026-09-23 (Robert's call) from three near-identical functions
+# (plot_x11_interannual_dynamic_vs_static/plot_x11_seasonal_dynamic_vs_static/
+# plot_x11_residual_dynamic_vs_static, ~10 duplicated lines each differing
+# only in registry slot_key and stack_x11_component()'s component argument)
+# down to this one shared implementation. The three registry-facing entry
+# points below are kept as one-line dispatchers since
+# func/figure.py::Figure_X11_weekly_results() looks up and calls each slot's
+# r_function by name generically (no type_of_signal argument passed through)
+# -- collapsing further would mean special-casing that dispatch loop, a
+# larger change for no real benefit. All three share the same DATA/ prep
+# (data_dir always resolves to the interannual slot's own folder, since
+# func/figure.py::_prep_x11_dynamic_vs_static_data() only ever writes
+# ts_plume_dynamic_vs_static.csv there -- true for the interannual call too,
+# since its own output_subdir *is* that slot).
+plot_x11_component_dynamic_vs_static <- function(where_to_save_the_figure, type_of_signal){
+  slot_key <- switch(type_of_signal,
+                     "Interannual" = "x11_interannual_dynamic_vs_static",
+                     "Seasonal"    = "x11_seasonal_dynamic_vs_static",
+                     "Residual"    = "x11_residual_dynamic_vs_static")
+  output_subdir <- get_registry_row(slot_key)$output_subdir
+  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
+  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+
+  data_dir <- file.path(where_to_save_the_figure, "ARTICLE",
+                        get_registry_row("x11_interannual_dynamic_vs_static")$output_subdir)
+  zone_plots <- compute_x11_dynamic_vs_static_plots(data_dir)
+  save_plot_as_png(stack_x11_component(zone_plots, type_of_signal), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
+}
+
+# Manuscript slot "x11_interannual_dynamic_vs_static" -- see
 # manuscript/figure_table_registry.csv for its current figure number.
 plot_x11_interannual_dynamic_vs_static <- function(where_to_save_the_figure){
-  output_subdir <- get_registry_row("x11_interannual_dynamic_vs_static")$output_subdir
-  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
-  zone_plots <- compute_x11_dynamic_vs_static_plots(main_folder)
-  save_plot_as_png(stack_x11_component(zone_plots, "Interannual"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
+  plot_x11_component_dynamic_vs_static(where_to_save_the_figure, "Interannual")
 }
 
-# X11 seasonal signal of plume area, dynamic vs. static threshold. Shares
-# x11_interannual_dynamic_vs_static's DATA/ prep. One of three separate
-# figures (interannual/seasonal/residual) requested in manuscript/TODO.md,
-# rather than a seasonal+residual composite. Manuscript slot
-# "x11_seasonal_dynamic_vs_static" -- see manuscript/figure_table_registry.csv
-# for its current figure number.
+# Manuscript slot "x11_seasonal_dynamic_vs_static" -- see
+# manuscript/figure_table_registry.csv for its current figure number.
 plot_x11_seasonal_dynamic_vs_static <- function(where_to_save_the_figure){
-  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", get_registry_row("x11_interannual_dynamic_vs_static")$output_subdir)
-  output_subdir <- get_registry_row("x11_seasonal_dynamic_vs_static")$output_subdir
-  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
-  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-  zone_plots <- compute_x11_dynamic_vs_static_plots(data_dir)
-  save_plot_as_png(stack_x11_component(zone_plots, "Seasonal"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
+  plot_x11_component_dynamic_vs_static(where_to_save_the_figure, "Seasonal")
 }
 
-# X11 residual variance of plume area, dynamic vs. static threshold. Shares
-# x11_interannual_dynamic_vs_static's DATA/ prep. Third of the three separate
-# figures requested in manuscript/TODO.md. Manuscript slot
-# "x11_residual_dynamic_vs_static" -- see manuscript/figure_table_registry.csv
-# for its current figure number.
+# Manuscript slot "x11_residual_dynamic_vs_static" -- see
+# manuscript/figure_table_registry.csv for its current figure number.
 plot_x11_residual_dynamic_vs_static <- function(where_to_save_the_figure){
-  data_dir <- file.path(where_to_save_the_figure, "ARTICLE", get_registry_row("x11_interannual_dynamic_vs_static")$output_subdir)
-  output_subdir <- get_registry_row("x11_residual_dynamic_vs_static")$output_subdir
-  main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
-  if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
-  zone_plots <- compute_x11_dynamic_vs_static_plots(data_dir)
-  save_plot_as_png(stack_x11_component(zone_plots, "Residual"), registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
+  plot_x11_component_dynamic_vs_static(where_to_save_the_figure, "Residual")
 }
 
 # Monthly (previously JJA vs. NDJ) dynamic-vs-static threshold comparison of

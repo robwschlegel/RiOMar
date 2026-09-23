@@ -11,8 +11,10 @@ library(scales)
 library(ggnewscale)
 library(zoo)
 
-# The central functions
-source("func/util.R")
+# The central functions -- multi.R (which itself sources util.R) rather than
+# util.R alone, needed by plot_driver_x11_trend_comparison() below for
+# driver_display and zone_title().
+source("func/multi.R")
 
 # where_are_saved_X11_results = "~/RiOMar/output/FIXED_THRESHOLD/BAY_OF_BISCAY"
 # Zone= "BAY_OF_SEINE"
@@ -104,7 +106,75 @@ make_the_plot <- function(X11_data, type_of_signal) {
           panel.border = element_rect(linetype = "solid", fill = NA))
   
   return(the_plot)
-  
+
+}
+
+
+# Driver comparison (generalised, wind/tide/wave/current) -------------------
+# Rollback (2026-09-23) of the Aug-11 driver-vs-plume X11 migration's Python
+# plotting (func/X11.py::plot_driver_x11_dual_axis(), called from
+# func/compute_driver_x11_figures.py) -- Python stays limited to the X11
+# *calculation* (still func/compute_x11_driver_signals.py, which persists
+# each driver's weekly Seasonal_signal/Interannual_signal to CSV); this is
+# the R replacement for the *plotting* half, matching make_the_plot()'s
+# house style (dual-axis, scaled second axis, r annotation) rather than
+# matplotlib's. Uses the Interannual_signal component only, matching what
+# the Python version compared (see decompose_driver_series() upstream).
+
+plot_driver_x11_trend_comparison <- function(where_are_saved_X11_results, zone_name, driver_name){
+
+  plume_path <- file.path(where_are_saved_X11_results, zone_name, "X11_ANALYSIS",
+                          "area_of_the_plume_mask_in_km2", "SEXTANT_merged_Standard_WEEKLY.csv")
+  driver_path <- file.path(where_are_saved_X11_results, zone_name, "X11_ANALYSIS",
+                           driver_name, paste0(driver_name, "_WEEKLY.csv"))
+
+  disp <- dplyr::filter(driver_display, driver_name == !!driver_name)
+
+  if(!file.exists(plume_path) || !file.exists(driver_path)){
+    return(ggplot() + labs(title = paste0(zone_title(zone_name), " (insufficient data)")) + ggplot_theme())
+  }
+
+  plume_ts <- readr::read_csv(plume_path, show_col_types = FALSE) |>
+    dplyr::transmute(dates = date, plume_area = Interannual_signal)
+  driver_ts <- readr::read_csv(driver_path, show_col_types = FALSE) |>
+    dplyr::transmute(dates = date, driver_value = Interannual_signal)
+
+  X11_data_for_plot <- dplyr::inner_join(plume_ts, driver_ts, by = "dates")
+  unique_years <- X11_data_for_plot$dates |> year() |> unique()
+
+  scaling_factor <- sec_axis_adjustement_factors(var_to_scale = X11_data_for_plot$driver_value,
+                                                 var_ref = X11_data_for_plot$plume_area)
+  X11_data_for_plot <- X11_data_for_plot |>
+    mutate(driver_scaled = driver_value * scaling_factor$diff + scaling_factor$adjust)
+
+  r_value <- cor(X11_data_for_plot$plume_area, X11_data_for_plot$driver_value, use = "complete.obs")
+  r_label <- paste0("r = ", sprintf("%.2f", r_value))
+
+  ggplot() +
+    geom_point(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = plume_area), color = "brown") +
+    geom_point(data = X11_data_for_plot, aes(x = dates, y = driver_scaled), color = disp$driver_colour) +
+    geom_path(data = X11_data_for_plot, aes(x = dates, y = driver_scaled), color = disp$driver_colour) +
+    annotate("text", x = min(X11_data_for_plot$dates), y = Inf, label = r_label,
+            hjust = 0, vjust = 1.5, size = 6, colour = "black") +
+    scale_x_date(name = "",
+                breaks = paste(unique_years, "01-01", sep = "-") |> as.Date(),
+                labels = unique_years |> str_extract_all('[0-9][0-9]$') |> unlist()) +
+    scale_y_continuous(name = "Plume area (km²)",
+                       sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
+                                           name = disp$driver_label)) +
+    labs(title = zone_title(zone_name)) +
+    ggplot_theme() +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+         axis.text.y.left = element_text(color = "brown"),
+         axis.ticks.y.left = element_line(color = "brown"),
+         axis.line.y.left = element_line(color = "brown"),
+         axis.title.y.left = element_text(color = "brown", margin = unit(c(0, 7.5, 0, 0), "mm")),
+         axis.text.y.right = element_text(color = disp$driver_colour),
+         axis.ticks.y.right = element_line(color = disp$driver_colour),
+         axis.line.y.right = element_line(color = disp$driver_colour),
+         axis.title.y.right = element_text(color = disp$driver_colour, margin = unit(c(0, 0, 0, 7.5), "mm")),
+         panel.border = element_rect(linetype = "solid", fill = NA))
 }
 
 
