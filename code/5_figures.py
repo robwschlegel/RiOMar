@@ -10,7 +10,6 @@
 
 import os, sys
 import matplotlib as mpl
-import rpy2.robjects as robjects
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
@@ -91,11 +90,4 @@ Figure_S3_seasonal_boxplots(where_to_save_the_figure = "figures")
 # daily_flow_lagged_correlation ("Sx. Lagged daily correlations"): daily
 # plume area vs. river flow scatter + lagged correlation, per zone.
 Figure_S_daily_flow(where_to_save_the_figure = "figures")
-
-# rofi_succession + rofi_lagged_correlation: flow/plume/ROFI succession +
-# lagged correlation. Previously run by hand -- see
-# func/ROFI.R::run_rofi_plume_succession().
-rofi_R_path = os.path.join(func_dir, 'ROFI.R')
-robjects.r['source'](rofi_R_path)
-robjects.r['run_rofi_plume_succession']()
 

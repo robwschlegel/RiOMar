@@ -59,7 +59,6 @@ library(RcppRoll) # For running means to get STL interannual signals closer to X
 library(patchwork)
 library(sandwich) # For HAC covariance tests (driver_plume_trend)
 library(lmtest) # For more detailed linear model tests (driver_plume_trend)
-library(doParallel); doParallel::registerDoParallel(cores = 14)
 
 # Common function
 source("func/util.R")

@@ -85,8 +85,7 @@ Apply_X11_method_on_time_series_per_river(sextant_spm_all,
 # a separate process keeps the two OpenMP runtimes apart.
 driver_interactions_R_path = os.path.join(func_dir, 'driver_interactions.R')
 
-# Runs both the dynamic-threshold main analysis and the static-threshold
-# supplementary analysis; see func/driver_interactions.R
+# Runs the dynamic-threshold main analysis; see func/driver_interactions.R
 subprocess.run(
     ['Rscript', '-e', f"source('{driver_interactions_R_path}'); run_driver_interactions_analysis()"],
     cwd=proj_dir, check=True
@@ -127,6 +126,11 @@ import compute_plume_shape  # noqa: F401
 # Order matters: generate_monthly_trend_pct_heatmap.R and 
 # generate_table_s_monthly_trends.R read compute_seasonal_trend.R's output; 
 # generate_table_s_octant_trends.R reads compute_direction_octant_trend.R's output.
+# compute_driver_correlation_matrices.R sources driver_interactions.R (for
+# its zone/driver helpers), which loads ranger -- run it via Rscript
+# subprocess rather than rpy2's embedded R for the same OpenMP-collision
+# reason as driver_interactions.R itself, above. The other 9 don't load
+# ranger, so they stay on rpy2.
 stats_scripts = [
     'compute_area_trend.R',
     'compute_mass_spm_trend.R',
@@ -137,8 +141,12 @@ stats_scripts = [
     'generate_table_s_monthly_trends.R',
     'compute_direction_octant_trend.R',
     'generate_table_s_octant_trends.R',
-    'compute_driver_correlation_matrices.R',
 ]
 for script in stats_scripts:
     robjects.r['source'](os.path.join(func_dir, script))
+
+subprocess.run(
+    ['Rscript', os.path.join(func_dir, 'compute_driver_correlation_matrices.R')],
+    cwd=proj_dir, check=True
+)
 

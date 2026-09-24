@@ -426,9 +426,16 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
 }
 
 
-# Entry point: called from code/4_time_series.py via rpy2 -------------------
-# Runs both the dynamic-threshold (main results) and static-threshold
-# (supplementary) driver analyses.
+# Entry point: called from code/4_time_series.py via Rscript subprocess -----
+# Runs the dynamic-threshold (main results) driver analysis. The
+# static-threshold (supplementary) pass was dropped (2026-09-24): its GAM
+# fitting (step 5/6) ran an order of magnitude slower than the dynamic
+# pass for reasons not worth chasing down, and the static results aren't
+# individually manuscript-referenced. func/render_gam_figure_only.R and
+# func/compute_direction_gam_significance.R still reference the static
+# output paths this used to write (output/STATS/static,
+# figures/ARTICLE/gam_monthly_dominance_static/Figure_S7_static.png) but
+# are standalone utility scripts, not part of the automated pipeline.
 
 run_driver_interactions_analysis <- function(){
 
@@ -447,15 +454,6 @@ run_driver_interactions_analysis <- function(){
     plume_dir = "output/panache/dynamic",
     stats_dir = "output/STATS",
     fig_paths = dynamic_fig_paths
-  )
-
-  message("== Driver interactions: static threshold (supplementary) ==")
-  # Not individually manuscript-referenced (no per-zone registry slot) --
-  # kept in one shared, descriptively named folder instead of a numbered one.
-  run_full_analysis(
-    plume_dir = "output/panache/static",
-    stats_dir = "output/STATS/static",
-    fig_path  = "figures/ARTICLE/gam_monthly_dominance_static/Figure_S7_static.png"
   )
 
   message("func/driver_interactions.R::run_driver_interactions_analysis() complete.")
