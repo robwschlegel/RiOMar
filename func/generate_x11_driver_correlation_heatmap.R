@@ -23,8 +23,7 @@
 #
 # Run from repo root: Rscript func/generate_x11_driver_correlation_heatmap.R
 
-source("func/util.R")
-source("func/X11.R")  # for get_X11_data()
+source("func/X11.R")  # loads tidyverse etc. and sources multi.R (which sources util.R) itself; also provides get_X11_data()
 
 OTHER_DRIVERS <- c("wind", "tide", "wave", "current")
 X11_DIR <- "output/panache/dynamic"
@@ -61,7 +60,11 @@ heat_data <- purrr::map_dfr(zones, function(zone_name){
       return(tibble::tibble(zone = zone_name, driver = driver_name,
                             component = c("seasonal", "interannual"), r = NA_real_))
     }
-    plume_ts <- readr::read_csv(plume_path, show_col_types = FALSE)
+    # plume_path's CSV (written by the frozen X11.py::apply_X11_method_and_save_results())
+    # uses "dates" (plural); csv_path's CSV (func/compute_x11_driver_signals.py,
+    # this session's own new script) uses "date" (singular) -- align here
+    # rather than change either writer.
+    plume_ts <- readr::read_csv(plume_path, show_col_types = FALSE) |> dplyr::rename(date = dates)
     driver_ts <- readr::read_csv(csv_path, show_col_types = FALSE)
     merged <- dplyr::inner_join(plume_ts, driver_ts, by = "date", suffix = c("_plume", "_driver"))
     tibble::tibble(
@@ -81,11 +84,12 @@ driver_display <- c(flow = "River flow", wind = "Wind speed", tide = "Tidal rang
 zone_labels <- zone_title(rev(zones))
 zone_labels[zone_labels == "Southern Brittany"] <- "S. Brittany"
 
+DRIVER_ORDER <- c("flow", "wave", "wind", "current", "tide")  # Robert's call, 2026-09-24
+
 heat_data <- heat_data |>
   dplyr::mutate(
     zone = factor(zone, levels = rev(zones), labels = zone_labels),
-    driver = factor(driver, levels = c("flow", "wind", "tide", "wave", "current"),
-                    labels = unname(driver_display[c("flow", "wind", "tide", "wave", "current")])),
+    driver = factor(driver, levels = DRIVER_ORDER, labels = unname(driver_display[DRIVER_ORDER])),
     component = factor(component, levels = c("seasonal", "interannual"),
                        labels = c("Seasonal component", "Interannual component")))
 
@@ -95,7 +99,8 @@ heat_data <- heat_data |>
 # purple/orange scale (midpoint=1).
 p_heatmap <- ggplot(heat_data, aes(x = driver, y = zone, fill = r)) +
   geom_tile(colour = "white", linewidth = 0.4) +
-  geom_text(aes(label = ifelse(is.na(r), "", sprintf("%.2f", r))), size = 3.5) +
+  geom_label(aes(label = ifelse(is.na(r), "", sprintf("%.2f", r))),
+            size = 3.5, fill = "white", linewidth = 0, label.padding = unit(0.12, "lines")) +
   facet_wrap(~component, ncol = 2) +
   scale_fill_gradient2(name = "Pearson r", low = "steelblue", mid = "grey90", high = "firebrick",
                        midpoint = 0, limits = c(-1, 1), na.value = "grey80") +
@@ -106,5 +111,5 @@ p_heatmap <- ggplot(heat_data, aes(x = driver, y = zone, fill = r)) +
 
 output_subdir <- get_registry_row("x11_driver_correlation_heatmap")$output_subdir
 figure_dir <- file.path("figures", "ARTICLE", output_subdir)
-save_plot_as_png(p_heatmap, registry_basename(output_subdir), width = 9, height = 6, path = figure_dir)
+save_plot_as_png(p_heatmap, registry_basename(output_subdir), width = 9, height = 4.2, path = figure_dir)
 message("Wrote ", registry_filename(output_subdir))

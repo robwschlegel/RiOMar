@@ -506,8 +506,9 @@ plot_methodology_worked_example_panel <- function(where_to_save_the_figure, name
           axis.ticks.x = element_blank(),
           axis.text.y = element_blank(),
           axis.ticks.y = element_blank(),
-          plot.tag = element_text(size = 50, face = "bold"),
-          plot.tag.position = c(0.02, 0.98))
+          plot.tag = element_text(size = 60, face = "bold"),
+          plot.tag.position = c(0.02, 0.98),
+          plot.margin = margin(t = 40, r = 10, b = 10, l = 10))
 
   if (name_of_the_plot == "B") {
     points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure,
@@ -517,6 +518,39 @@ plot_methodology_worked_example_panel <- function(where_to_save_the_figure, name
     the_map <- the_map +
       geom_point(data = all_points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "grey50", size = 3) +
       geom_point(data = points_used_for_finding_SPM_threshold, aes(x = longitude, y = latitude), color = "red", size = 3)
+  }
+
+  if (name_of_the_plot == "A") {
+    # Marks the Grand Rhone river mouth (panel a's "daily map of SPM for the
+    # study region"), per Robert's request -- river_mouths comes from
+    # func/util.R (panache_zone_metadata), already loaded.
+    grand_rhone_mouth <- dplyr::filter(river_mouths, mouth_name == "Grand Rhone")
+    the_map <- the_map +
+      geom_point(data = grand_rhone_mouth, aes(x = mouth_lon, y = mouth_lat),
+                colour = "red", shape = 4, size = 7, stroke = 3)
+
+    # 15-pixel-radius circle showing panache's near-mouth sampling window
+    # (near_mouth_radius_pixels, panache/src/panache/config.py -- the
+    # circular window used to derive the SPM_threshold's minimal/maximal
+    # bounds; same 15-pixel default already used by figure.py's panel-B
+    # data export). Radius converted from pixels to degrees using this
+    # scene's own grid spacing (SPM_map_data's lon/lat are on a regular
+    # grid), not a fixed km distance -- an ellipse rather than a true
+    # circle wherever the grid's lon/lat pixel spacing differ, matching
+    # what a 15-pixel *index* radius (panache samples in row/column space)
+    # actually looks like in lon/lat map space.
+    lon_grid <- sort(unique(SPM_map_data$lon))
+    lat_grid <- sort(unique(SPM_map_data$lat))
+    near_mouth_radius_pixels <- 15
+    radius_lon <- near_mouth_radius_pixels * mean(diff(lon_grid))
+    radius_lat <- near_mouth_radius_pixels * mean(diff(lat_grid))
+    theta <- seq(0, 2 * pi, length.out = 100)
+    near_mouth_circle <- data.frame(
+      lon = grand_rhone_mouth$mouth_lon + radius_lon * cos(theta),
+      lat = grand_rhone_mouth$mouth_lat + radius_lat * sin(theta))
+    the_map <- the_map +
+      geom_path(data = near_mouth_circle, aes(x = lon, y = lat),
+               colour = "red", linewidth = 1.8, inherit.aes = FALSE)
   }
 
   # 20 m bathymetric exclusion boundary:
@@ -563,7 +597,7 @@ plot_methodology_transect_panel <- function(where_to_save_the_figure) {
                         labels = c(`TRUE` = "kept (edge candidate)", `FALSE` = "rejected"), name = NULL) +
     geom_hline(data = ref_lines, aes(yintercept = value, linetype = label), colour = "black", linewidth = 1) +
     scale_linetype_manual(values = ref_line_styles, labels = ref_line_labels, name = NULL) +
-    labs(x = "Distance from river mouth (km)", y = "SPM (g m⁻³)", tag = "e)") +
+    labs(x = "Distance from river mouth (km)", y = expression(SPM~(g~m^{-3})), tag = "e)") +
     ggplot_theme() +
     # Legend moved inside the plot area 2026-08-11 (was legend.position =
     # "right", eating into the panel's plotting width) and its text sized up
@@ -578,7 +612,7 @@ plot_methodology_transect_panel <- function(where_to_save_the_figure) {
           text = element_text(size = 20, colour = "black"),
           axis.text = element_text(size = 18, colour = "black"))
 
-  save_plot_as_png(the_plot, "transect_panel", width = 24, height = 8, path = where_to_save_the_figure)
+  save_plot_as_png(the_plot, "transect_panel", width = 24, height = 7.2, path = where_to_save_the_figure)
 
 }
 
@@ -777,7 +811,7 @@ plot_plume_area_timeseries <- function(where_to_save_the_figure){
   save_plot_as_png(annotate_figure(
                      ggarrange(plotlist = SPM_map_ts |> plyr::llply(function(x) {x$wo_modis}), common.legend = FALSE, ncol = 1, nrow = 4, align = "v"),
                      left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "red3"),
-                     right = text_grob("SPM mass (t x 10⁵)", rot = -90, size = 30, color = "steelblue4")),
+                     right = text_grob(expression(SPM~mass~(t~x~10^{5})), rot = -90, size = 30, color = "steelblue4")),
                    registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 
@@ -805,16 +839,22 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
 
   mass_col <- "mass_SPM_in_the_plume_area_in_t"  # tonnes, see compute_mass_spm_trend.R
   drivers <- c("flow", "wind", "tide", "wave", "current")
+  # Plotmath source strings (parsed via facet_wrap(labeller = label_parsed)
+  # below), not literal Unicode superscripts -- U+207B/U+00B3 intermittently
+  # render as missing-glyph boxes in this figure's strip text depending on
+  # the R session's font/graphics-device state (reproduced 2026-09-24: same
+  # code, same machine, correct in one render and broken in the next two),
+  # so plotmath avoids depending on that glyph being available at all.
   variable_display <- c(
-    plume_area    = "Plume area (km²)",
-    SPM_mass      = "SPM mass (t)",
-    compactness   = "Compactness",
-    alongcoast_km = "Along-coast drift (km)",
-    flow          = "River flow (m³ s⁻¹)",
-    wind          = "Wind speed (m s⁻¹)",
-    tide          = "Tidal range (m)",
-    wave          = "Wave height (m)",
-    current       = "Current speed (m s⁻¹)"
+    plume_area    = '"Plume area ("*km^2*")"',
+    SPM_mass      = '"SPM mass (t)"',
+    compactness   = '"Compactness"',
+    alongcoast_km = '"Along-coast drift (km)"',
+    flow          = '"River flow ("*m^3~s^{-1}*")"',
+    wind          = '"Wind speed ("*m~s^{-1}*")"',
+    tide          = '"Tidal range (m)"',
+    wave          = '"Wave height (m)"',
+    current       = '"Current speed ("*m~s^{-1}*")"'
   )
 
   thresholds <- c(dynamic = where_are_saved_plume_results_with_dynamic_threshold,
@@ -902,14 +942,20 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
                   variable = factor(variable, levels = names(variable_display), labels = unname(variable_display)))
 
   # Diverging scale centred on 1 (= that month matches the zone's own
-  # all-time typical day); purple/orange rather than the blue/red diverging
-  # scale used by the monthly_trend_pct_heatmap slot's %-change-per-year
-  # figure (func/generate_monthly_trend_pct_heatmap.R), so the two are not
-  # visually conflated.
+  # all-time typical day). Co-authors flagged the original purple/orange
+  # scale as still reading too close to the blue/red diverging scale used by
+  # the monthly_trend_pct_heatmap slot's %-change-per-year figure
+  # (func/generate_monthly_trend_pct_heatmap.R) -- both are a cool colour
+  # against a warm colour, so the two heatmaps were visually conflated at a
+  # glance even though the hues differ. Switched to ColorBrewer's PRGn
+  # (purple-green), a colourblind-safe diverging palette (verified
+  # deuteranopia/protanopia/tritanopia-safe at colorbrewer2.org) that reads
+  # as a genuinely different colour axis -- purple vs. green, not
+  # warm vs. cool -- rather than another warm/cool pair.
   p_heatmap <- ggplot(heat_stats, aes(x = month, y = zone, fill = ratio)) +
     geom_tile(colour = "white", linewidth = 0.4) +
-    facet_wrap(~variable, ncol = 3) +
-    scale_fill_gradient2(name = "Month / overall\nmedian", low = "#7b3294", mid = "white", high = "#e66101", midpoint = 1) +
+    facet_wrap(~variable, ncol = 3, labeller = label_parsed) +
+    scale_fill_gradient2(name = "Month / overall\nmedian", low = "#762A83", mid = "white", high = "#1B7837", midpoint = 1) +
     labs(x = NULL, y = NULL) +
     theme_bw(base_size = 13) +
     theme(strip.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1, size = 9),

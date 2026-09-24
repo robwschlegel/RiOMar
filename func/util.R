@@ -250,7 +250,14 @@ qc_tide_days <- function(df_tide, station){
   )
   df_tide |>
     dplyr::filter(source == 4) |>
-    mutate(t = as.POSIXct(t, format = "%d/%m/%Y %H:%M:%S")) |>
+    # tz = "UTC" matches the raw file's own declared "Fuseau horaire : UTC"
+    # header. Without it, as.POSIXct() uses the system's local timezone,
+    # which silently produces NA for the ~2 hours/year that don't exist
+    # locally across a spring-forward DST transition (harmless on a UTC- or
+    # non-DST-observing machine, but real on e.g. Europe/Paris) -- these NAs
+    # then propagate into qc_tide_days()'s unique(as.Date(t)) as a literal
+    # NA "day", which .tide_day_qc() can't format into a parseable string.
+    mutate(t = as.POSIXct(t, format = "%d/%m/%Y %H:%M:%S", tz = "UTC")) |>
     dplyr::distinct(t, .keep_all = TRUE) |>
     dplyr::arrange(t) |>
     dplyr::select(t, tide)

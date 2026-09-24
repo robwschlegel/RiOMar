@@ -10,6 +10,7 @@
 
 import os
 import sys
+import subprocess
 import matplotlib as mpl
 import rpy2.robjects as robjects
 
@@ -77,15 +78,19 @@ Apply_X11_method_on_time_series_per_river(sextant_spm_all,
 # ### Multi-driver interaction analysis (GLM / GAM / RF, both thresholds)
 # =============================================================================
 
-# Source the R script
+# Run via a Rscript subprocess rather than rpy2's embedded R: ranger (loaded
+# by driver_interactions.R) initialises its own OpenMP runtime, which
+# collides with the one numpy/scipy already loaded into this Python process
+# (macOS-only "OMP: Error #15: libomp.dylib already initialized" abort) --
+# a separate process keeps the two OpenMP runtimes apart.
 driver_interactions_R_path = os.path.join(func_dir, 'driver_interactions.R')
-robjects.r['source'](driver_interactions_R_path)
 
-r_function = robjects.r['run_driver_interactions_analysis']
-
-# Call the R function (runs both the dynamic-threshold main analysis and the
-# static-threshold supplementary analysis; see func/driver_interactions.R)
-r_function()
+# Runs both the dynamic-threshold main analysis and the static-threshold
+# supplementary analysis; see func/driver_interactions.R
+subprocess.run(
+    ['Rscript', '-e', f"source('{driver_interactions_R_path}'); run_driver_interactions_analysis()"],
+    cwd=proj_dir, check=True
+)
 
 
 # =============================================================================
@@ -96,8 +101,10 @@ r_function()
 # each calendar month's data subset, dynamic threshold only. Feeds the
 # Supplementary monthly driver-dominance table (manuscript.tex); see
 # func/driver_interactions.R::run_monthly_driver_interactions_analysis().
-r_function_monthly = robjects.r['run_monthly_driver_interactions_analysis']
-r_function_monthly()
+subprocess.run(
+    ['Rscript', '-e', f"source('{driver_interactions_R_path}'); run_monthly_driver_interactions_analysis()"],
+    cwd=proj_dir, check=True
+)
 
 
 # =============================================================================

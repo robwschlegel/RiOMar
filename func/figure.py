@@ -195,6 +195,26 @@ def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_fi
     save_insitu_stations_for_plot(folder_where_to_save_Figure_1_data)
     
     
+def _find_sextant_nc_for_date(input_path, date_ts):
+    """
+    Locates a single day's Sextant-OC5 .nc granule under input_path, whose
+    on-disk layout is not fixed -- e.g. flat (/Volumes/Toshi/data/SEXTANT/SPM/
+    YYYYMMDD-....nc) on one machine, nested (~/pCloudDrive/data/SEXTANT/SPM/
+    merged/Standard/DAILY/YYYY/MM/DD/YYYYMMDD-....nc) on another. Matches by
+    the date embedded in the filename (YYYYMMDD prefix, the one constant
+    across both layouts) via a recursive '**' glob, rather than assuming any
+    particular subdirectory depth -- the same approach panache's own
+    _discover_input_files() uses (Path.rglob('*.nc'), no depth assumption).
+    Found 2026-09-24: the previous fixed year/month/day glob only matched
+    the nested layout, silently breaking on the flat one.
+    """
+    date_str = date_ts.strftime('%Y%m%d')
+    matches = glob.glob(os.path.join(input_path, '**', f'{date_str}*.nc'), recursive=True)
+    if not matches:
+        raise FileNotFoundError(f"No Sextant-OC5 .nc file found for {date_str} under {input_path}")
+    return matches[0]
+
+
 def load_and_save_regional_maps_for_plot(where_to_save_the_figure, dates_for_each_zone) :
 
     folder_where_to_save_regional_zone_maps_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
@@ -209,7 +229,7 @@ def load_and_save_regional_maps_for_plot(where_to_save_the_figure, dates_for_eac
             zone_config = json.load(f)
 
         date_ts = pd.Timestamp(date)
-        nc_path = glob.glob(os.path.join(zone_config['input_path'], f'{date_ts.year}', f'{date_ts.month:02d}', f'{date_ts.day:02d}', '*.nc'))[0]
+        nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date_ts)
 
         SPM_map_da = load_map_data(nc_path,
                                    lon_range=tuple(coordinates_of_the_map['lon_range_of_plume_area']),
@@ -352,7 +372,7 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
         zone_config = json.load(f)
 
     date_ts = pd.Timestamp(Date)
-    nc_path = glob.glob(os.path.join(zone_config['input_path'], f'{date_ts.year}', f'{date_ts.month:02d}', f'{date_ts.day:02d}', '*.nc'))[0]
+    nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date_ts)
 
     # Crop to panache's own plume-area bbox (not regmap.py's wider
     # Basin_limits) -- every bbox used anywhere in this pipeline comes from
@@ -366,7 +386,11 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     # coarsens internally), so no resolution reduction happens here either.
     ds_reduced = ds
 
-    bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced, f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
+    # bathymetry_path (not a hardcoded output/REGIONAL_MAPS path -- that was
+    # never the real source of truth) is the same file panache itself
+    # already computed/cached while generating this zone's Results.csv, per
+    # config.bathymetry_path in panache.runner -- see zone_config JSON.
+    bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced, zone_config['bathymetry_path'])
 
     (_, land_mask) = derive_masks_from_bathymetry(bathymetry_data_aligned_to_reduced_map, parameters)
 
@@ -466,7 +490,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
             zone_config = json.load(f)
 
         date = pd.Timestamp(Date)
-        nc_path = glob.glob(os.path.join(zone_config['input_path'], f'{date.year}', f'{date.month:02d}', f'{date.day:02d}', '*.nc'))[0]
+        nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date)
 
         SPM_map_da = load_map_data(nc_path,
                                    lon_range=tuple(parameters['lon_range_of_plume_area']),
@@ -493,7 +517,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
         # (uniform across all rivers within a given zone: Seine 20 m,
         # Gironde/Charente/Sevre 10 m, Loire/Vilaine 10 m, Grand/Petit
         # Rhone 20 m), so any one river's value represents its zone.
-        bathymetry_map = align_bathymetry(SPM_map_da, f'{where_are_saved_regional_maps}/REGIONAL_MAPS/{Zone}/Bathy_data.pkl')
+        bathymetry_map = align_bathymetry(SPM_map_da, zone_config['bathymetry_path'])
         resuspension_threshold = next(iter(parameters['maximal_bathymetric_for_zone_with_resuspension'].values()))
         SPM_map['shallow'] = (bathymetry_map.values.flatten() > -resuspension_threshold)
 
