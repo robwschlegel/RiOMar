@@ -8,6 +8,6 @@
   "global_threshold_quantile": 0.95,
   "overwrite": false,
   "gif": false,
-  "nb_cores": 12,
+  "nb_cores": 8,
   "variable_name": "analysed_spim"
 }

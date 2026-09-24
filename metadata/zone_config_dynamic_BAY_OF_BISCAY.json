@@ -10,6 +10,6 @@
   "near_mouth_upper_quantile": 0.50,
   "overwrite": false,
   "gif": false,
-  "nb_cores": 12,
+  "nb_cores": 8,
   "variable_name": "analysed_spim"
 }
