@@ -9,7 +9,7 @@
 
 source("func/multi.R")
 
-tide_stations <- c("FOS-SUR-MER", "LE_HAVRE", "MARSEILLE", "PORT_DE_BOUC", "PORT-BLOC", "SAINT-NAZAIRE")
+tide_stations <- c("LE_HAVRE", "MARSEILLE", "PORT-BLOC", "SAINT-NAZAIRE")
 
 
 # Tidal regime per gauge (form number) --------------------------------------
@@ -21,7 +21,7 @@ tide_stations <- c("FOS-SUR-MER", "LE_HAVRE", "MARSEILLE", "PORT_DE_BOUC", "PORT
 #   1.5 <= F < 3.0        mixed, mainly diurnal
 #   F >= 3.0              diurnal
 # This is what tide_periods_hr / tide_r2_threshold in func/util.R are
-# calibrated against: all six gauges turn out semidiurnal or
+# calibrated against: all four gauges turn out semidiurnal or
 # mixed-mainly-semidiurnal, so the same M2+S2+K1+O1 model is used
 # everywhere, and only the per-gauge R^2 floor differs (Atlantic/Channel
 # vs. Mediterranean, see below).
@@ -44,7 +44,7 @@ tide_form_number <- function(station){
 
 # Per-day QC summary, all gauges ---------------------------------------------
 
-# Re-derives qc_tide_days() output for all six gauges and tabulates how many
+# Re-derives qc_tide_days() output for all four gauges and tabulates how many
 # days were flagged, and why. Saved to output/STATS/ alongside the other
 # pipeline QC summaries (missing_SPM.csv, missing_chla.csv in multi.R).
 tide_qc_all <- function(){
@@ -113,8 +113,8 @@ plot_tide_qc_day <- function(df_tide, day, station, reason){
 # real, representative failure mode rather than a cherry-picked edge case.
 tide_qc_example_days <- data.frame(
   station = tide_stations,
-  good_day = as.Date(c("2015-01-02", "2015-01-02", "2015-01-02", "2023-04-29", "2015-01-02", "2015-01-02")),
-  bad_day  = as.Date(c("2012-05-17", "2023-03-31", "1849-11-07", "2023-04-28", "2000-11-06", "1992-12-02")),
+  good_day = as.Date(c("2015-01-02", "2015-01-02", "2015-01-02", "2015-01-02")),
+  bad_day  = as.Date(c("2023-03-31", "1849-11-07", "2000-11-06", "1992-12-02")),
   stringsAsFactors = FALSE
 )
 
@@ -143,3 +143,4 @@ save_tide_qc_examples <- function(){
 # tide_qc_summary_table(df_qc)
 # write_csv(tide_qc_summary_table(df_qc), "output/STATS/tide_qc_summary.csv")
 # save_tide_qc_examples()
+

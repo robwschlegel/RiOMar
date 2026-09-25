@@ -82,8 +82,8 @@ registry_filename <- function(output_subdir, ext = "png"){
 # for the reasoning behind the threshold choices below.
 #
 # Harmonic model: M2 + S2 + K1 + O1 (dominant semi-diurnal + diurnal tidal
-# constituents). Confirmed empirically for all six gauges via the tidal form
-# number F = (K1+O1)/(M2+S2) (func/tide.R): all six are semidiurnal or
+# constituents). Confirmed empirically for all four gauges via the tidal form
+# number F = (K1+O1)/(M2+S2) (func/tide.R): all four are semidiurnal or
 # mixed-mainly-semidiurnal, so the same 4-constituent model is used
 # everywhere -- only the pass/fail thresholds differ by gauge.
 tide_periods_hr <- c(M2 = 12.4206012, S2 = 12.0, K1 = 23.93447213, O1 = 25.81933871)
@@ -93,15 +93,14 @@ tide_periods_hr <- c(M2 = 12.4206012, S2 = 12.0, K1 = 23.93447213, O1 = 25.81933
 # the Atlantic/Channel gauges (Le Havre, Port-Bloc, Saint-Nazaire) have a
 # strong, clean semidiurnal signal (M2 amplitude 1.4-2.5 m) -- even their
 # worst 1st-percentile day still fits the harmonic model with R^2 > 0.92, so
-# 0.85 only catches genuine failures. The Mediterranean gauges (Fos-sur-Mer,
-# Marseille, Port-de-Bouc) have a tiny tidal signal (M2 amplitude ~0.06 m)
-# that is easily swamped by non-tidal sea-level noise (storm surge, seiches,
-# and at Fos-sur-Mer, harbour-scale wind chop) -- plenty of genuinely good
-# days sit at R^2 0.7-0.9, so 0.30 is used instead: below that, the day's
-# water level is no longer tide-dominated, whatever the physical cause, so
-# it is not a reliable tidal-range value regardless.
+# 0.85 only catches genuine failures. The Mediterranean gauge (Marseille) has
+# a tiny tidal signal (M2 amplitude ~0.06 m) that is easily swamped by
+# non-tidal sea-level noise (storm surge, seiches) -- plenty of genuinely
+# good days sit at R^2 0.7-0.9, so 0.30 is used instead: below that, the
+# day's water level is no longer tide-dominated, whatever the physical
+# cause, so it is not a reliable tidal-range value regardless.
 tide_r2_threshold <- c("LE_HAVRE" = 0.85, "PORT-BLOC" = 0.85, "SAINT-NAZAIRE" = 0.85,
-                       "FOS-SUR-MER" = 0.30, "MARSEILLE" = 0.30, "PORT_DE_BOUC" = 0.30)
+                       "MARSEILLE" = 0.30)
 
 # Count local extrema in a sub-daily curve, merging turning points whose
 # prominence (jump to the neighbouring turning point) is below `prom` --
@@ -232,8 +231,12 @@ qc_tide_days <- function(df_tide, station){
   spike_thresh <- quantile(daily_max_rate$max_rate, 0.999, na.rm = TRUE)
 
   days <- unique(as.Date(df_tide$t))
-  plyr::ldply(days, .tide_day_qc, t_all = df_tide$t, y_all = df_tide$tide,
-              station = station, spike_thresh = spike_thresh, .parallel = TRUE)
+  future::plan(future::multisession, workers = parallel::detectCores() - 4)
+  out <- furrr::future_map_dfr(days, .tide_day_qc, t_all = df_tide$t, y_all = df_tide$tide,
+                               station = station, spike_thresh = spike_thresh,
+                               .options = furrr::furrr_options(seed = TRUE))
+  future::plan(future::sequential)
+  out
 }
 
 # Read + clean one tide gauge's raw sub-daily record (all years available,

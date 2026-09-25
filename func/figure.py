@@ -357,7 +357,7 @@ def Figure_2(where_to_save_the_figure):
                where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
+def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
     # Produces the A-E methodology panels
 
     # Static date for each zone to illustrate the plume detection steps
@@ -471,7 +471,7 @@ def Figure_3_panels(where_are_saved_regional_maps, where_to_save_the_figure):
     )
 
 
-def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
+def Figure_3_zone_maps(where_are_saved_panache_outputs, where_to_save_the_figure):
 
     the_dates_for_each_zone = dates_for_each_zone()
 
@@ -497,7 +497,7 @@ def Figure_3_zone_maps(where_are_saved_regional_maps, where_to_save_the_figure):
                                    lat_range=tuple(parameters['lat_range_of_plume_area']),
                                    variable_name=zone_config['variable_name'])
 
-        plume_masks_path = os.path.join(where_are_saved_regional_maps, 'panache', 'dynamic', Zone, 'PlumeMasks.nc')
+        plume_masks_path = os.path.join(where_are_saved_panache_outputs, 'panache', 'dynamic', Zone, 'PlumeMasks.nc')
         with xr.open_dataset(plume_masks_path) as mask_ds:
             plume_mask = (mask_ds['plume_mask']
                           .sel(time=Date, river='ALL')

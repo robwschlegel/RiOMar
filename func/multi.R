@@ -144,6 +144,15 @@ wind_add_direction <- function(df_wind, zone_name){
   df_wind
 }
 
+# Study period every data source is meant to be bounded to (Table~\ref{tab:metadata}).
+# CMEMS/HydroPortail downloads request exactly this range, so their files are
+# already bounded on disk; SHOM's tide web form has no such request parameter
+# and returns each gauge's entire digitised archive instead (e.g. Marseille
+# back to 1849, all four gauges' 2026 files already present) -- load_driver()
+# below enforces the cap explicitly so a raw archive's actual span can never
+# silently widen a driver's trend-fitting window.
+STUDY_DATE_RANGE <- as.Date(c("1998-01-01", "2025-12-31"))
+
 # Load one driver's daily time series for a zone, in a common two-column
 # (date, value) shape so downstream functions don't need to know which
 # driver they're looking at.
@@ -192,7 +201,7 @@ load_driver <- function(driver_name, meta){
     df <- df_wave |> dplyr::select(date, value = wave_height, wave_dir)
   }
 
-  return(df)
+  dplyr::filter(df, date >= STUDY_DATE_RANGE[1], date <= STUDY_DATE_RANGE[2])
 }
 
 

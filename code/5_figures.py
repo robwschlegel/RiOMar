@@ -33,12 +33,12 @@ Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
 
 Figure_2(where_to_save_the_figure = "figures")
 
-Figure_3_panels(where_are_saved_regional_maps = "output",
+Figure_3_panels(where_are_saved_panache_outputs = "output",
                 where_to_save_the_figure = "figures")
 
 # Writes its regional-zone-maps panel into the plume_methodology_panel
 # slot's output folder (see manuscript/figure_table_registry.csv)
-Figure_3_zone_maps(where_are_saved_regional_maps = "output",
+Figure_3_zone_maps(where_are_saved_panache_outputs = "output",
                    where_to_save_the_figure = "figures")
 
 # plume_methodology_panel: plume-detection methodology composite

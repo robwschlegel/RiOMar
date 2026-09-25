@@ -28,7 +28,7 @@ from util import (degrees_to_km, find_sat_data_files,
                             path_to_fill_to_where_to_save_satellite_files, fill_the_sat_paths,
                             date_from_path,
                             get_all_cases_to_process_for_regional_maps_or_plumes_or_X11)
-from panache.utils import load_file, align_bathymetry, years_between_dates
+from panache.utils import load_file, align_bathymetry, years_between_dates, define_parameters
 
 
 # =============================================================================
@@ -53,47 +53,57 @@ def site_coordinates(Study_area) :
     """
     
     # Define spatial parameters based on the study area.
-    if Study_area == "GULF_OF_LION" : 
+    # Basin_limits for the four official RiOMar zones come from panache's own
+    # define_parameters() (lat/lon_range_of_plume_area), not a second,
+    # locally-hardcoded bbox -- per Robert (2026-08-07): every bbox used
+    # anywhere in this pipeline should come from panache, no exceptions.
+    # panache does not define parameters for FRANCE/EASTERN_CHANNEL/
+    # ETANG_DE_BERRE (not RiOMar study zones), so those keep their own
+    # hardcoded Basin_limits below.
+    if Study_area == "GULF_OF_LION" :
 
-        Basin_limits = [41.2, 43.6, 2.75, 9] # (Lat min , Lat max, Lon min, Lon max)
-        
-        Embouchure_central_point = [43.2, 4.6] # (Lat, Lon) # [43.24, 4.75] 
+        panache_params = define_parameters(Study_area)
+        Basin_limits = panache_params['lat_range_of_plume_area'] + panache_params['lon_range_of_plume_area'] # (Lat min , Lat max, Lon min, Lon max)
+
+        Embouchure_central_point = [43.2, 4.6] # (Lat, Lon) # [43.24, 4.75]
         Embouchure_lat_extend = 0.5 # 0.55
         Embouchure_lon_extend = 0.75 # 0.75
-        
+
         Bloom_central_point = [42.05, 5.2] # (Lat, Lon)
         Bloom_lat_extend = 1.7 # 1.25
         Bloom_lon_extend = 3.25 # 2.25
-        
-    elif Study_area == "BAY_OF_BISCAY" : 
 
-        Basin_limits = [43, 49, -7, -0.5] # (Lat min , Lat max, Lon min, Lon max)
-        
-        Embouchure_central_point = [45.6, -1.5] # (Lat, Lon) # [43.24, 4.75] 
+    elif Study_area == "BAY_OF_BISCAY" :
+
+        panache_params = define_parameters(Study_area)
+        Basin_limits = panache_params['lat_range_of_plume_area'] + panache_params['lon_range_of_plume_area'] # (Lat min , Lat max, Lon min, Lon max)
+
+        Embouchure_central_point = [45.6, -1.5] # (Lat, Lon) # [43.24, 4.75]
         Embouchure_lat_extend = 1 # 0.55
         Embouchure_lon_extend = 1 # 0.75
-        
+
         # Bloom_central_point = [45.5, -2.5] # (Lat, Lon)
         # Bloom_lat_extend = 2 # 1.25
         # Bloom_lon_extend = 1 # 2.25
-        
+
         Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
         Bloom_lat_extend = 0 # 1.25
         Bloom_lon_extend = 0 # 2.25
-        
-    elif Study_area == "SOUTHERN_BRITTANY" : 
 
-         Basin_limits = [46, 48.5, -5, -1.5] # (Lat min , Lat max, Lon min, Lon max)
-         
-         Embouchure_central_point = [47.125, -2.75] # (Lat, Lon) # [43.24, 4.75] 
+    elif Study_area == "SOUTHERN_BRITTANY" :
+
+         panache_params = define_parameters(Study_area)
+         Basin_limits = panache_params['lat_range_of_plume_area'] + panache_params['lon_range_of_plume_area'] # (Lat min , Lat max, Lon min, Lon max)
+
+         Embouchure_central_point = [47.125, -2.75] # (Lat, Lon) # [43.24, 4.75]
          Embouchure_lat_extend = 1.25 # 0.55
          Embouchure_lon_extend = 1.5 # 0.75
-         
+
          Bloom_central_point = [np.nan, np.nan] # (Lat, Lon)
          Bloom_lat_extend = 0 # 1.25
          Bloom_lon_extend = 0 # 2.25
-        
-    elif Study_area == "FRANCE" : 
+
+    elif Study_area == "FRANCE" :
 
         Basin_limits = [41, 52, -8, 11] # (Lat min , Lat max, Lon min, Lon max)
         
@@ -105,11 +115,12 @@ def site_coordinates(Study_area) :
         Bloom_lat_extend = 0 # 1.25
         Bloom_lon_extend = 0 # 2.25
         
-    elif Study_area == "BAY_OF_SEINE" : 
+    elif Study_area == "BAY_OF_SEINE" :
 
-        Basin_limits = [49.16, 51.38, -1.61, 2.6] # (Lat min , Lat max, Lon min, Lon max)
-        
-        Embouchure_central_point = [49.5, 0] # (Lat, Lon) # [43.24, 4.75] 
+        panache_params = define_parameters(Study_area)
+        Basin_limits = panache_params['lat_range_of_plume_area'] + panache_params['lon_range_of_plume_area'] # (Lat min , Lat max, Lon min, Lon max)
+
+        Embouchure_central_point = [49.5, 0] # (Lat, Lon) # [43.24, 4.75]
         Embouchure_lat_extend = 0.3 # 0.55
         Embouchure_lon_extend = 0.5 # 0.75
         
