@@ -110,10 +110,9 @@ combine_flow_plume_rofi <- function(meta, exclude_estuary = TRUE){
 
 # Single-zone dual-axis panel: plume area and ROFI extent share the left axis
 # (same units, km^2, so no rescaling between them), river flow gets the right
-# axis (rescaled onto the left axis's range, same convention as
-# plot_driver_plume_dual_axis()). Raw daily values only so the 
-# flow -> plume -> ROFI succession Maud described is visible exactly
-# as observed, not as the interannual signal.
+# axis (rescaled onto the left axis's range via sec_axis_adjustement_factors()).
+# Raw daily values only so the flow -> plume -> ROFI succession Maud described
+# is visible exactly as observed, not as the interannual signal.
 plot_flow_plume_rofi_panel <- function(zone_name, show_axis_titles = TRUE){
   meta <- get_zone_meta(zone_name = zone_name)
   df <- combine_flow_plume_rofi(meta, exclude_estuary = TRUE)

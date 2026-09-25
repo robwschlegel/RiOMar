@@ -66,6 +66,15 @@ manuscript/google_doc_sync/sync.sh
 
 Large datasets are stored **outside** this repo under `~/pCloudDrive/data/` and are never committed. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.
 
+Two distinct kinds of "outside the repo" apply here, and only one of them is backed up automatically:
+
+- **Pipeline-native pCloud data** — `SEXTANT`, `WIND`, `WAVE`, `GLORYS`, `DOWNLOAD_REPORTS` under `~/pCloudDrive/data/`. `code/0_download_data.py`, `code/2_regional_maps.py`, `code/5_figures.py`, and the R side (`func/util.R`, `func/multi.R`, `func/VOG.R`, `func/compute_driver_spatial_variance.R`) read and write these paths directly — the data never lives inside the repo working tree, so it's inherently durable across machine migrations.
+- **Repo-local gitignored content** — everything else the `.gitignore` excludes (`manuscript/`, `data/EUROPE_shapefile`, `data/HydroRIVERS_v10_eu_shp`, `data/INSITU_data`, `data/RIVER_FLOW`, `data/TIDES`, `output/MATCH_UP_DATA`, `output/STATS`, `output/panache`, `figures/ARTICLE/*/DATA`, `figures/ARTICLE/gam_monthly_breakdown`) lives only in the repo working tree on whichever machine produced it. Nothing copies this automatically — a lost or wiped machine loses it (this is what happened to `data/ROFI` in the September 2026 migration; still unresolved, see memory). Back it up by hand into the pre-existing mirror at `~/pCloud Drive/Documents/OMTAB/RiOMar/`, which mirrors the repo's structure path-for-path:
+  ```bash
+  rsync -au <repo_relative_path>/ "~/pCloud Drive/Documents/OMTAB/RiOMar/<repo_relative_path>/"
+  ```
+  `-au` (`--archive --update`) only overwrites a pCloud file when the local copy is newer, so it's safe to re-run anytime — e.g. before a machine migration, or after a pipeline re-run that regenerates `output/`. `data/ROFI` currently has no local or pCloud copy — not yet restorable. `RIOMAR_old/` inside that same pCloud folder is an unrelated pre-reorg archive, not this mirror.
+
 ## Architecture
 
 ### Study zones
