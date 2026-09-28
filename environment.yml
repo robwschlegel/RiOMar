@@ -36,6 +36,4 @@ dependencies:
   - ruff
   - pip
   - pip:
-      # Plume detection (step 3). TODO(Robert): replace with the install
-      # source you actually use, e.g. git+https://github.com/<owner>/panache
-      - panache
+      - panache-riomar
