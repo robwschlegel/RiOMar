@@ -14,9 +14,15 @@ has run the pipeline (output/ is gitignored, so there is nothing to hash in a
 fresh clone). PNGs are not hashed: plotting libraries can embed timestamps or
 render slightly differently between versions, so the CSVs behind the figures
 are the reliable signal.
+
+Files matching IGNORED_GLOBS are skipped entirely: the multi-driver GLM/GAM
+outputs are exploratory dead ends not used in the main text, and random
+forest importances drift between runs by design, so neither is a useful
+refactor signal.
 """
 
 import argparse
+import fnmatch
 import glob
 import hashlib
 import json
@@ -26,6 +32,15 @@ import sys
 OUTPUT_GLOBS = [
     'output/STATS/**/*.csv',
     'figures/ARTICLE/**/DATA/*.csv',
+]
+# fnmatch patterns ('*' also matches '/'), applied to repo-relative paths
+IGNORED_GLOBS = [
+    'output/STATS/driver_glm_comparison.csv',
+    'output/STATS/driver_gam_summary.csv',
+    'output/STATS/driver_regime_glm.csv',
+    'output/STATS/driver_metric_models_*.csv',
+    'output/STATS/driver_rf_*.csv',
+    'output/STATS/monthly/*',
 ]
 GOLDEN_PATH = os.path.join('tests', 'golden_hashes.json')
 
@@ -38,9 +53,13 @@ def hash_file(path):
     return digest.hexdigest()
 
 
+def is_ignored(path):
+    return any(fnmatch.fnmatch(path, pattern) for pattern in IGNORED_GLOBS)
+
+
 def current_hashes():
     paths = sorted({p for pattern in OUTPUT_GLOBS for p in glob.glob(pattern, recursive=True)})
-    return {p: hash_file(p) for p in paths}
+    return {p: hash_file(p) for p in paths if not is_ignored(p)}
 
 
 def main():
@@ -61,7 +80,7 @@ def main():
         return
 
     with open(GOLDEN_PATH) as f:
-        golden = json.load(f)
+        golden = {p: h for p, h in json.load(f).items() if not is_ignored(p)}
     changed = sorted(p for p in golden.keys() & hashes.keys() if golden[p] != hashes[p])
     missing = sorted(golden.keys() - hashes.keys())
     new = sorted(hashes.keys() - golden.keys())
