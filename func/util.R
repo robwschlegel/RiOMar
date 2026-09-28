@@ -50,7 +50,7 @@ figure_table_registry <- read_csv("metadata/figure_table_registry.csv", show_col
 
 # Single source of truth for "which script/data file produced the numbers in
 # this manuscript paragraph" -- see metadata/paragraph_source_registry.csv.
-# Checked by make_figures_tables.R's check_all_paragraph_sources(); read here
+# Checked by metadata/make_figures_tables.R's make_all_figures_tables(); read here
 # rather than there so the checklist script can source() this file the same
 # way it already does for figure_table_registry above.
 paragraph_source_registry <- read_csv("metadata/paragraph_source_registry.csv", show_col_types = FALSE)

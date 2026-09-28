@@ -844,7 +844,7 @@ def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_sav
 
 def Figure_S3_seasonal_boxplots(where_to_save_the_figure):
     """
-    Migrated from manuscript/make_figures_tables.R's
+    Migrated from metadata/make_figures_tables.R's
     generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
     writes straight to the seasonal_boxplots_dynamic_vs_static slot's output
     folder (see metadata/figure_table_registry.csv) instead of via the

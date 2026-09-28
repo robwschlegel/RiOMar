@@ -98,7 +98,7 @@ Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.
 ### metadata/
 Zone configuration JSONs consumed directly by `panache` and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
 
-Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), and `TODO.md` (the manuscript/pipeline to-do list). Anything under `manuscript/` that still reads these (e.g. `make_figures_tables.R`, `google_doc_sync/`) must point at `metadata/` — there are no copies left in `manuscript/`.
+Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), `TODO.md` (the manuscript/pipeline to-do list), and `make_figures_tables.R` (the figure/table/paragraph-source checklist; run `Rscript metadata/make_figures_tables.R` from the repo root — it still reads `manuscript/manuscript.tex` and `references.bib`). Anything under `manuscript/` that still reads these (e.g. `google_doc_sync/`) must point at `metadata/` — there are no copies left in `manuscript/`.
 
 ### Satellite data dict convention
 A Python dict like:
