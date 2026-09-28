@@ -1,6 +1,6 @@
 # One-off: compute satellite-vs-in-situ percent error and percent bias for
 # the manuscript's "validation_summary_stats" table (see
-# manuscript/figure_table_registry.csv for its current table number -- Table
+# metadata/figure_table_registry.csv for its current table number -- Table
 # S1 as of the validation table/figure's move to the supplement), from the
 # raw SOMLIT/REPHY match-up file produced by func/validate.R
 #

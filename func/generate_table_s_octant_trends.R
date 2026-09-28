@@ -11,7 +11,7 @@
 # min/max range that slot also prints is deliberately omitted here (full
 # detail stays in the CSV only) because printing it caused a genuine
 # page-width overflow (four "min to max" strings side by side), not merely a
-# cosmetic one. See manuscript/figure_table_registry.csv for current table
+# cosmetic one. See metadata/figure_table_registry.csv for current table
 # numbers.
 #
 # Slopes in octant_trend_compact_summary.csv are proportion-of-days-per-day

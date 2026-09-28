@@ -6,7 +6,7 @@
 # metric_col = area_of_the_plume_mask_in_km2, so the annual means are
 # consistent with the panache_stats_table's existing "Surface area mean
 # (km^2)" row and its ceiling-screened outlier handling
-# (util.R::load_plume_ts()). See manuscript/figure_table_registry.csv for
+# (util.R::load_plume_ts()). See metadata/figure_table_registry.csv for
 # the slot's current table number.
 #
 # Run from repo root: Rscript func/compute_area_annual_variance.R

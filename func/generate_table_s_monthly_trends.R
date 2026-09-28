@@ -4,7 +4,7 @@
 # (func/compute_seasonal_trend.R). Dynamic threshold only, AR(1)/HAC-weighted
 # ("ar") trend -- matching the compact main-text monthly_trends_table_main
 # slot (\label{tab:monthly_trends}) convention this table is the full detail
-# behind. See manuscript/figure_table_registry.csv for current table numbers.
+# behind. See metadata/figure_table_registry.csv for current table numbers.
 #
 # This project hand-transcribes every table into manuscript.tex rather than
 # \input{}-ing a generated fragment -- this script follows that convention

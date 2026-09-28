@@ -2,7 +2,7 @@
 One-off: derive a daily plume-shape (compactness) time series per zone from
 the panache PlumeMasks.nc daily masks, since no shape metric currently exists
 anywhere in the pipeline (see manuscript/manuscript.tex's panache_stats_table,
-"Shape: TBD metric" -- manuscript/figure_table_registry.csv has its current
+"Shape: TBD metric" -- metadata/figure_table_registry.csv has its current
 table number). Compactness = 4*pi*area / perimeter^2 (isoperimetric ratio; 1 for a
 circle, lower for elongated/irregular shapes). Perimeter is estimated with
 skimage's Crofton estimator (more accurate than naive edge-counting for

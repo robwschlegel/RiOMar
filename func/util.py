@@ -33,7 +33,7 @@ def exit_program():
 
 def get_registry_row(slot_key):
     """
-    Look up one row of manuscript/figure_table_registry.csv by slot_key.
+    Look up one row of metadata/figure_table_registry.csv by slot_key.
 
     Single source of truth for which output folder ("FIGURE_N"/"TABLE_N") and
     which R function currently render a given manuscript figure/table. Every
@@ -41,7 +41,7 @@ def get_registry_row(slot_key):
     of hardcoding a "FIGURE_N" string, so renumbering a figure/table is a
     one-row edit to that CSV.
     """
-    registry_path = os.path.join(proj_dir, 'manuscript', 'figure_table_registry.csv')
+    registry_path = os.path.join(proj_dir, 'metadata', 'figure_table_registry.csv')
     registry = pd.read_csv(registry_path)
     row = registry[registry['slot_key'] == slot_key]
     if len(row) != 1:

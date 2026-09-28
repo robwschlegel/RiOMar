@@ -11,7 +11,7 @@
 # bin_to_pseudo_weekly()/decompose_driver_series() wrappers added there),
 # rather than R's seasonal::seas()/X-13ARIMA-SEATS. Same family of method
 # (Cleveland 1976 Census-X11), but not numerically identical to X-13 -- see
-# CLAUDE.md and manuscript/TODO.md for why this replacement was made
+# CLAUDE.md and metadata/TODO.md for why this replacement was made
 # (X-13 rejects weekly-frequency input outright).
 #
 # The wind/wave category rows and the river-flow reference column are NOT

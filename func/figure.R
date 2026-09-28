@@ -484,7 +484,7 @@ regional_zone_maps <- function(where_to_save_the_figure, include_station_points)
 
 # Satellite-vs-in-situ validation scatterplots, panel (a) SPM and panel (b)
 # Turbidity. Manuscript slot "validation_scatterplot_panel" -- see
-# manuscript/figure_table_registry.csv for its current figure number and
+# metadata/figure_table_registry.csv for its current figure number and
 # output folder (get_registry_row(), func/util.R).
 plot_validation_scatterplot_panel <- function(spm_scatterplot_path, turb_scatterplot_path, where_to_save_the_figure) {
 
@@ -512,7 +512,7 @@ plot_validation_scatterplot_panel <- function(spm_scatterplot_path, turb_scatter
 
 
 # Renders one methodology panel (A-D) for the plume_methodology_panel figure
-# (manuscript/figure_table_registry.csv)
+# (metadata/figure_table_registry.csv)
 # where_to_save_the_figure <- '/figures/ARTICLE/' + that slot's output_subdir
 # name_of_the_plot <- "C"
 plot_methodology_worked_example_panel <- function(where_to_save_the_figure, name_of_the_plot) {
@@ -633,7 +633,7 @@ plot_methodology_transect_panel <- function(where_to_save_the_figure) {
     ggplot_theme() +
     # Legend moved inside the plot area 2026-08-11 (was legend.position =
     # "right", eating into the panel's plotting width) and its text sized up
-    # for legibility, per manuscript/TODO.md. Anchored top-right: rendered
+    # for legibility, per metadata/TODO.md. Anchored top-right: rendered
     # against the real transect data, SPM decays sharply with distance from
     # the mouth, so nothing is ever plotted in the high-distance/high-SPM
     # corner -- confirmed empty, not assumed.
@@ -650,7 +650,7 @@ plot_methodology_transect_panel <- function(where_to_save_the_figure) {
 
 
 # Renders the per-zone plume-maps panel feeding the plume_methodology_panel
-# figure (manuscript/figure_table_registry.csv)
+# figure (metadata/figure_table_registry.csv)
 plot_methodology_zone_maps_panel <- function(where_to_save_the_figure) {
 
   # Read only the four per-zone SPM-map CSVs figure.py's plot_methodology_zone_maps_panel()
@@ -703,7 +703,7 @@ plot_methodology_zone_maps_panel <- function(where_to_save_the_figure) {
 # Daily plume area + SPM mass time series (dynamic threshold, merged
 # sensor), with an AR(1)/HAC-weighted trend line, one panel per zone.
 # Manuscript slot "plume_area_timeseries" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 # where_to_save_the_figure <- 'figures'
 plot_plume_area_timeseries <- function(where_to_save_the_figure){
   output_subdir <- get_registry_row("plume_area_timeseries")$output_subdir
@@ -858,7 +858,7 @@ plot_plume_area_timeseries <- function(where_to_save_the_figure){
 # are annotated as text. Also writes the shared long-format data (both thresholds) that
 # plot_seasonal_boxplots_dynamic_vs_static() below reads back in, so the
 # static-threshold pass is computed once rather than twice. Manuscript slot
-# "seasonal_boxplot_heatmap" -- see manuscript/figure_table_registry.csv for
+# "seasonal_boxplot_heatmap" -- see metadata/figure_table_registry.csv for
 # its current figure number.
 plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
                                        where_are_saved_plume_results_with_static_threshold = "output/panache/static",
@@ -1005,7 +1005,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
 # pass (only its old main-text role, superseded by plot_seasonal_boxplot_heatmap()
 # above, was ever deprecated -- this Supplementary figure itself is still
 # live, called from code/5_figures.py); moved back out here. Manuscript slot
-# "daily_flow_lagged_correlation" -- see manuscript/figure_table_registry.csv
+# "daily_flow_lagged_correlation" -- see metadata/figure_table_registry.csv
 # for its current figure number.
 plot_daily_flow_lagged_correlation <- function(where_to_save_the_figure, max_lag_daily = 14){
 
@@ -1075,7 +1075,7 @@ plot_daily_flow_lagged_correlation <- function(where_to_save_the_figure, max_lag
 # label on the assembled composite, matching the plume_methodology_panel
 # figure's convention (annotate_figure(), not a title repeated on all four
 # panels). Manuscript slot "x11_interannual_river_flow" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 plot_x11_interannual_river_flow <- function(where_to_save_the_figure){
   output_subdir <- get_registry_row("x11_interannual_river_flow")$output_subdir
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
@@ -1095,7 +1095,7 @@ plot_x11_interannual_river_flow <- function(where_to_save_the_figure){
 # loaded elsewhere in the pipeline (e.g. the driver_stats_table's driver set)
 # under the same column-naming convention plot_driver_rose() already expects.
 # Manuscript slot "driver_rose_diagram" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
 
   output_subdir <- get_registry_row("driver_rose_diagram")$output_subdir
@@ -1168,7 +1168,7 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
 # essentially fixed astronomical property of each site rather than something
 # worth a dedicated panel; it stays in the underlying GAM/driver_stats_table
 # statistics, just not visualised here. Manuscript slot "gam_partial_effects"
-# -- see manuscript/figure_table_registry.csv for its current figure number.
+# -- see metadata/figure_table_registry.csv for its current figure number.
 plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "output/STATS"){
 
   # Sourced here rather than at file scope (unlike multi.R above): this pulls
@@ -1275,7 +1275,7 @@ stack_x11_component <- function(zone_plots, component, common_legend = FALSE, le
 # per zone. Reads the same ts_data.csv plot_plume_area_timeseries() does
 # (both share one Python-side data prep), but writes to its own folder.
 # Manuscript slot "thresholds_comparison" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 # where_to_save_the_figure <- 'figures'
 plot_threshold_comparison <- function(where_to_save_the_figure){
   data_dir <- file.path(where_to_save_the_figure, "ARTICLE", get_registry_row("plume_area_timeseries")$output_subdir)
@@ -1449,7 +1449,7 @@ compute_x11_dynamic_vs_static_plots <- function(data_dir){
 
 # X11 seasonal component of plume area vs. river flow, dynamic threshold,
 # all four zones. Shares x11_interannual_river_flow's DATA/ prep. Manuscript
-# slot "x11_seasonal_river_flow" -- see manuscript/figure_table_registry.csv
+# slot "x11_seasonal_river_flow" -- see metadata/figure_table_registry.csv
 # for its current figure number. Split 2026-08-26 out of the former
 # plot_x11_components_dynamic(), which rendered this and the residual
 # component as one stacked seasonal-on-top-of-residual composite image via
@@ -1473,7 +1473,7 @@ plot_x11_seasonal_river_flow <- function(where_to_save_the_figure){
 # X11 residual (short-term) component of plume area vs. river flow, dynamic
 # threshold, all four zones. Shares x11_interannual_river_flow's DATA/ prep.
 # Manuscript slot "x11_residual_river_flow" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 # Renamed/split 2026-08-26 from plot_x11_components_dynamic() (see
 # plot_x11_seasonal_river_flow() above for why); this function renders
 # residual only, matching the slot's narrowed role now that seasonal has
@@ -1524,19 +1524,19 @@ plot_x11_component_dynamic_vs_static <- function(where_to_save_the_figure, type_
 }
 
 # Manuscript slot "x11_interannual_dynamic_vs_static" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 plot_x11_interannual_dynamic_vs_static <- function(where_to_save_the_figure){
   plot_x11_component_dynamic_vs_static(where_to_save_the_figure, "Interannual")
 }
 
 # Manuscript slot "x11_seasonal_dynamic_vs_static" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 plot_x11_seasonal_dynamic_vs_static <- function(where_to_save_the_figure){
   plot_x11_component_dynamic_vs_static(where_to_save_the_figure, "Seasonal")
 }
 
 # Manuscript slot "x11_residual_dynamic_vs_static" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 plot_x11_residual_dynamic_vs_static <- function(where_to_save_the_figure){
   plot_x11_component_dynamic_vs_static(where_to_save_the_figure, "Residual")
 }
@@ -1557,7 +1557,7 @@ plot_x11_residual_dynamic_vs_static <- function(where_to_save_the_figure){
 # sitting outside 0-100% is a direct visual signal that the two thresholds
 # disagree, not scaling noise. Manuscript slot
 # "seasonal_boxplots_dynamic_vs_static" -- see
-# manuscript/figure_table_registry.csv for its current figure number.
+# metadata/figure_table_registry.csv for its current figure number.
 plot_seasonal_boxplots_dynamic_vs_static <- function(where_to_save_the_figure){
   output_subdir <- get_registry_row("seasonal_boxplots_dynamic_vs_static")$output_subdir
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)

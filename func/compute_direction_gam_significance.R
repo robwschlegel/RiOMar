@@ -2,7 +2,7 @@
 # wind_dir_cat / wave_dir_cat / current_dir_cat parametric terms from the
 # multi-driver GAM, for the driver_stats_table's "Wind direction" / "Wave
 # direction" / "Current direction" rows (see
-# manuscript/figure_table_registry.csv for its current table number).
+# metadata/figure_table_registry.csv for its current table number).
 # fit_gam()'s tensor-product smooths
 # only take numeric driver pairs, so the direction categoricals enter as
 # flat parametric main-effect terms instead

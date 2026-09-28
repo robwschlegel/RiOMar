@@ -37,7 +37,7 @@ Figure_3_panels(where_are_saved_panache_outputs = "output",
                 where_to_save_the_figure = "figures")
 
 # Writes its regional-zone-maps panel into the plume_methodology_panel
-# slot's output folder (see manuscript/figure_table_registry.csv)
+# slot's output folder (see metadata/figure_table_registry.csv)
 Figure_3_zone_maps(where_are_saved_panache_outputs = "output",
                    where_to_save_the_figure = "figures")
 
@@ -81,7 +81,7 @@ Figure_8_gam_partial(where_to_save_the_figure = "figures")
 # =============================================================================
 # ### Supplementary figures
 # =============================================================================
-# See manuscript/figure_table_registry.csv for every slot's current number.
+# See metadata/figure_table_registry.csv for every slot's current number.
 
 # seasonal_boxplots_dynamic_vs_static: monthly boxplots of plume properties
 # and drivers, dynamic vs. static threshold

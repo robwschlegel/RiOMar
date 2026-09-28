@@ -10,7 +10,7 @@
 # significant out of 12, majority direction, range of monthly trend
 # magnitude, dynamic threshold only) and the companion Supplementary table
 # (full month-by-month detail, both thresholds). See
-# manuscript/figure_table_registry.csv for current table numbers.
+# metadata/figure_table_registry.csv for current table numbers.
 #
 # Run from repo root: Rscript func/compute_seasonal_trend.R
 source("func/multi.R")

@@ -1,5 +1,5 @@
 # Manuscript slot "monthly_trend_pct_heatmap" -- see
-# manuscript/figure_table_registry.csv for its current figure number. Zone x
+# metadata/figure_table_registry.csv for its current figure number. Zone x
 # month heatmap of each plume property's and driver's per-calendar-month
 # linear trend, expressed as a percent-of-mean change per year rather than
 # raw units -- lets properties/drivers on very different scales (e.g. plume

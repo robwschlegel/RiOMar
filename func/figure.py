@@ -333,7 +333,7 @@ def regional_zone_maps(where_to_save_the_figure, include_station_points=True):
 
 def Figure_2(where_to_save_the_figure):
     # Manuscript slot "validation_scatterplot_panel" -- see
-    # manuscript/figure_table_registry.csv (util.get_registry_row()) for its
+    # metadata/figure_table_registry.csv (util.get_registry_row()) for its
     # current figure number/output folder and the R function that renders it.
     # This Python entry point's own name is an unchanging handle and is not
     # kept in sync with the manuscript number.
@@ -397,7 +397,7 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
     inside_polygon_mask = create_polygon_mask(ds_reduced, parameters)
 
     # Panels A-E feed the plume_methodology_panel composite -- see
-    # manuscript/figure_table_registry.csv for its current figure number.
+    # metadata/figure_table_registry.csv for its current figure number.
     where_to_save_the_figure_3 = os.path.join(
         where_to_save_the_figure, "ARTICLE", get_registry_row("plume_methodology_panel")['output_subdir'])
 
@@ -548,7 +548,7 @@ def Figure_3(where_to_save_the_figure):
     into the plume_methodology_panel slot's output folder (none is a
     standalone manuscript figure itself), so this just reads them back out
     and composites -- must be called after both Figure_3_panels() and
-    Figure_3_zone_maps(). See manuscript/figure_table_registry.csv for the
+    Figure_3_zone_maps(). See metadata/figure_table_registry.csv for the
     slot's current figure number.
 
     Panels A-D and e) are resized down to the zone-maps panel's native width
@@ -674,7 +674,7 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
                                where_are_saved_plume_results_with_static_threshold,
                                where_to_save_the_figure):
     """The seasonal_boxplot_heatmap figure (sec:results_seasonal, see
-    manuscript/figure_table_registry.csv for its current figure number):
+    metadata/figure_table_registry.csv for its current figure number):
     heatmap of monthly median values (% of each zone's own observed range)
     for all four plume properties and five drivers, per zone, dynamic
     threshold -- one small zone x month heatmap per variable, 9 in total in a
@@ -713,7 +713,7 @@ def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):
 def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
     """manuscript figure: wind/wave direction-magnitude roses, coloured by
     the flow-controlled plume-area response, one row per zone. See
-    manuscript/figure_table_registry.csv (slot "driver_rose_diagram") for
+    metadata/figure_table_registry.csv (slot "driver_rose_diagram") for
     its current figure number.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
@@ -730,7 +730,7 @@ def Figure_8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
     GAM/driver_stats_table stats, just not visualised), one row per zone. Refits
     func/driver_interactions.R::fit_gam() from the already-saved
     daily_driver_matrix_<zone>.csv (Stage 4 output) rather than a separate
-    model or a full pipeline rerun. See manuscript/figure_table_registry.csv
+    model or a full pipeline rerun. See metadata/figure_table_registry.csv
     (slot "gam_partial_effects") for its current figure number.
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
@@ -813,7 +813,7 @@ def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_sav
                               where_to_save_the_figure):
     """
     Wires all 6 real manuscript figures (slot_key -> current number, see
-    manuscript/figure_table_registry.csv): x11_interannual_river_flow +
+    metadata/figure_table_registry.csv): x11_interannual_river_flow +
     x11_seasonal_river_flow + x11_residual_river_flow (dynamic threshold,
     plume area vs. river flow, split into interannual/seasonal/residual --
     each its own standalone 4-zone-panel figure, never combined into one
@@ -848,7 +848,7 @@ def Figure_S3_seasonal_boxplots(where_to_save_the_figure):
     Migrated from manuscript/make_figures_tables.R's
     generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
     writes straight to the seasonal_boxplots_dynamic_vs_static slot's output
-    folder (see manuscript/figure_table_registry.csv) instead of via the
+    folder (see metadata/figure_table_registry.csv) instead of via the
     manuscript/figures/ copy step. No Python-side data prep needed -- the R
     function reads output/panache/{dynamic,static}/{zone}/Results.csv directly.
     """

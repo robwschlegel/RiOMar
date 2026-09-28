@@ -3,7 +3,7 @@
 # (func/multi.R::fit_wls_hac_trend(), the same estimator used for the
 # panache_stats_table's plume-area/SPM-mass rows -- func/compute_area_trend.R),
 # for the driver_stats_table's River discharge / Wind / Tide / Wave height
-# rows. See manuscript/figure_table_registry.csv for current numbers.
+# rows. See metadata/figure_table_registry.csv for current numbers.
 #
 # Best-lag search over 0-14 days (func/compute_driver_x11_correlation_table.R
 # ::daily_flow_r_best_lag()/category_r_best_lag(), the
@@ -33,7 +33,7 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
 
     # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
     # matching the same convention the panache_stats_table's generators
-    # already use (func/compute_area_trend.R etc.), added 2026-08-11 per manuscript/TODO.md.
+    # already use (func/compute_area_trend.R etc.), added 2026-08-11 per metadata/TODO.md.
     value_adj <- deseason_doy(df$value, df$date)
 
     tibble::tibble(zone = meta$zone, driver = driver_name, driver_label = driver_label,

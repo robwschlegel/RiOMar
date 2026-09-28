@@ -1,5 +1,5 @@
 # One-off: spatial-consistency diagnostic for wind/current/wave direction and
-# magnitude within each zone's bbox. Addresses the manuscript/TODO.md Section
+# magnitude within each zone's bbox. Addresses the metadata/TODO.md Section
 # 2.8 deferral -- func/multi.R::load_driver() collapses every driver to a
 # single zone-day scalar (spatial mean) before any consumer sees it, so no
 # consumer downstream of it can check whether pixels within a zone actually
@@ -250,7 +250,7 @@ driver_octant_pixel_counts_timesteps <- octant_pixel_counts_timesteps(driver_oct
 }
 
 # One PNG per driver: magnitude spread, one row per zone, saved as a
-# diagnostic (not manuscript ARTICLE/) figure -- manuscript/TODO.md Section
+# diagnostic (not manuscript ARTICLE/) figure -- metadata/TODO.md Section
 # 2.8 has not decided whether this becomes real Methods/Results content or a
 # Discussion-limitation caveat.
 plot_spatial_variance <- function(driver_name, output_dir = "figures/driver_spatial_variance"){

@@ -1,9 +1,9 @@
 # func/generate_x11_driver_correlation_heatmap.R
 #
 # Manuscript slot "x11_driver_correlation_heatmap" -- see
-# manuscript/figure_table_registry.csv. Replaces the originally-planned
+# metadata/figure_table_registry.csv. Replaces the originally-planned
 # ~10-page per-driver seasonal/interannual X11 time-series comparison
-# Supplementary section (manuscript/TODO.md, superseded 2026-09) with a
+# Supplementary section (metadata/TODO.md, superseded 2026-09) with a
 # single compact heatmap of Pearson r between plume area's X11 Seasonal (and,
 # separately, Interannual) component and each of 5 drivers' own component,
 # per zone.

@@ -154,7 +154,7 @@ plot_flow_plume_rofi_succession <- function(){
     left = ggpubr::text_grob("Plume area / ROFI extent (km²)", rot = 90, size = 14),
     right = ggpubr::text_grob("River flow (m³ s⁻¹)", rot = -90, size = 14, color = "blue"))
 
-  # Manuscript slot "rofi_succession" -- see manuscript/figure_table_registry.csv
+  # Manuscript slot "rofi_succession" -- see metadata/figure_table_registry.csv
   output_subdir <- get_registry_row("rofi_succession")$output_subdir
   out_dir <- file.path("figures/ARTICLE", output_subdir)
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
@@ -202,7 +202,7 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
          subtitle = "Daily resolution; estuary excluded from plume area; red = lag of maximum r") +
     theme_bw()
 
-  # Manuscript slot "rofi_lagged_correlation" -- see manuscript/figure_table_registry.csv
+  # Manuscript slot "rofi_lagged_correlation" -- see metadata/figure_table_registry.csv
   output_subdir <- get_registry_row("rofi_lagged_correlation")$output_subdir
   out_dir <- file.path("figures/ARTICLE", output_subdir)
   if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)

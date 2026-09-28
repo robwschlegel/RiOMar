@@ -168,7 +168,7 @@ fit_gam <- function(df, response = "plume_area"){
 }
 
 # Full GAM output figures. Each zone is a separate manuscript slot
-# (gam_monthly_dominance_<zone> in manuscript/figure_table_registry.csv)
+# (gam_monthly_dominance_<zone> in metadata/figure_table_registry.csv)
 # since one call here produces all four at once -- pass fig_paths, a named
 # list keyed by zone_name, for that case.
 # fig_path (single shared base, zone name appended) is kept for the
@@ -440,7 +440,7 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
 run_driver_interactions_analysis <- function(){
 
   # Each zone is its own manuscript slot (gam_monthly_dominance_<zone> in
-  # manuscript/figure_table_registry.csv) -- build the per-zone output path
+  # metadata/figure_table_registry.csv) -- build the per-zone output path
   # for each from the registry rather than hardcoding a shared folder.
   dynamic_fig_paths <- purrr::set_names(zones) |>
     purrr::map(function(zone_name){
