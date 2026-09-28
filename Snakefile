@@ -5,9 +5,14 @@
 # Nothing here runs unless you ask it to:
 #
 #   snakemake -n                  # dry run: list what WOULD run, and why
-#   snakemake --dag | dot -Tpdf > dag.pdf   # draw the rules as a graph (needs graphviz)
+#   snakemake --rulegraph | dot -Tpdf > rules.pdf   # draw the rules and their links (needs graphviz)
+#   snakemake --dag | dot -Tpdf > jobs.pdf          # same, one box per job (e.g. 8 panache runs)
 #   snakemake -n --summary        # every output, its date, and whether it is out of date
 #   snakemake -c1 <output file>   # actually (re)build one output, using 1 core
+#   snakemake -c8                 # rebuild everything out of date, up to 8 cores at once:
+#                                 # independent rules run side by side, each rule's
+#                                 # `threads:` says how many of the 8 it needs
+#   snakemake --touch -c1         # mark existing outputs as up to date without running
 #
 # The first dry run may also say "missing provenance/metadata": that only means
 # the existing outputs were made outside Snakemake (by code/*.py). It goes away
@@ -219,6 +224,11 @@ rule driver_interactions:
         glm = "output/STATS/driver_glm_comparison.csv",
         metric_models = expand("output/STATS/driver_metric_models_{resp}.csv", resp=METRIC_RESPONSES),
         rf = "output/STATS/driver_rf_importance.csv",
+    # ranger (the random forest) uses every core it can see, so this rule
+    # asks for more cores than any machine here has; Snakemake caps it at the
+    # -c you give, so it runs on its own while the single-threaded rules
+    # (default: 1 thread each) share the cores otherwise
+    threads: 64
     log:
         "logs/driver_interactions.log",
     shell:
