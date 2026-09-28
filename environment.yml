@@ -31,9 +31,11 @@ dependencies:
   - rpy2
   # Data access
   - copernicusmarine
-  # Pipeline orchestration + linting
-  - snakemake-minimal
+  # Linting
   - ruff
   - pip
   - pip:
       - panache-riomar
+      # Pipeline orchestration (Snakefile). From pip, not conda: the conda
+      # package lives on the bioconda channel, which this env doesn't use.
+      - snakemake
