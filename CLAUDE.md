@@ -114,3 +114,13 @@ is the standard argument passed to every major pipeline function; build it with 
 
 Bug-fix history (root cause, symptom, before/after) is intentionally not kept here — it bloats a file loaded every session regardless of relevance. Each fix is commented in place at its own function; check `git log`/`git blame` on the relevant file for the full story.
 
+
+## Rules for automated changes
+
+Added 2026-09-28 after an agent deleted code and outputs the manuscript still depended on (commits 321fc22/7cedb76, rolled back in 4017af8). These apply to every Claude session, local or cloud:
+
+- **Never delete without per-item approval.** Don't delete or untrack a file, or remove a function, unless Robert has approved that exact item in writing. Present the list first (path or function name, what uses it, why it looks dead) and wait. A general instruction like "clean up dead code", or a registry row marked `(removed)`/`(orphaned)`, is not approval. Record each approved item in `metadata/approved_deletions.txt`, with the date and where the approval was given.
+- **`manuscript/` is invisible to cloud sessions,** so "I found no reference" is not evidence that nothing uses a file. Treat anything named in `metadata/paragraph_source_registry.csv` or `metadata/figure_table_registry.csv` as in use, whatever its status column says.
+- **Enforced by `tools/check_protected.py`.** The `.claude/settings.json` PreToolUse hook runs it before every `git commit`/`git push` issued through Bash, and it blocks deleted files and removed functions. Moves and renames pass: same file content at a new path, or same argument list under a new function name. Run it by hand with `python tools/check_protected.py` (uncommitted changes) or `--range A..B`. Don't bypass it (for example with `--no-verify` or by editing the hook) without Robert's say-so.
+- **Only deliver work as pull requests.** Put changes on a new branch and open a PR. Never push to `main` or to a branch Robert is running the pipeline from; he merges when no run is in progress.
+- **Prove refactors are result-neutral.** A refactor must leave `python tools/snapshot_outputs.py --check` unchanged on Robert's machine. Keep structural PRs to moves/renames, and never mix them with deletions.
