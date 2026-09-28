@@ -137,7 +137,14 @@ check_registry_row <- function(row) {
     message("[ok] ", slot_label, ": hand-transcribed in manuscript.tex, no single source file to check.")
     return(invisible(TRUE))
   }
-  check_figure_exists(paste0(slot_label, " source data"), row$check_path)
+  # check_path can itself be a ";"-separated list (e.g. missing_days_table's
+  # two source CSVs) -- same convention as source_files below, and the same
+  # bug class if skipped: passing the raw joined string to file.exists()
+  # checks for one file literally named "a.csv;b.csv", which never exists,
+  # so a table with multiple real source files always reported [MISSING].
+  paths <- trimws(strsplit(row$check_path, ";")[[1]])
+  ok <- purrr::map_lgl(paths, ~ check_figure_exists(paste0(slot_label, " source data"), .x))
+  invisible(all(ok))
 }
 
 

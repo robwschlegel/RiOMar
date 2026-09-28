@@ -656,7 +656,7 @@ plot_methodology_zone_maps_panel <- function(where_to_save_the_figure) {
   # Read only the four per-zone SPM-map CSVs figure.py's plot_methodology_zone_maps_panel()
   # writes here (Zone.csv, via zone_meta$zone for canonical zone naming/order)
   # -- a plain "*.csv" glob on this shared DATA/ folder also picks up
-  # Figure_3_panels()' A-E.csv (which lack a `plume` column entirely) and its
+  # Figure_2_methodology_panels()' A-E.csv (which lack a `plume` column entirely) and its
   # *_threshold.csv debug files, crashing create_the_basic_map()'s
   # which(map_df$plume) on the first file missing that column.
   SPM_map_data <- where_to_save_the_figure |>
