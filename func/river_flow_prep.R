@@ -12,7 +12,7 @@
 # "measured_low_flow_uncertain") so reconstructed values are never presented
 # as directly observed.
 
-# Exploratory/diagnostic plots for these fits live in: func/river_flow_diagnostics.R
+# Exploratory/diagnostic plots for these fits live in: func/tools/river_flow_diagnostics.R
 
 
 # Setup -------------------------------------------------------------------

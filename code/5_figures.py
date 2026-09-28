@@ -28,7 +28,7 @@ mpl.use('agg')
 # the comments are the keys in metadata/figure_table_registry.csv, which
 # remains the source of truth for numbers and output folders.
 # Figure 5 (monthly_trend_pct_heatmap) is not built here -- it is written by
-# func/generate_monthly_trend_pct_heatmap.R, run from code/4_time_series.py.
+# func/analysis/generate_monthly_trend_pct_heatmap.R, run from code/4_time_series.py.
 
 
 # =============================================================================
@@ -53,7 +53,7 @@ Figure_3_S2_timeseries(where_are_saved_plume_results_with_dynamic_threshold = "o
 
 # seasonal_boxplot_heatmap (Fig. 4): heatmap of each month's median plume
 # property/driver value as a ratio to the zone's 1998-2025 median. Per-month
-# trends are computed separately by func/compute_seasonal_trend.R.
+# trends are computed separately by func/analysis/compute_seasonal_trend.R.
 Figure_4_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
                                 where_are_saved_plume_results_with_static_threshold = "output/panache/static",
                                 where_to_save_the_figure = "figures")
@@ -80,13 +80,13 @@ Figure_S1_validation(where_to_save_the_figure = "figures")
 # X11 seasonal/interannual component and each driver's own component, per
 # zone. Self-contained -- reads its own registry row for the output path,
 # and regenerates output/panache/dynamic/<Zone>/X11_ANALYSIS/<driver>/*_WEEKLY.csv
-# (func/compute_x11_driver_signals.py) itself if missing. A plain top-level
+# (func/analysis/compute_x11_driver_signals.py) itself if missing. A plain top-level
 # script (unlike the other R figure code here, which defines functions
 # sourced then called), so run via Rscript subprocess exactly as its own
 # header documents -- was previously only ever run by hand, not wired into
 # any code/ stage (see metadata/figure_table_registry.csv).
 subprocess.run(
-    ['Rscript', 'func/generate_x11_driver_correlation_heatmap.R'],
+    ['Rscript', 'func/analysis/generate_x11_driver_correlation_heatmap.R'],
     cwd=proj_dir, check=True,
 )
 

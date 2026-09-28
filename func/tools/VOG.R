@@ -1,0 +1,153 @@
+# func/tools/VOG.R
+
+# Code used to extract data for studies linked to the VOG
+
+
+# Setup ------------------------------------------------------------------
+
+# Needed libraries
+library(tidyverse)
+library(sf)
+library(furrr)
+source("func/config.R")
+# library(doParallel)
+
+# Set cores for use below
+# registerDoParallel(cores = parallel::detectCores()-2)
+
+
+# Functions --------------------------------------------------------------
+
+# Helper to extract data for a given shapefile from a given .csv file
+# file_name = panache_files[1025]; polygon_sf = VOG_shape
+extract_csv <- function(file_name, polygon_sf){
+
+  # Read and convert .csv file
+  df_csv <- read_csv(file_name, show_col_types = FALSE)
+  df_sf <- st_as_sf(df_csv, coords = c("lon", "lat"), crs = 4326)
+  
+  # Get date and create corresponding SEXTANT file name
+  file_date <- as.Date(basename(file_name))
+  file_date_flat <- format(file_date, "%Y%m%d")
+  file_date_day <- format(file_date, "%d")
+  file_date_month <- format(file_date, "%m")
+  file_date_year <- format(file_date, "%Y")
+  sextant_file <- paste0(riomar_data_path("SEXTANT", "SPM", "merged", "Standard", "DAILY"), "/",
+                         file_date_year, "/", file_date_month, "/", file_date_day, "/", 
+                         file_date_flat, "-EUR-L4-SPIM-ATL-v01-fv01-OI.nc")
+  
+  # Then get the data from the corresponding day of SEXTANT data
+  if(file.exists(sextant_file)){
+
+    # Load data roughly to shape of .csv file
+    nc_data <- ncdf4::nc_open(sextant_file)
+    lon <- ncdf4::ncvar_get(nc_data, "lon")
+    lat <- ncdf4::ncvar_get(nc_data, "lat")
+    lon_idx <- which(lon >= range(df_csv$lon)[1] - 0.05 & lon <= range(df_csv$lon)[2] + 0.05)
+    lat_idx <- which(lat >= range(df_csv$lat)[1] - 0.05 & lat <= range(df_csv$lat)[2] + 0.05)
+    spm <- ncdf4::ncvar_get(nc_data, "analysed_spim")[lon_idx, lat_idx, drop = FALSE]
+    ncdf4::nc_close(nc_data)
+
+    sextant_data <- expand.grid(lon = lon[lon_idx], lat = lat[lat_idx]) |>
+      mutate(spm = as.vector(spm)) |>
+      dplyr::select(lon, lat, spm) |>
+      mutate(lon = round(as.numeric(lon) / 0.005) * 0.005,
+             lat = round(as.numeric(lat), 2),
+             spm = round(spm, 2))
+
+    # Convert to sf
+    sextant_sf <- st_as_sf(sextant_data, coords = c("lon", "lat"), crs = 4326)
+
+    # Subset points within the polygon
+    df_within <- data.frame()
+    for(i in 1:nrow(polygon_sf)){
+      df_within_sub <- sextant_sf[st_within(sextant_sf, polygon_sf[i,], sparse = FALSE), ]
+      df_within_sub$Name <- polygon_sf$Name[i]
+      df_within <- rbind(df_within, df_within_sub)
+    }
+    
+    # Convert back to data.frame
+    df_res <- df_within |> 
+      mutate(lon = st_coordinates(df_within)[, 1],
+             lat = st_coordinates(df_within)[, 2],
+             date = as.Date(basename(file_name))) |> 
+      st_drop_geometry() |> 
+      dplyr::select(Name, date, lon, lat, spm)
+    
+  } else {
+
+    # Or return empty data.frame with zone names and date if no SEXTANT file
+    df_res <- data.frame()
+    for(i in 1:nrow(polygon_sf)){
+      df_res_sub <- data.frame(Name = polygon_sf$Name, date = file_date, lon = NA, lat = NA, spm = NA)
+      df_res <- rbind(df_res, df_res_sub)
+    }
+  }
+  return(df_res)
+}
+
+
+# Load shapes ------------------------------------------------------------
+
+# The overall shape
+VOG_shape <- st_polygonize(st_transform(read_sf("data/VOG_shapes/Outline_VOG_2/Outline_VOG.shp"), crs = 4326))
+VOG_shape$Name <- "VOG full"
+plot(VOG_shape)
+
+# The specific zones of extraction
+VOG_zones <- st_transform(read_sf("data/VOG_shapes/Zone_extraction/Zone_Extraction_Sat_VOG.shp"), crs = 4326)
+plot(VOG_zones)
+
+
+# Extract data -----------------------------------------------------------
+
+# List of the Bay of Biscay panache output files
+panache_files <- dir("output/panache/BAY_OF_BISCAY",
+                      recursive = TRUE, pattern = ".csv", full.names = TRUE)
+
+# Prep multicore environment
+plan(multisession, workers = parallel::detectCores() - 4)
+
+# Extract VOG shape pixels
+pixel_ts_VOG_shape <- future_map_dfr(panache_files, extract_csv, 
+  polygon_sf = VOG_shape, .options = furrr_options(seed=TRUE))
+write_csv(pixel_ts_VOG_shape, "data/VOG_shapes/pixel_ts_VOG_shape.csv")
+
+# Extract VOG zones pixels
+pixel_ts_VOG_zones <- future_map_dfr(panache_files, extract_csv, 
+  polygon_sf = VOG_zones, .options = furrr_options(seed=TRUE))
+write_csv(pixel_ts_VOG_zones, "data/VOG_shapes/pixel_ts_VOG_zones.csv")
+
+# Close multicore environment
+plan(sequential)
+
+
+# Test visuals -----------------------------------------------------------
+
+pixel_ts_VOG_shape <- read_csv("data/VOG_shapes/pixel_ts_VOG_shape.csv")
+pixel_ts_VOG_zones <- read_csv("data/VOG_shapes/pixel_ts_VOG_zones.csv")
+
+ggplot() +
+  # Pixels from the VOG shape output showing SPM values
+  geom_raster(data = filter(pixel_ts_VOG_shape, date == "2000-10-26"),
+              aes(x = lon, y = lat, fill = spm)) +
+  # Pixels from the VOG shape output
+  # geom_raster(data = filter(pixel_ts_VOG_shape, date == "1999-01-01"),
+  #             aes(x = lon, y = lat), colour = "blue") +
+  # Pixels from the VOG zones output
+  # geom_raster(data = filter(pixel_ts_VOG_zones, date == "1999-01-01"),
+  #           aes(x = lon, y = lat), colour = "green") +
+  # VOG shape
+  geom_sf(data = VOG_shape, fill  = NA, colour = "black", linewidth = 0.8) +
+  # VOG zones
+  geom_sf(data = VOG_zones, fill  = NA, colour = "black", linewidth = 0.8) +
+  # Plotting region and sf corrd adjustment
+  coord_sf(
+    xlim = st_bbox(VOG_shape$geometry)[c("xmin", "xmax")],
+    ylim = st_bbox(VOG_shape$geometry)[c("ymin", "ymax")],
+    expand = TRUE) +
+  # Pretty
+  labs(title = "VOG rasters plus extracted data", fill  = "SPM",
+       x = NULL, y = NULL) + 
+  theme_minimal()
+

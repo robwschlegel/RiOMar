@@ -307,7 +307,7 @@ def Figure_1_mean_spm_map(where_to_save_the_figure):
     # GEOS/PROJ/HDF5 builds in one process crashes R. A separate process has
     # its own library address space, so the conflict can't occur.
     subprocess.run(
-        ['Rscript', 'func/run_figure_1.R', where_to_save_the_figure],
+        ['Rscript', 'func/tools/run_figure_1.R', where_to_save_the_figure],
         cwd=proj_dir,
         check=True,
     )
@@ -467,7 +467,7 @@ def Figure_2_methodology_panels(where_are_saved_panache_outputs, where_to_save_t
     # sf, which conflicts with the conda geospatial stack already loaded in
     # this process via panache -- same workaround as Figure_1_mean_spm_map().
     subprocess.run(
-        ['Rscript', 'func/run_figure_2_methodology_panels.R', where_to_save_the_figure_2],
+        ['Rscript', 'func/tools/run_figure_2_methodology_panels.R', where_to_save_the_figure_2],
         cwd=proj_dir,
         check=True,
     )
@@ -530,7 +530,7 @@ def Figure_2_methodology_zone_maps(where_are_saved_panache_outputs, where_to_sav
     # via sf, which conflicts with the conda geospatial stack already loaded
     # in this process via panache -- same workaround as Figure_1_mean_spm_map().
     subprocess.run(
-        ['Rscript', 'func/run_figure_2_methodology_zone_maps.R', where_to_save_the_figure_2],
+        ['Rscript', 'func/tools/run_figure_2_methodology_zone_maps.R', where_to_save_the_figure_2],
         cwd=proj_dir,
         check=True,
     )

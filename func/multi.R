@@ -675,9 +675,9 @@ compute_monthly_octant_trend <- function(degrees, date, min_years = 10, min_occu
 # The along-coast direction is estimated per zone as
 # the first principal component of the centroid's own long-term scatter (in
 # local km, relative to the river mouth), then each day's centroid is
-# projected onto that axis. Shared by func/compute_seasonal_trend.R,
+# projected onto that axis. Shared by func/analysis/compute_seasonal_trend.R,
 # func/figure.R::plot_seasonal_boxplot_heatmap(), and
-# func/compute_shape_alongcoast_trend.R (which used to carry its own
+# func/analysis/compute_shape_alongcoast_trend.R (which used to carry its own
 # near-identical local compute_alongcoast() before it was deduplicated onto
 # this shared version -- verified to reproduce identical output first,
 # since that script feeds the published panache_stats_table).
