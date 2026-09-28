@@ -126,6 +126,7 @@ stats_scripts = [
     'compute_driver_correlation_trend.R',
     'compute_seasonal_trend.R',
     'generate_monthly_trend_pct_heatmap.R',
+    'compute_direction_octant_trend.R',
 ]
 for script in stats_scripts:
     robjects.r['source'](os.path.join(func_dir, script))
