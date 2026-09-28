@@ -17,8 +17,8 @@ sys.path.append( func_dir )
 
 import util, figure
 from figure import (Figure_1, Figure_2, Figure_3, Figure_3_panels, Figure_3_zone_maps, Figure_5_seasonal_analysis,
-                    Figure_7_driver_rose, Figure_8_gam_partial, Figure_S_daily_flow,
-                    Figure_4_S1_timeseries, Figure_X11_weekly_results, Figure_S3_seasonal_boxplots)
+                    Figure_7_driver_rose, Figure_8_gam_partial,
+                    Figure_4_S1_timeseries, Figure_X11_weekly_results)
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg')
@@ -52,9 +52,7 @@ Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold = "o
                        where_to_save_the_figure = "figures")
 
 # seasonal_boxplot_heatmap (sec:results_seasonal): monthly boxplots of all
-# plume properties and drivers, per zone, dynamic threshold; also writes the
-# shared dynamic+static data that Figure_S3_seasonal_boxplots() below
-# re-reads, so it must run before that call. Per-month trends themselves are
+# plume properties and drivers, per zone, dynamic threshold. Per-month trends themselves are
 # computed separately by func/compute_seasonal_trend.R (feeds the
 # monthly_trends_table_main slot), not by this figure.
 Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
@@ -75,18 +73,3 @@ Figure_7_driver_rose(where_to_save_the_figure = "figures")
 
 # gam_partial_effects: GAM partial-dependence curves
 Figure_8_gam_partial(where_to_save_the_figure = "figures")
-
-
-# =============================================================================
-# ### Supplementary figures
-# =============================================================================
-# See metadata/figure_table_registry.csv for every slot's current number.
-
-# seasonal_boxplots_dynamic_vs_static: monthly boxplots of plume properties
-# and drivers, dynamic vs. static threshold
-Figure_S3_seasonal_boxplots(where_to_save_the_figure = "figures")
-
-# daily_flow_lagged_correlation ("Sx. Lagged daily correlations"): daily
-# plume area vs. river flow scatter + lagged correlation, per zone.
-Figure_S_daily_flow(where_to_save_the_figure = "figures")
-

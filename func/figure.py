@@ -674,13 +674,9 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
     All data loading (incl. the along-coast PCA projection, which needs
     func/multi.R) and plotting happens in R.
     See func/figure.R::plot_seasonal_boxplot_heatmap()
-    following the same no-Python-prep pattern already used by
-    Figure_S3_seasonal_boxplots() below. Writes a shared
-    <output_subdir>/DATA/monthly_boxplot_data.csv (both thresholds,
-    full daily-level detail, not just the medians plotted here) that the
-    updated Figure_S3_seasonal_boxplots() reads back in, so the dynamic/
-    static computation is only done once. Writes its PNG directly (a
-    single figure now, no Python-side compositing needed).
+    Also writes <output_subdir>/DATA/monthly_boxplot_data.csv (both
+    thresholds, full daily-level detail, not just the medians plotted
+    here). Writes its PNG directly (no Python-side compositing needed).
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
@@ -688,18 +684,6 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
         where_are_saved_plume_results_with_dynamic_threshold=robjects.StrVector([where_are_saved_plume_results_with_dynamic_threshold]),
         where_are_saved_plume_results_with_static_threshold=robjects.StrVector([where_are_saved_plume_results_with_static_threshold]),
         where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-
-
-def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):
-    """Supplementary "Sx. Lagged daily correlations" figure (fig:daily_flow):
-    daily plume area vs. river flow scatter + lagged correlation, per zone.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r[get_registry_row("daily_flow_lagged_correlation")['r_function']]
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
-               max_lag_daily=robjects.IntVector([max_lag_daily]))
 
 
 def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
@@ -833,34 +817,3 @@ def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_sav
             robjects.r[r_func_name](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
         except Exception as e:
             print(f"Warning: {r_func_name} ({slot_key}) R plot failed: {e}. Skipping.")
-
-
-def Figure_S3_seasonal_boxplots(where_to_save_the_figure):
-    """
-    Migrated from metadata/make_figures_tables.R's
-    generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
-    writes straight to the seasonal_boxplots_dynamic_vs_static slot's output
-    folder (see metadata/figure_table_registry.csv) instead of via the
-    manuscript/figures/ copy step. No Python-side data prep needed -- the R
-    function reads output/panache/{dynamic,static}/{zone}/Results.csv directly.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-    robjects.r[get_registry_row("seasonal_boxplots_dynamic_vs_static")['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-
-
-# =============================================================================
-#### Deprecated functions
-# =============================================================================
-
-def Figure_8_driver_category(where_to_save_the_figure):
-    """manuscript Figure 8: flow-controlled plume-area residual vs. wave
-    height, coloured by on/off-shore wind category, one panel per zone.
-    Generalises the Rhone-only rhone_wind_wave_effect() analysis.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_8_driver_category']
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-

@@ -932,31 +932,6 @@ load_surface_current <- function(zone_name, lon_range, lat_range){
   return(current_df)
 }
 
-# Load ROFI surface NetcDF
-load_ROFI <- function(file_name){
-  # Get zone from file name
-  if(grepl("Seine", file_name)){
-    zone <- "BAY_OF_SEINE"
-  } else if (grepl("Gironde", file_name)){
-    zone <- "BAY_OF_BISCAY"
-  } else if (grepl("Loire", file_name)){
-    zone <- "SOUTHERN_BRITTANY"
-  } else if (grepl("Rhone", file_name)){
-    zone <- "GULF_OF_LION"
-  } else {
-    stop("Zone not recognised from ROFI file name")
-  }
-  nc <- nc_open(file_name)
-  date <- .nc_time_to_date(nc, "time_counter")
-  rofi_surface <- ncvar_get(nc, "ROFI_surface")
-  nc_close(nc)
-
-  df_ROFI <- tibble::tibble(zone = zone, date = date, ROFI_surface = rofi_surface) |>
-    dplyr::summarise(ROFI_surface = mean(ROFI_surface, na.rm = TRUE), .by = c("zone", "date"))
-  return(df_ROFI)
-}
-
-
 # Statistics --------------------------------------------------------------
 
 # Check for leap year

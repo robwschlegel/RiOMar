@@ -112,13 +112,12 @@ import compute_plume_shape  # noqa: F401
 # These are one-off scripts that generate stats used in the manuscript; 
 # wiring them in here keeps their outputs (output/STATS/*.csv) in sync 
 # with the panache/X11/ driver-interactions data above. 
-# Order matters: generate_monthly_trend_pct_heatmap.R and 
-# generate_table_s_monthly_trends.R read compute_seasonal_trend.R's output; 
-# generate_table_s_octant_trends.R reads compute_direction_octant_trend.R's output.
+# Order matters: generate_monthly_trend_pct_heatmap.R reads
+# compute_seasonal_trend.R's output.
 # compute_driver_correlation_matrices.R sources driver_interactions.R (for
 # its zone/driver helpers), which loads ranger -- run it via Rscript
 # subprocess rather than rpy2's embedded R for the same OpenMP-collision
-# reason as driver_interactions.R itself, above. The other 9 don't load
+# reason as driver_interactions.R itself, above. The others don't load
 # ranger, so they stay on rpy2.
 stats_scripts = [
     'compute_area_trend.R',
@@ -127,9 +126,6 @@ stats_scripts = [
     'compute_driver_correlation_trend.R',
     'compute_seasonal_trend.R',
     'generate_monthly_trend_pct_heatmap.R',
-    'generate_table_s_monthly_trends.R',
-    'compute_direction_octant_trend.R',
-    'generate_table_s_octant_trends.R',
 ]
 for script in stats_scripts:
     robjects.r['source'](os.path.join(func_dir, script))
