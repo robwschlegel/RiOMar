@@ -28,6 +28,9 @@ python code/5_figures.py         # Publication figures
 
 All scripts prepend `func/` to `sys.path` by setting `proj_dir` from `os.path.abspath('__file__')` — they must be executed from the repo root, not from inside `code/`.
 
+### Snakemake (in progress)
+`Snakefile` at the repo root is being built up step by step to describe the same pipeline as rules, with declared inputs and outputs. It runs nothing unless asked. `snakemake -n` dry-runs it and `snakemake -n --summary` shows what's out of date. The numbered `code/*.py` scripts remain the way to run the pipeline until the Snakefile covers it. Its settings come from `metadata/riomar_config.yml`. Logs go to the gitignored `logs/`, and Snakemake's bookkeeping to the gitignored `.snakemake/`.
+
 ## Pipeline map (living document)
 
 A browsable map of which script produces which figure/table, where each output lands, and what's currently a known gap is maintained at https://claude.ai/code/artifact/fd8a00ad-f109-48cd-94c1-2cca329f657f. It is a living document, not a one-time snapshot — update it in place (same URL) whenever the pipeline's wiring changes (a figure function moves, an output path changes, a `\figplaceholder` gets repointed, a gap gets fixed or a new one is found).
