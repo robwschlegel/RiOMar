@@ -288,7 +288,8 @@ metric_responses <- c("plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_t
 
 # Step 6: exploratory random forest + H-statistic ----------------------------
 
-fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area", n_repeats = 10){
+fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area", n_repeats = 10,
+                              num_threads = NULL){
   df <- driver_matrices[[zone_name]]
   drivers <- available_drivers(df)
   df_complete <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
@@ -308,7 +309,8 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
   # of silently looking as solid as a stable one.
   importance_repeats <- purrr::map(seq_len(n_repeats), function(i){
     ranger::ranger(rf_formula, data = df_complete[, c(response, drivers)],
-                   importance = "permutation", num.trees = 500, seed = i)$variable.importance
+                   importance = "permutation", num.trees = 500, seed = i,
+                   num.threads = num_threads)$variable.importance
   })
   importance_mat <- do.call(rbind, importance_repeats)
   importance_mean <- colMeans(importance_mat)
@@ -317,7 +319,8 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
   # One fit (seed 1) is kept for the H-statistic interaction diagnostic,
   # which is too expensive to repeat n_repeats times as well.
   rf <- ranger::ranger(rf_formula, data = df_complete[, c(response, drivers)],
-                       importance = "permutation", num.trees = 500, seed = 1)
+                       importance = "permutation", num.trees = 500, seed = 1,
+                       num.threads = num_threads)
 
   predictor <- iml::Predictor$new(rf, data = df_complete[, drivers], y = df_complete[[response]])
   interaction_hstat <- iml::Interaction$new(predictor)$results
@@ -328,7 +331,8 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
 
 # Runner: execute all steps for one set of plume results ---------------------
 
-run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths = NULL, month_filter = NULL){
+run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths = NULL, month_filter = NULL,
+                              rf_num_threads = NULL){
 
   if(!dir.exists(stats_dir)) dir.create(stats_dir, recursive = TRUE)
 
@@ -405,7 +409,8 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
   message("[", Sys.time(), "] Step 6/6: fitting random forest + H-statistic interaction diagnostics...")
 
   # Step 6: random forest
-  rf_results <- purrr::map(zones, fit_rf_diagnostic, driver_matrices = driver_matrices) |>
+  rf_results <- purrr::map(zones, fit_rf_diagnostic, driver_matrices = driver_matrices,
+                           num_threads = rf_num_threads) |>
     purrr::set_names(zones) |> purrr::compact()
 
   rf_importance <- purrr::imap_dfr(rf_results, function(res, zone_name){
@@ -473,21 +478,44 @@ run_driver_interactions_analysis <- function(){
 # for anyone who wants the detail; summarise_monthly_driver_dominance() below
 # then distils just the dominant driver per zone per month into the compact
 # Supplementary table manuscript.tex actually shows.
+#
+# The 12 months are independent, so code/4_time_series.py dispatches
+# run_monthly_driver_interactions_analysis_for_month() below across 12
+# parallel Rscript subprocesses rather than calling
+# run_monthly_driver_interactions_analysis() (kept here as a sequential
+# fallback, e.g. for manual/interactive use). rf_num_threads defaults to 1 in
+# the per-month function: ranger() otherwise grabs every core for a single
+# fit, which is fine when one month runs alone but would oversubscribe the
+# machine 12x over if every concurrent month's process asked for all cores
+# at once -- the speedup instead comes from running 12 single-threaded
+# processes side by side.
 
-run_monthly_driver_interactions_analysis <- function(){
-  purrr::walk(1:12, function(m){
-    mm <- sprintf("%02d", m)
-    message("== Driver interactions: month ", mm, " (dynamic threshold) ==")
-    run_full_analysis(
-      plume_dir    = "output/panache/dynamic",
-      stats_dir    = file.path("output/STATS/monthly", mm),
-      fig_path     = file.path("figures/ARTICLE/gam_monthly_breakdown", paste0("Figure_S7_month_", mm, ".png")),
-      month_filter = m
-    )
-  })
+run_monthly_driver_interactions_analysis_for_month <- function(m, rf_num_threads = 1){
+  mm <- sprintf("%02d", m)
+  message("== Driver interactions: month ", mm, " (dynamic threshold) ==")
+  run_full_analysis(
+    plume_dir      = "output/panache/dynamic",
+    stats_dir      = file.path("output/STATS/monthly", mm),
+    fig_path       = file.path("figures/ARTICLE/gam_monthly_breakdown", paste0("Figure_S7_month_", mm, ".png")),
+    month_filter   = m,
+    rf_num_threads = rf_num_threads
+  )
+  invisible(TRUE)
+}
 
+# Aggregates the 12 months' output into the compact Supplementary table;
+# split out from run_monthly_driver_interactions_analysis() so
+# code/4_time_series.py can call it once, after all 12 per-month subprocesses
+# above have finished.
+write_monthly_driver_dominance_summary <- function(){
   dominance <- summarise_monthly_driver_dominance()
   readr::write_csv(dominance, "output/STATS/monthly_driver_dominance_summary.csv")
+  invisible(dominance)
+}
+
+run_monthly_driver_interactions_analysis <- function(){
+  purrr::walk(1:12, run_monthly_driver_interactions_analysis_for_month, rf_num_threads = NULL)
+  write_monthly_driver_dominance_summary()
 
   message("func/driver_interactions.R::run_monthly_driver_interactions_analysis() complete.")
   invisible(TRUE)

@@ -11,6 +11,7 @@
 import os
 import sys
 import subprocess
+import concurrent.futures
 import matplotlib as mpl
 import rpy2.robjects as robjects
 
@@ -82,10 +83,10 @@ Apply_X11_method_on_time_series_per_river(sextant_spm_all,
 driver_interactions_R_path = os.path.join(func_dir, 'driver_interactions.R')
 
 # Runs the dynamic-threshold main analysis; see func/driver_interactions.R
-subprocess.run(
-    ['Rscript', '-e', f"source('{driver_interactions_R_path}'); run_driver_interactions_analysis()"],
-    cwd=proj_dir, check=True
-)
+# subprocess.run(
+#     ['Rscript', '-e', f"source('{driver_interactions_R_path}'); run_driver_interactions_analysis()"],
+#     cwd=proj_dir, check=True
+# )
 
 
 # =============================================================================
@@ -94,10 +95,31 @@ subprocess.run(
 
 # Re-runs the same six-step GLM/GAM/RF sequence above independently within
 # each calendar month's data subset, dynamic threshold only. Feeds the
-# Supplementary monthly driver-dominance table (manuscript.tex); see
-# func/driver_interactions.R::run_monthly_driver_interactions_analysis().
+# Supplementary monthly driver-dominance table (manuscript.tex).
+#
+# The 12 months are independent, so they're dispatched as separate Rscript
+# subprocesses running concurrently (each via run_monthly_driver_interactions_analysis_for_month(),
+# with ranger pinned to 1 thread there -- see func/driver_interactions.R for
+# why) rather than looping over them sequentially in one process. A
+# ThreadPoolExecutor is enough here, not multiprocess: each worker just
+# launches and waits on its own Rscript subprocess, no Python-level
+# computation happens in the workers themselves.
+nb_of_cores_to_use = max(1, os.cpu_count() - 2)
+
+def _run_month_driver_interactions(m):
+    subprocess.run(
+        ['Rscript', '-e',
+         f"source('{driver_interactions_R_path}'); run_monthly_driver_interactions_analysis_for_month({m})"],
+        cwd=proj_dir, check=True
+    )
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=min(12, nb_of_cores_to_use)) as executor:
+    list(executor.map(_run_month_driver_interactions, range(1, 13)))
+
+# Aggregates the 12 months' output into the compact Supplementary table,
+# now that every month above has finished.
 subprocess.run(
-    ['Rscript', '-e', f"source('{driver_interactions_R_path}'); run_monthly_driver_interactions_analysis()"],
+    ['Rscript', '-e', f"source('{driver_interactions_R_path}'); write_monthly_driver_dominance_summary()"],
     cwd=proj_dir, check=True
 )
 
