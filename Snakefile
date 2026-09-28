@@ -73,6 +73,8 @@ rule all:
         "output/STATS/monthly_trend_summary.csv",
         "output/STATS/monthly_trend_compact_summary.csv",
         registry_figure("monthly_trend_pct_heatmap"),
+        "output/STATS/driver_rf_importance.csv",
+        "output/STATS/driver_correlation_matrix_seasonal.png",
 
 
 # Step 1: one rule ------------------------------------------------------------
@@ -187,3 +189,53 @@ rule panache:
     shell:
         "python {input.writer} --zone {wildcards.zone} --mode {wildcards.mode} > {log} 2>&1"
         " && panache output/panache/configs/zone_config_{wildcards.mode}_{wildcards.zone}.json >> {log} 2>&1"
+
+
+# Step 4: one expensive rule, many outputs ----------------------------------
+# The multi-driver GLM/GAM/random-forest analysis is the slowest analysis step
+# (tens of minutes). As its own rule, it reruns only when one of its inputs
+# really changes -- tweaking a figure or another stats script never triggers
+# it. A rule can declare several outputs; Snakemake treats them as one unit,
+# so asking for any one of them (rule all asks for the RF CSV) brings in all.
+#
+# Its per-cell checkpoints (output/STATS/.checkpoints/) are deliberately not
+# declared: they are the script's own resume mechanism, not results.
+# pCloud driver data (wind/wave/current) is not declared (as in step 2).
+
+# Must match metric_responses in func/driver_interactions.R
+METRIC_RESPONSES = ["plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_the_plume_area_in_t",
+                    "lon_weighted_centroid_of_the_plume_area", "lat_weighted_centroid_of_the_plume_area"]
+
+rule driver_interactions:
+    input:
+        script = "func/driver_interactions.R",
+        code = SHARED_R + ["func/tide.R"],
+        zone_metadata = "metadata/panache_zone_metadata.csv",
+        plumes = expand("output/panache/dynamic/{zone}/Results.csv", zone=ZONES),
+        flow = expand("data/RIVER_FLOW/{zone}", zone=ZONES),
+        tides = "data/TIDES",
+    output:
+        matrices = expand("output/STATS/daily_driver_matrix_{zone}.csv", zone=ZONES),
+        glm = "output/STATS/driver_glm_comparison.csv",
+        metric_models = expand("output/STATS/driver_metric_models_{resp}.csv", resp=METRIC_RESPONSES),
+        rf = "output/STATS/driver_rf_importance.csv",
+    log:
+        "logs/driver_interactions.log",
+    shell:
+        # the same call code/4_time_series.py makes (a separate Rscript process,
+        # which avoids the ranger/numpy OpenMP clash noted there)
+        """Rscript -e "source('{input.script}'); run_driver_interactions_analysis()" > {log} 2>&1"""
+
+
+rule driver_correlation_matrices:
+    input:
+        script = "func/analysis/compute_driver_correlation_matrices.R",
+        code = SHARED_R + ["func/tide.R", "func/driver_interactions.R"],
+        matrices = rules.driver_interactions.output.matrices,   # chained, as in step 2
+    output:
+        "output/STATS/driver_correlation_matrix_overall.png",
+        "output/STATS/driver_correlation_matrix_seasonal.png",
+    log:
+        "logs/driver_correlation_matrices.log",
+    shell:
+        "Rscript {input.script} > {log} 2>&1"
