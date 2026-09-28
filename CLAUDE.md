@@ -14,16 +14,12 @@ Each numbered script in [code/](code/) corresponds to a pipeline stage. Run them
 python code/0_download_data.py   # Download satellite + driver data (~hours, ~280 GB)
 python code/1_validate.py        # Satellite vs in situ match-up
 python code/2_regional_maps.py   # Create & QC regional maps
-# Step 3: plume detection via the external panache module (must be called from terminal directly).
-# Two config variants per zone -- dynamic (main results) and static (supplementary) -- 8 calls total:
-panache metadata/zone_config_dynamic_GULF_OF_LION.json
-panache metadata/zone_config_dynamic_BAY_OF_BISCAY.json
-panache metadata/zone_config_dynamic_SOUTHERN_BRITTANY.json
-panache metadata/zone_config_dynamic_BAY_OF_SEINE.json
-panache metadata/zone_config_static_GULF_OF_LION.json
-panache metadata/zone_config_static_BAY_OF_BISCAY.json
-panache metadata/zone_config_static_SOUTHERN_BRITTANY.json
-panache metadata/zone_config_static_BAY_OF_SEINE.json
+python code/3_plumes.py           # Plume detection via the external panache CLI (~60 min per zone x mode)
+# Step 3 first writes one panache JSON per zone x threshold mode (dynamic = main results,
+# static = supplementary) to output/panache/configs/ via tools/write_panache_configs.py,
+# then calls `panache <json>` 8 times. To run a single one by hand:
+#   python tools/write_panache_configs.py
+#   panache output/panache/configs/zone_config_dynamic_GULF_OF_LION.json
 python code/4_time_series.py     # X11 decomposition + driver comparisons + monthly seasonal driver analysis (~2h, see below)
 python code/5_figures.py         # Publication figures
 ```
@@ -64,7 +60,7 @@ manuscript/google_doc_sync/sync.sh
 
 ## Data storage
 
-Large datasets are stored **outside** this repo under the pCloud data folder (`~/pCloud Drive/data/` on macOS, `~/pCloudDrive/data/` on Linux) and are never committed. Code never hardcodes this path: Python uses `func/config.py` (`config.data_root()`, `config.data_path('WIND', zone)`) and R uses `func/config.R` (`riomar_data_root()`, `riomar_data_path(...)`, sourced by `util.R`). They pick the folder by OS (falling back to the other spelling), unless `data_root` in `metadata/riomar_config.yml` or the `RIOMAR_DATA_ROOT` env var overrides it. The same YAML holds the zone list and the default satellite dict. Exception: the panache `metadata/zone_config_*.json` files still carry absolute machine-specific paths, because panache reads them directly. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.
+Large datasets are stored **outside** this repo under the pCloud data folder (`~/pCloud Drive/data/` on macOS, `~/pCloudDrive/data/` on Linux) and are never committed. Code never hardcodes this path: Python uses `func/config.py` (`config.data_root()`, `config.data_path('WIND', zone)`) and R uses `func/config.R` (`riomar_data_root()`, `riomar_data_path(...)`, sourced by `util.R`). They pick the folder by OS (falling back to the other spelling), unless `data_root` in `metadata/riomar_config.yml` or the `RIOMAR_DATA_ROOT` env var overrides it. The same YAML holds the zone list and the default satellite dict. Panache settings live in the same YAML's `panache` section (including `input_path`, the SEXTANT SPM folder panache reads — currently the external `/Volumes/Toshi` drive); `tools/write_panache_configs.py` renders them into machine-specific JSONs under the gitignored `output/panache/configs/`, and `func/figure.py` reads them via `config.panache_zone_config(zone, mode)`. Never edit the generated JSONs. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and `metadata/riomar_config.yml` are tracked.
 
 Two distinct kinds of "outside the repo" apply here, and only one of them is backed up automatically:
 
@@ -96,9 +92,9 @@ Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.
 `panache`'s `Results.csv`/`PlumeMasks.nc` carry one row/mask layer per individual river mouth within a zone, plus an `'ALL'` union-mask row/layer (the zone total). RiOMar's loaders (`util.R::load_plume_ts()`, `figure.py::_load_results()`, `compute_plume_shape.py`, etc.) default to `river == "ALL"` for all zone-level stats. A real per-river analysis layer also exists (`func/compute_river_plume_correlation.R`, `X11.py::Apply_X11_method_on_time_series_per_river()`, `metadata/river_discharge_mapping.csv`) but is intentionally not surfaced in the manuscript — all published tables/figures stay at zone level, per project convention.
 
 ### metadata/
-Zone configuration JSONs consumed directly by `panache` and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
+`riomar_config.yml` (project settings, including panache's — see Data storage) and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
 
-Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), `TODO.md` (the manuscript/pipeline to-do list), and `make_figures_tables.R` (the figure/table/paragraph-source checklist; run `Rscript metadata/make_figures_tables.R` from the repo root — it still reads `manuscript/manuscript.tex` and `references.bib`). Anything under `manuscript/` that still reads these (e.g. `google_doc_sync/`) must point at `metadata/` — there are no copies left in `manuscript/`.
+Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), `TODO.md` (the manuscript/pipeline to-do list), and `make_figures_tables.R` (the figure/table/paragraph-source checklist; run `Rscript metadata/make_figures_tables.R` from the repo root — it still reads `manuscript/manuscript.tex` and `references.bib`). There are no copies left in `manuscript/` (`google_doc_sync/` never read them).
 
 ### Satellite data dict convention
 A Python dict like:

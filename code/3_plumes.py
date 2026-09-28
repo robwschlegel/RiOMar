@@ -4,32 +4,29 @@
 # The code needed to analyse the river plumes used in the RiOMar project.
 
 import os
+import sys
 import subprocess
 
 proj_dir = os.path.dirname(os.path.abspath('__file__'))
+sys.path.append(os.path.join(proj_dir, 'tools'))
+
+from write_panache_configs import write_all, config_path
 
 # NB: The plume detection is done via the panache module.
 # NB: Takes roughly 60 minutes per zone.
 
+# Write this machine's panache JSONs (output/panache/configs/) from the
+# `panache` section of metadata/riomar_config.yml -- edit settings there.
+write_all()
 
-# =============================================================================
-#### Dynamic thresholds
-# =============================================================================
-
-
-subprocess.run("panache metadata/zone_config_dynamic_GULF_OF_LION.json", shell=True, cwd=proj_dir, check=True)
-subprocess.run("panache metadata/zone_config_dynamic_BAY_OF_BISCAY.json", shell=True, cwd=proj_dir, check=True)
-subprocess.run("panache metadata/zone_config_dynamic_SOUTHERN_BRITTANY.json", shell=True, cwd=proj_dir, check=True)
-subprocess.run("panache metadata/zone_config_dynamic_BAY_OF_SEINE.json", shell=True, cwd=proj_dir, check=True)
+# Same order as the original hand-written calls
+zones_in_run_order = ['GULF_OF_LION', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY', 'BAY_OF_SEINE']
 
 
 # =============================================================================
-#### Static thresholds
+#### Dynamic thresholds, then static thresholds
 # =============================================================================
 
-
-subprocess.run("panache metadata/zone_config_static_GULF_OF_LION.json", shell=True, cwd=proj_dir, check=True)
-subprocess.run("panache metadata/zone_config_static_BAY_OF_BISCAY.json", shell=True, cwd=proj_dir, check=True)
-subprocess.run("panache metadata/zone_config_static_SOUTHERN_BRITTANY.json", shell=True, cwd=proj_dir, check=True)
-subprocess.run("panache metadata/zone_config_static_BAY_OF_SEINE.json", shell=True, cwd=proj_dir, check=True)
-
+for mode in ['dynamic', 'static']:
+    for zone in zones_in_run_order:
+        subprocess.run(['panache', config_path(zone, mode)], cwd=proj_dir, check=True)

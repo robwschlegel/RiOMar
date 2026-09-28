@@ -7,7 +7,7 @@
 # =============================================================================
 
 
-import os, sys, re, glob, subprocess, json
+import os, sys, re, glob, subprocess
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -19,6 +19,7 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
+import config
 from util import (load_csv_files, order_zones, get_registry_row, registry_filename)
 from panache.plume_algorithm import (Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask,
                                      derive_masks_from_bathymetry, estimate_near_mouth_bounds)
@@ -34,12 +35,12 @@ from panache.io import load_map_data
 def build_plume_parameters(Zone):
     """
     panache's authoritative algorithm parameters, overlaid with the
-    zone-tuned near-mouth-quantile settings from
-    metadata/zone_config_dynamic_<Zone>.json -- so Figure_3_panels()/
+    zone-tuned near-mouth-quantile settings from the `panache` section of
+    metadata/riomar_config.yml (config.panache_zone_config) -- so Figure_3_panels()/
     Figure_3_zone_maps() detect plumes exactly as the real pipeline does.
 
     near_mouth_lower_quantile/near_mouth_upper_quantile/gradient_steepness_fraction
-    are set only in that JSON, read here and overlaid last -- panache's
+    are set only there, read here and overlaid last -- panache's
     define_parameters() does not set them at all, so without this they
     silently fell back to panache's hardcoded defaults (0.25/0.75/0.9)
     instead of each zone's tuned values, which only the operational panache
@@ -47,9 +48,7 @@ def build_plume_parameters(Zone):
     """
     parameters = define_parameters(Zone)
 
-    zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
-    with open(zone_config_path) as f:
-        zone_config = json.load(f)
+    zone_config = config.panache_zone_config(Zone, 'dynamic')
     for key in ("near_mouth_lower_quantile", "near_mouth_upper_quantile", "gradient_steepness_fraction"):
         if key in zone_config:
             parameters[key] = zone_config[key]
@@ -224,9 +223,7 @@ def load_and_save_regional_maps_for_plot(where_to_save_the_figure, dates_for_eac
 
         coordinates_of_the_map = define_parameters(key)
 
-        zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{key}.json")
-        with open(zone_config_path) as f:
-            zone_config = json.load(f)
+        zone_config = config.panache_zone_config(key, 'dynamic')
 
         date_ts = pd.Timestamp(date)
         nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date_ts)
@@ -366,9 +363,7 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
 
     parameters = build_plume_parameters(Zone)
 
-    zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
-    with open(zone_config_path) as f:
-        zone_config = json.load(f)
+    zone_config = config.panache_zone_config(Zone, 'dynamic')
 
     date_ts = pd.Timestamp(Date)
     nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date_ts)
@@ -388,7 +383,7 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
     # bathymetry_path (not a hardcoded output/REGIONAL_MAPS path -- that was
     # never the real source of truth) is the same file panache itself
     # already computed/cached while generating this zone's Results.csv, per
-    # config.bathymetry_path in panache.runner -- see zone_config JSON.
+    # config.bathymetry_path in panache.runner -- see config.panache_zone_config().
     bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced, zone_config['bathymetry_path'])
 
     (_, land_mask) = derive_masks_from_bathymetry(bathymetry_data_aligned_to_reduced_map, parameters)
@@ -484,9 +479,7 @@ def Figure_3_zone_maps(where_are_saved_panache_outputs, where_to_save_the_figure
 
         parameters = define_parameters(Zone)
 
-        zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
-        with open(zone_config_path) as f:
-            zone_config = json.load(f)
+        zone_config = config.panache_zone_config(Zone, 'dynamic')
 
         date = pd.Timestamp(Date)
         nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date)
