@@ -1,4 +1,4 @@
-# manuscript/make_figures_tables.R
+# metadata/make_figures_tables.R
 #
 # A CHECKLIST, not a pipeline: verifies every figure/table manuscript.tex
 # expects has actually been generated, and reports where it lives and
@@ -14,29 +14,36 @@
 #
 # Driven by two CSV registries, both the single source of truth for their
 # own concern:
-#   - manuscript/figure_table_registry.csv: "what manuscript slot is this,
+#   - metadata/figure_table_registry.csv: "what manuscript slot is this,
 #     what number does it currently have, which R function/script renders
 #     it, where does its output live." Renumbering a figure/table (moving it
 #     in manuscript.tex, or reassigning its number) is a one-row edit to
 #     that CSV; this script and every figure.R/figure.py generator look up
 #     their current_number/output_subdir from the same row instead of
 #     hardcoding it.
-#   - manuscript/paragraph_source_registry.csv: "which script/data file
+#   - metadata/paragraph_source_registry.csv: "which script/data file
 #     produced the numbers cited in this manuscript paragraph." One row per
 #     Results/Discussion/Appendix paragraph containing a quantitative claim,
 #     anchored by a verbatim text snippet (most of these paragraphs have no
 #     \label of their own to key off).
 #
 # Usage:
-#   Rscript manuscript/make_figures_tables.R
+#   Rscript metadata/make_figures_tables.R   (from the repo root)
 # or, interactively, source() this file and call make_all_figures_tables().
 
 
 # Setup -----------------------------------------------------------------
 
-manuscript_dir <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly = FALSE), value = TRUE)))
-if (length(manuscript_dir) == 0 || manuscript_dir == "") manuscript_dir <- getwd()  # fallback when source()-d interactively
-proj_dir <- normalizePath(file.path(manuscript_dir, ".."))
+# This script lives in metadata/ (tracked) while manuscript.tex and
+# references.bib live in the gitignored manuscript/ -- so locate the repo root
+# from this script's own folder, then point at manuscript/ explicitly.
+script_dir <- dirname(sub("--file=", "", grep("--file=", commandArgs(trailingOnly = FALSE), value = TRUE)))
+if (length(script_dir) == 1 && script_dir != "") {
+  proj_dir <- normalizePath(file.path(script_dir, ".."))
+} else {
+  proj_dir <- getwd()  # fallback when source()-d interactively (RStudio project = repo root)
+}
+manuscript_dir <- file.path(proj_dir, "manuscript")
 
 func_dir <- file.path(proj_dir, "func")
 # figure.R loads tidyverse (for read_csv() etc.) then sources util.R itself
@@ -63,7 +70,7 @@ riomar_figure_root <- file.path(proj_dir, "figures")
 check_figure_exists <- function(label, path, newer_than = NULL) {
   if (!file.exists(path)) {
     message("[MISSING] ", label, ": ", path,
-           "\n           -> run the pipeline stage that generates it (see manuscript/figure_table_registry.csv).")
+           "\n           -> run the pipeline stage that generates it (see metadata/figure_table_registry.csv).")
     return(invisible(FALSE))
   }
   stale_note <- ""
@@ -130,14 +137,21 @@ check_registry_row <- function(row) {
     message("[ok] ", slot_label, ": hand-transcribed in manuscript.tex, no single source file to check.")
     return(invisible(TRUE))
   }
-  check_figure_exists(paste0(slot_label, " source data"), row$check_path)
+  # check_path can itself be a ";"-separated list (e.g. missing_days_table's
+  # two source CSVs) -- same convention as source_files below, and the same
+  # bug class if skipped: passing the raw joined string to file.exists()
+  # checks for one file literally named "a.csv;b.csv", which never exists,
+  # so a table with multiple real source files always reported [MISSING].
+  paths <- trimws(strsplit(row$check_path, ";")[[1]])
+  ok <- purrr::map_lgl(paths, ~ check_figure_exists(paste0(slot_label, " source data"), .x))
+  invisible(all(ok))
 }
 
 
 # Paragraph numeric-source check -----------------------------------------
 #
 # Same checklist spirit as check_registry_row() above, one level deeper:
-# manuscript/paragraph_source_registry.csv maps each manuscript paragraph
+# metadata/paragraph_source_registry.csv maps each manuscript paragraph
 # that states a quantitative claim (Results/Discussion/Appendix only -- see
 # that CSV's own notes) to the script(s)/data file(s) that produced its
 # numbers, anchored by a verbatim text snippet rather than a \label (most of

@@ -68,3 +68,29 @@ def satellite_dict(variable):
             'Temporal_resolution': sat['Temporal_resolution'],
             'start_day': sat['start_day'],
             'end_day': sat['end_day']}
+
+
+PANACHE_MODES = ('dynamic', 'static')
+
+
+def panache_zone_config(zone, mode, proj_dir=proj_dir):
+    """
+    The panache settings for one zone and threshold mode ('dynamic' or
+    'static'), as the dict panache expects in its zone_config JSON (same key
+    order as the hand-written JSONs this replaced). Paths are absolute for
+    this machine; proj_dir can be overridden to render them for another.
+    """
+    if mode not in PANACHE_MODES:
+        raise ValueError(f"mode must be one of {PANACHE_MODES}, got {mode!r}")
+    panache = load_config()['panache']
+    input_path = os.environ.get('RIOMAR_SEXTANT_SPM_PATH') or panache.get('input_path')
+    if not input_path:
+        input_path = data_path('SEXTANT', 'SPM') + os.sep
+    output_dir = os.path.join(proj_dir, 'output', 'panache', mode, zone)
+    return {'zone': zone,
+            'input_path': input_path,
+            'output_dir': output_dir,
+            'bathymetry_path': os.path.join(output_dir, 'Bathy_data.pkl'),
+            'coast_shapefile': os.path.join(proj_dir, panache['coast_shapefile']),
+            **panache[mode],
+            **panache['common']}

@@ -25,3 +25,29 @@ satellite:
   Temporal_resolution: [DAILY]
   start_day: "1998/01/01"
   end_day: "2025/12/31"
+
+# Plume detection (step 3). tools/write_panache_configs.py turns this into one
+# panache JSON per zone x threshold mode under output/panache/configs/
+# (gitignored, since the paths are machine-specific); func/figure.py reads
+# the same settings via config.panache_zone_config().
+panache:
+  # Folder of daily SEXTANT SPM .nc files. null -> <data_root>/SEXTANT/SPM/.
+  # The RIOMAR_SEXTANT_SPM_PATH environment variable overrides it.
+  input_path: /Volumes/Toshi/data/SEXTANT/SPM/
+  # Repo-relative; made absolute when the JSON is written.
+  coast_shapefile: data/FRANCE_shapefile/gadm41_FRA_0.shp
+  # Settings for each threshold mode...
+  dynamic:
+    dynamic_threshold: true
+    gradient_steepness_fraction: 0.30
+    near_mouth_lower_quantile: 0.20
+    near_mouth_upper_quantile: 0.50
+  static:
+    dynamic_threshold: false
+    global_threshold_quantile: 0.95
+  # ...and settings shared by both.
+  common:
+    overwrite: false
+    gif: false
+    nb_cores: 8
+    variable_name: analysed_spim

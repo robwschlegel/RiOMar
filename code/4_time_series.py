@@ -87,19 +87,12 @@ subprocess.run(
     cwd=proj_dir, check=True
 )
 
-
-# =============================================================================
-# ### Monthly multi-driver interaction analysis (sec:seasonal_methods)
-# =============================================================================
-
-# Re-runs the same six-step GLM/GAM/RF sequence above independently within
-# each calendar month's data subset, dynamic threshold only. Feeds the
-# Supplementary monthly driver-dominance table (manuscript.tex); see
-# func/driver_interactions.R::run_monthly_driver_interactions_analysis().
-subprocess.run(
-    ['Rscript', '-e', f"source('{driver_interactions_R_path}'); run_monthly_driver_interactions_analysis()"],
-    cwd=proj_dir, check=True
-)
+# The monthly re-run of this analysis (run_monthly_driver_interactions_analysis(),
+# 12 calendar months x the full sequence above) was removed from the pipeline
+# 2026-09-28: its only output, the Supplementary monthly driver-dominance
+# table, was removed from manuscript.tex in the 2026-09 revision pass (content
+# preserved in manuscript/reviewer_responses.md). The R functions are still
+# defined in func/driver_interactions.R if this needs restoring.
 
 
 # =============================================================================
@@ -107,9 +100,11 @@ subprocess.run(
 # =============================================================================
 
 # Derives PlumeShape.csv per zone/threshold from panache's PlumeMasks.nc (see
-# func/compute_plume_shape.py); read by func/figure.R's compactness panels
-# and func/compute_shape_alongcoast_trend.R.
-import compute_plume_shape  # noqa: F401
+# func/analysis/compute_plume_shape.py); read by func/figure.R's compactness panels
+# and func/analysis/compute_shape_alongcoast_trend.R.
+sys.path.append(os.path.join(func_dir, 'analysis'))
+import compute_plume_shape  # noqa: E402
+compute_plume_shape.main()
 
 
 # =============================================================================
@@ -119,30 +114,27 @@ import compute_plume_shape  # noqa: F401
 # These are one-off scripts that generate stats used in the manuscript; 
 # wiring them in here keeps their outputs (output/STATS/*.csv) in sync 
 # with the panache/X11/ driver-interactions data above. 
-# Order matters: generate_monthly_trend_pct_heatmap.R and 
-# generate_table_s_monthly_trends.R read compute_seasonal_trend.R's output; 
-# generate_table_s_octant_trends.R reads compute_direction_octant_trend.R's output.
+# Order matters: generate_monthly_trend_pct_heatmap.R reads
+# compute_seasonal_trend.R's output.
 # compute_driver_correlation_matrices.R sources driver_interactions.R (for
 # its zone/driver helpers), which loads ranger -- run it via Rscript
 # subprocess rather than rpy2's embedded R for the same OpenMP-collision
-# reason as driver_interactions.R itself, above. The other 9 don't load
+# reason as driver_interactions.R itself, above. The others don't load
 # ranger, so they stay on rpy2.
 stats_scripts = [
-    'compute_area_trend.R',
-    'compute_mass_spm_trend.R',
-    'compute_shape_alongcoast_trend.R',
-    'compute_driver_correlation_trend.R',
-    'compute_seasonal_trend.R',
-    'generate_monthly_trend_pct_heatmap.R',
-    'generate_table_s_monthly_trends.R',
-    'compute_direction_octant_trend.R',
-    'generate_table_s_octant_trends.R',
+    'analysis/compute_area_trend.R',
+    'analysis/compute_mass_spm_trend.R',
+    'analysis/compute_shape_alongcoast_trend.R',
+    'analysis/compute_driver_correlation_trend.R',
+    'analysis/compute_seasonal_trend.R',
+    'analysis/generate_monthly_trend_pct_heatmap.R',
+    'analysis/compute_direction_octant_trend.R',
 ]
 for script in stats_scripts:
     robjects.r['source'](os.path.join(func_dir, script))
 
 subprocess.run(
-    ['Rscript', os.path.join(func_dir, 'compute_driver_correlation_matrices.R')],
+    ['Rscript', os.path.join(func_dir, 'analysis', 'compute_driver_correlation_matrices.R')],
     cwd=proj_dir, check=True
 )
 

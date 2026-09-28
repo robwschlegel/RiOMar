@@ -12,22 +12,24 @@
 # What this script does
 #   1. Baseline additive GLM
 #   2. + pairwise interaction terms, LRT/AIC
-#   3. GAM with te() tensor smooths
-#   4. Regime stratification (discharge, wind, tide, current, wave)
-#   5. Per-metric models (area, centroid lon/lat, not just area)
-#   6. Exploratory random forest + iml H-statistic
-#   7. Do it all again per month per zone
+#   3. Per-metric models: additive GLM, interaction GLM, and GAM with te()
+#      tensor smooths, for each of 5 response metrics (area, mean/mass SPM,
+#      centroid lon/lat)
+#   4. Exploratory random forest importance
+#
+# Removed 2026-09-28 (none had a manuscript consumer left): a zone-level GAM
+# fit for driver_gam_summary.csv + its figures (plot_gam_figure()), the
+# discharge/wind/tide/current/wave regime-stratified GLMs
+# (add_regime_labels()/refit_by_regime(), driver_regime_glm.csv), the random
+# forest H-statistic diagnostic, and the per-month repeat of the whole
+# sequence (run_monthly_driver_interactions_analysis() and
+# summarise_monthly_driver_dominance()). The CSVs they last wrote are still
+# on disk and cited as frozen results in manuscript.tex; the code is in git
+# history (last present in commit 533e42c) and summarised in
+# manuscript/reviewer_responses.md.
 
 # Known simplifications / gaps, so nothing here is mistaken for more
 # rigorous than it is:
-#   - discharge_regime in add_regime_labels() is NOT the true discharge
-#     Rossby number from Fong & Geyer (2002) (Ro = U / (f * L), needing
-#     mouth width and outflow velocity); it is a per-zone standardised
-#     discharge (z-score) used purely as a cheap, ordered stand-in for
-#     "is today a high- or low-discharge day relative to this river's own range".
-#     Regime stratification (step 4) now covers five regimes in total --
-#     discharge_regime, wind_regime, tide_bin, current_regime, wave_regime,
-#     not just the three named in the "What this script does" summary above.
 #   - "Centroid" per-metric models use the SPM-weighted mean pixel lon/lat
 #     of the daily plume mask (lon/lat_weighted_centroid_of_the_plume_area),
 #     not an unweighted mean. Ralston et al. (2024)'s alongshore/cross-shore
@@ -42,16 +44,9 @@
 if(!dir.exists("func")) stop("func/driver_interactions.R must be sourced with the repo root as the working directory.")
 
 library(tidyverse)
-library(mgcv)       # GAM with tensor-product smooths (step 3)
-library(broom)      # tidy() model summaries (steps 1,2,4,5)
-library(patchwork)
-library(gratia)
+library(mgcv)       # fit_gam(): used by the per-metric models step and by
+                    # func/figure.R's Figure S8 (gam_partial_effects)
 library(ranger)
-library(iml)
-
-# iml::Interaction uses future.apply internally; the R6 predictor object can
-# exceed the default 500 MiB per-worker globals limit.
-options(future.globals.maxSize = 2 * 1024^3)   # 2 GiB
 
 # Run multi-driver analyses and load project common functions
 source("func/multi.R")
@@ -66,13 +61,8 @@ source("func/multi.R")
 # plume_dir: path to the panache output root (e.g. "output/panache/dynamic").
 #            Passed to util.R::load_plume_ts() so the correct threshold run
 #            is used.
-# month_filter: NULL (default) keeps every day of the year, as for the
-#            annual analysis. An integer 1-12 restricts the matrix to that
-#            calendar month only, across all years.
-#            Used by run_monthly_driver_interactions_analysis() to refit the
-#            same six-step sequence within each month's data subset.
 
-build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic", month_filter = NULL){
+build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic"){
 
   meta <- get_zone_meta(zone_name = zone_name)
 
@@ -89,8 +79,6 @@ build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic",
     dplyr::left_join(df_wind, by = "date") |>
     dplyr::left_join(df_current, by = "date") |>
     dplyr::left_join(df_wave, by = "date")
-
-  if(!is.null(month_filter)) df <- dplyr::filter(df, lubridate::month(date) == month_filter)
 
   df |>
     dplyr::mutate(zone = zone_name, .before = "date",
@@ -137,6 +125,7 @@ compare_glms <- function(zone_name, driver_matrices, response = "plume_area"){
     message("compare_glms: skipping ", zone_name, " (insufficient variation in ", response, ")")
     return(NULL)
   }
+  message("  [", Sys.time(), "] ", zone_name, ": fitting baseline + interaction GLMs...")
   m0 <- fit_baseline_glm(df_valid, response)
   m1 <- fit_interaction_glm(df_valid, response)
   lrt <- stats::anova(m0, m1, test = "Chisq")
@@ -147,7 +136,7 @@ compare_glms <- function(zone_name, driver_matrices, response = "plume_area"){
 }
 
 
-# Step 3: GAM with tensor-product smooths ------------------------------------
+# GAM with tensor-product smooths (used by step 3 and figure.R) ------------------------------------
 
 fit_gam <- function(df, response = "plume_area"){
   drivers <- available_drivers(df)
@@ -165,44 +154,6 @@ fit_gam <- function(df, response = "plume_area"){
   te_terms <- purrr::map_chr(pair_terms, ~ paste0("te(", .x[1], ", ", .x[2], ")"))
   form <- stats::as.formula(paste(response, "~", paste(c(te_terms, categorical_drivers), collapse = " + ")))
   mgcv::gam(form, data = df_valid, method = "REML")
-}
-
-# Full GAM output figures. Each zone is a separate manuscript slot
-# (gam_monthly_dominance_<zone> in metadata/figure_table_registry.csv)
-# since one call here produces all four at once -- pass fig_paths, a named
-# list keyed by zone_name, for that case.
-# fig_path (single shared base, zone name appended) is kept for the
-# static-threshold companion run, which isn't individually manuscript-
-# referenced and so has no per-zone registry slot.
-plot_gam_figure <- function(gam_models, fig_path = NULL, fig_paths = NULL){
-  if (is.null(fig_paths)) {
-    if (!dir.exists(dirname(fig_path))) dir.create(dirname(fig_path), recursive = TRUE)
-    ext <- tools::file_ext(fig_path)
-    base <- tools::file_path_sans_ext(fig_path)
-
-    zone_files <- purrr::imap_chr(gam_models, function(m, zone_name){
-      p <- gratia::draw(m, ncol = 5, caption = FALSE) +
-        patchwork::plot_annotation(title = zone_title(zone_name),
-                                   theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 24, face = "bold", hjust = 0.5)))
-      out_file <- paste0(base, "_", zone_name, ".", ext)
-      ggplot2::ggsave(out_file, p, width = 20, height = 9, dpi = 200)
-      out_file
-    })
-
-    return(invisible(zone_files))
-  }
-
-  zone_files <- purrr::imap_chr(gam_models, function(m, zone_name){
-    out_file <- fig_paths[[zone_name]]
-    if (!dir.exists(dirname(out_file))) dir.create(dirname(out_file), recursive = TRUE)
-    p <- gratia::draw(m, ncol = 5, caption = FALSE) +
-      patchwork::plot_annotation(title = zone_title(zone_name),
-                                 theme = ggplot2::theme(plot.title = ggplot2::element_text(size = 24, face = "bold", hjust = 0.5)))
-    ggplot2::ggsave(out_file, p, width = 20, height = 9, dpi = 200)
-    out_file
-  })
-
-  invisible(zone_files)
 }
 
 # Partial-dependence curve for one driver from a fitted GAM: vary that
@@ -235,44 +186,7 @@ gam_partial_effect <- function(gam_model, driver_name, df, n_points = 50){
 }
 
 
-# Step 4: regime stratification ----------------------------------------------
-
-add_regime_labels <- function(df){
-  df |>
-    dplyr::mutate(
-      flow_z = as.numeric(scale(flow)),
-      discharge_regime = ifelse(flow_z >= 0, "high (>=zone median)", "low (<zone median)"),
-      wind_regime = ifelse(wind_spd >= 6, "high (>=6 m/s)", "low (<6 m/s)"),
-      tide_bin = ifelse(tide_range >= stats::median(tide_range, na.rm = TRUE),
-                        "spring (>=zone median)", "neap (<zone median)"),
-      # NB: unlike wind_regime's literature-grounded 6 m/s threshold (Fofonova
-      # et al. 2015), no equivalent fixed threshold for current speed or wave
-      # height was found in the reviewed literature.
-      current_regime = ifelse(current >= stats::median(current, na.rm = TRUE),
-                              "high (>=zone median)", "low (<zone median)"),
-      wave_regime = ifelse(wave_height >= stats::median(wave_height, na.rm = TRUE),
-                           "high (>=zone median)", "low (<zone median)")
-    )
-}
-
-refit_by_regime <- function(zone_name, regime_col, driver_matrices, response = "plume_area", min_n = 30){
-  df <- add_regime_labels(driver_matrices[[zone_name]])
-  drivers <- available_drivers(df)
-  df_valid <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
-  if(nrow(df_valid) < min_n || stats::var(df_valid[[response]]) < 1e-6) return(NULL)
-  df <- df_valid
-  form <- stats::as.formula(paste(response, "~", paste(drivers, collapse = " + ")))
-
-  purrr::map_dfr(split(df, df[[regime_col]]), function(sub){
-    if(nrow(sub) < min_n) return(NULL)
-    m <- stats::glm(form, data = sub, family = gaussian())
-    broom::tidy(m) |> dplyr::mutate(n = nrow(sub), regime_value = unique(sub[[regime_col]]))
-  }) |>
-    dplyr::mutate(zone = zone_name, regime = regime_col, response = response, .before = 1)
-}
-
-
-# Step 5: per-metric models --------------------------------------------------
+# Step 3: per-metric models --------------------------------------------------
 
 fit_metric_models <- function(df, response){
   list(
@@ -286,9 +200,14 @@ metric_responses <- c("plume_area", "mean_SPM_in_the_plume_area", "mass_SPM_in_t
                       "lon_weighted_centroid_of_the_plume_area", "lat_weighted_centroid_of_the_plume_area")
 
 
-# Step 6: exploratory random forest + H-statistic ----------------------------
+# Step 4: exploratory random forest importance --------------------------------
+# The H-statistic interaction diagnostic that used to sit here (one extra
+# ranger fit + iml::Interaction$new() per zone) was removed 2026-09-28: its
+# output (driver_rf_interaction_hstat.csv) had no manuscript consumer and was
+# the single slowest part of this step.
 
-fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area", n_repeats = 10){
+fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area", n_repeats = 10,
+                              num_threads = NULL){
   df <- driver_matrices[[zone_name]]
   drivers <- available_drivers(df)
   df_complete <- tidyr::drop_na(df, dplyr::all_of(c(response, drivers)))
@@ -299,6 +218,10 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
 
   rf_formula <- stats::as.formula(paste(response, "~", paste(drivers, collapse = " + ")))
 
+  message("  [", Sys.time(), "] ", zone_name, ": fitting ", n_repeats, " ranger repeats on ",
+          nrow(df_complete), " rows...")
+  repeats_start <- Sys.time()
+
   # Permutation importance is known to redistribute unpredictably among
   # correlated predictors and vary between repeated fits of the same forest
   # (Strobl et al. 2007; Nicodemus et al. 2010; Wang et al. 2016), worse the
@@ -308,93 +231,90 @@ fit_rf_diagnostic <- function(zone_name, driver_matrices, response = "plume_area
   # of silently looking as solid as a stable one.
   importance_repeats <- purrr::map(seq_len(n_repeats), function(i){
     ranger::ranger(rf_formula, data = df_complete[, c(response, drivers)],
-                   importance = "permutation", num.trees = 500, seed = i)$variable.importance
+                   importance = "permutation", num.trees = 500, seed = i,
+                   num.threads = num_threads)$variable.importance
   })
   importance_mat <- do.call(rbind, importance_repeats)
   importance_mean <- colMeans(importance_mat)
   importance_sd <- apply(importance_mat, 2, stats::sd)
 
-  # One fit (seed 1) is kept for the H-statistic interaction diagnostic,
-  # which is too expensive to repeat n_repeats times as well.
-  rf <- ranger::ranger(rf_formula, data = df_complete[, c(response, drivers)],
-                       importance = "permutation", num.trees = 500, seed = 1)
+  message("  [", Sys.time(), "] ", zone_name, ": ranger repeats done (",
+          round(difftime(Sys.time(), repeats_start, units = "secs"), 1), "s)")
 
-  predictor <- iml::Predictor$new(rf, data = df_complete[, drivers], y = df_complete[[response]])
-  interaction_hstat <- iml::Interaction$new(predictor)$results
-
-  list(model = rf, importance = importance_mean, importance_sd = importance_sd, interaction = interaction_hstat)
+  list(importance = importance_mean, importance_sd = importance_sd)
 }
 
 
 # Runner: execute all steps for one set of plume results ---------------------
 
-run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths = NULL, month_filter = NULL){
+run_full_analysis <- function(plume_dir, stats_dir, rf_num_threads = NULL, overwrite = TRUE){
 
   if(!dir.exists(stats_dir)) dir.create(stats_dir, recursive = TRUE)
 
-  message("[", Sys.time(), "] Step 0/6: building daily driver matrices for ", length(zones), " zones (", plume_dir,
-          if(!is.null(month_filter)) paste0(", month ", month_filter) else "", ")...")
+  message("[", Sys.time(), "] Step 0/4: building daily driver matrices for ", length(zones), " zones (", plume_dir, ")...")
 
   # Step 0: build driver matrices
-  driver_matrices <- purrr::map(zones, ~ build_driver_matrix(.x, plume_dir = plume_dir, month_filter = month_filter)) |>
-    purrr::set_names(zones)
+  driver_matrices <- purrr::map(zones, function(zone_name){
+    message("  [", Sys.time(), "] ", zone_name, ": building driver matrix...")
+    build_driver_matrix(zone_name, plume_dir = plume_dir)
+  }) |> purrr::set_names(zones)
 
   # Save daily combined tables
   purrr::iwalk(driver_matrices, function(df, zone){
     readr::write_csv(df, file.path(stats_dir, paste0("daily_driver_matrix_", zone, ".csv")))
   })
 
-  message("[", Sys.time(), "] Step 1-2/6: fitting baseline + interaction GLMs and comparing via LRT/AIC...")
+  message("[", Sys.time(), "] Step 1-2/4: fitting baseline + interaction GLMs and comparing via LRT/AIC...")
 
   # Step 2: GLM comparison
   glm_comparison_stats <- purrr::map(zones, compare_glms, driver_matrices = driver_matrices) |>
     purrr::compact() |> dplyr::bind_rows()
   readr::write_csv(glm_comparison_stats, file.path(stats_dir, "driver_glm_comparison.csv"))
 
-  message("[", Sys.time(), "] Step 3/6: fitting GAMs with tensor-product smooths and drawing the GAM figure(s)...")
+  # (The zone-level GAM and regime-GLM steps that used to sit here were
+  # removed 2026-09-28 -- see the header note. Their GAM R^2/deviance
+  # numbers were redundant with the plume_area cell below, which is what
+  # paragraph_source_registry.csv cites.)
 
-  # Step 3: GAM
-  gam_models <- purrr::map(zones, ~ fit_gam(driver_matrices[[.x]])) |>
-    purrr::set_names(zones) |> purrr::compact()
+  message("[", Sys.time(), "] Step 3/4: fitting per-metric models for ", length(metric_responses), " response variables...")
 
-  gam_summary <- purrr::imap_dfr(gam_models, function(m, zone_name){
-    s <- summary(m)
-    tibble::tibble(zone = zone_name, term = rownames(s$s.table),
-                   edf = s$s.table[, "edf"], ref.df = s$s.table[, "Ref.df"],
-                   F = s$s.table[, "F"], p = s$s.table[, "p-value"],
-                   r_sq_adj = s$r.sq, deviance_explained = s$dev.expl)
-  })
-  readr::write_csv(gam_summary, file.path(stats_dir, "driver_gam_summary.csv"))
-  if(length(gam_models) > 0) plot_gam_figure(gam_models, fig_path = fig_path, fig_paths = fig_paths)
+  # Step 3: per-metric models. Each (response, zone) cell is checkpointed to
+  # its own file under metric_cache_dir as soon as it's fitted -- this is
+  # what makes overwrite = FALSE useful: a rerun after an interrupted run
+  # reads any cell that's already on disk instead of refitting it, while
+  # overwrite = TRUE (the default) always refits and just refreshes the
+  # cache file for next time.
+  metric_cache_dir <- file.path(stats_dir, ".checkpoints", "metric_models")
+  dir.create(metric_cache_dir, recursive = TRUE, showWarnings = FALSE)
 
-  message("[", Sys.time(), "] Step 4/6: refitting GLMs by discharge/wind/tide regime...")
-
-  # Step 4: regime stratification
-  regime_stats <- purrr::map_dfr(zones, function(z){
-    dplyr::bind_rows(
-      refit_by_regime(z, "discharge_regime", driver_matrices),
-      refit_by_regime(z, "wind_regime", driver_matrices),
-      refit_by_regime(z, "tide_bin", driver_matrices),
-      refit_by_regime(z, "current_regime", driver_matrices),
-      refit_by_regime(z, "wave_regime", driver_matrices)
-    )
-  })
-  readr::write_csv(regime_stats, file.path(stats_dir, "driver_regime_glm.csv"))
-
-  message("[", Sys.time(), "] Step 5/6: fitting per-metric models for ", length(metric_responses), " response variables...")
-
-  # Step 5: per-metric models
   metric_model_stats <- purrr::map(metric_responses, function(resp){
     purrr::imap_dfr(driver_matrices, function(df, zone_name){
-      if(!(resp %in% names(df))) return(NULL)
+      cache_path <- file.path(metric_cache_dir, paste0(resp, "__", zone_name, ".csv"))
+      if(!overwrite && file.exists(cache_path)){
+        message("  [", Sys.time(), "] ", resp, " / ", zone_name, ": using cached result (overwrite = FALSE)")
+        return(readr::read_csv(cache_path, show_col_types = FALSE))
+      }
+      if(!(resp %in% names(df))){
+        message("  [", Sys.time(), "] ", resp, " / ", zone_name, ": skipped (response not present)")
+        return(NULL)
+      }
       df_resp <- tidyr::drop_na(df, dplyr::all_of(c(resp, available_drivers(df))))
-      if(nrow(df_resp) < 30) return(NULL)
+      if(nrow(df_resp) < 30){
+        message("  [", Sys.time(), "] ", resp, " / ", zone_name, ": skipped (< 30 complete rows)")
+        return(NULL)
+      }
+      message("  [", Sys.time(), "] ", resp, " / ", zone_name, ": fitting GLM + GAM on ", nrow(df_resp), " rows...")
+      fit_start <- Sys.time()
       models <- fit_metric_models(df_resp, resp)
-      tibble::tibble(zone = zone_name, response = resp,
+      message("  [", Sys.time(), "] ", resp, " / ", zone_name, ": done (",
+              round(difftime(Sys.time(), fit_start, units = "secs"), 1), "s)")
+      result <- tibble::tibble(zone = zone_name, response = resp,
                      aic_additive = stats::AIC(models$glm_additive),
                      aic_interaction = stats::AIC(models$glm_interaction),
                      gam_r_sq_adj = summary(models$gam)$r.sq,
                      gam_deviance_explained = summary(models$gam)$dev.expl)
+      readr::write_csv(result, cache_path)
+      result
     })
   }) |> purrr::set_names(metric_responses)
 
@@ -402,11 +322,23 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
     readr::write_csv(stats_df, file.path(stats_dir, paste0("driver_metric_models_", resp, ".csv")))
   })
 
-  message("[", Sys.time(), "] Step 6/6: fitting random forest + H-statistic interaction diagnostics...")
+  message("[", Sys.time(), "] Step 4/4: fitting random forest importance diagnostics...")
 
-  # Step 6: random forest
-  rf_results <- purrr::map(zones, fit_rf_diagnostic, driver_matrices = driver_matrices) |>
-    purrr::set_names(zones) |> purrr::compact()
+  # Random forest importance. Same per-cell checkpointing as step 3, one file
+  # per zone.
+  rf_cache_dir <- file.path(stats_dir, ".checkpoints", "rf")
+  dir.create(rf_cache_dir, recursive = TRUE, showWarnings = FALSE)
+
+  rf_results <- purrr::map(zones, function(zone_name){
+    cache_path <- file.path(rf_cache_dir, paste0(zone_name, ".rds"))
+    if(!overwrite && file.exists(cache_path)){
+      message("  [", Sys.time(), "] ", zone_name, ": using cached RF result (overwrite = FALSE)")
+      return(readRDS(cache_path))
+    }
+    result <- fit_rf_diagnostic(zone_name, driver_matrices, num_threads = rf_num_threads)
+    if(!is.null(result)) saveRDS(result, cache_path)
+    result
+  }) |> purrr::set_names(zones) |> purrr::compact()
 
   rf_importance <- purrr::imap_dfr(rf_results, function(res, zone_name){
     tibble::tibble(zone = zone_name, driver = names(res$importance), importance = res$importance,
@@ -414,15 +346,7 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
   })
   readr::write_csv(rf_importance, file.path(stats_dir, "driver_rf_importance.csv"))
 
-  rf_interaction <- purrr::imap_dfr(rf_results, function(res, zone_name){
-    dplyr::mutate(res$interaction, zone = zone_name, .before = 1)
-  })
-  if(nrow(rf_interaction) > 0){
-    readr::write_csv(rf_interaction, file.path(stats_dir, "driver_rf_interaction_hstat.csv"))
-  }
-
-  message("run_full_analysis() complete. Outputs written to ", stats_dir, " and ", fig_path,
-          " at ", Sys.time())
+  message("run_full_analysis() complete. Outputs written to ", stats_dir, " at ", Sys.time())
 }
 
 
@@ -431,95 +355,17 @@ run_full_analysis <- function(plume_dir, stats_dir, fig_path = NULL, fig_paths =
 # static-threshold (supplementary) pass was dropped (2026-09-24): its GAM
 # fitting (step 5/6) ran an order of magnitude slower than the dynamic
 # pass for reasons not worth chasing down, and the static results aren't
-# individually manuscript-referenced. func/render_gam_figure_only.R and
-# func/compute_direction_gam_significance.R still reference the static
-# output paths this used to write (output/STATS/static,
-# figures/ARTICLE/gam_monthly_dominance_static/Figure_S7_static.png) but
-# are standalone utility scripts, not part of the automated pipeline.
+# individually manuscript-referenced.
 
-run_driver_interactions_analysis <- function(){
-
-  # Each zone is its own manuscript slot (gam_monthly_dominance_<zone> in
-  # metadata/figure_table_registry.csv) -- build the per-zone output path
-  # for each from the registry rather than hardcoding a shared folder.
-  dynamic_fig_paths <- purrr::set_names(zones) |>
-    purrr::map(function(zone_name){
-      slot_key <- paste0("gam_monthly_dominance_", tolower(zone_name))
-      row <- get_registry_row(slot_key)
-      file.path("figures/ARTICLE", row$output_subdir, registry_filename(row$output_subdir))
-    })
+run_driver_interactions_analysis <- function(overwrite = TRUE){
 
   message("== Driver interactions: dynamic threshold (main results) ==")
   run_full_analysis(
     plume_dir = "output/panache/dynamic",
     stats_dir = "output/STATS",
-    fig_paths = dynamic_fig_paths
+    overwrite = overwrite
   )
 
   message("func/driver_interactions.R::run_driver_interactions_analysis() complete.")
   invisible(TRUE)
 }
-
-
-# Monthly entry point (sec:seasonal_methods) ---------------------------------
-# Re-runs the same six-step sequence independently within each calendar
-# month's data subset, dynamic threshold only (the static-threshold pass is
-# not repeated here -- the seasonal_boxplots_dynamic_vs_static figure's
-# dynamic-vs-static comparison only needs the boxplot-distribution data
-# prepared in func/figure.py, not these
-# driver-interaction results). Each month's full run_full_analysis() output
-# (GLM comparison, GAM summary + figure, regime stats, per-metric models, RF
-# importance/H-statistic) is kept on disk under output/STATS/monthly/<MM>/
-# for anyone who wants the detail; summarise_monthly_driver_dominance() below
-# then distils just the dominant driver per zone per month into the compact
-# Supplementary table manuscript.tex actually shows.
-
-run_monthly_driver_interactions_analysis <- function(){
-  purrr::walk(1:12, function(m){
-    mm <- sprintf("%02d", m)
-    message("== Driver interactions: month ", mm, " (dynamic threshold) ==")
-    run_full_analysis(
-      plume_dir    = "output/panache/dynamic",
-      stats_dir    = file.path("output/STATS/monthly", mm),
-      fig_path     = file.path("figures/ARTICLE/gam_monthly_breakdown", paste0("Figure_S7_month_", mm, ".png")),
-      month_filter = m
-    )
-  })
-
-  dominance <- summarise_monthly_driver_dominance()
-  readr::write_csv(dominance, "output/STATS/monthly_driver_dominance_summary.csv")
-
-  message("func/driver_interactions.R::run_monthly_driver_interactions_analysis() complete.")
-  invisible(TRUE)
-}
-
-# Aggregates the 12 output/STATS/monthly/<MM>/ directories written above into
-# a single per-zone-per-month "which driver dominates" summary: the term with
-# the largest GAM F-statistic (driver_gam_summary.csv) and the driver with
-# the largest random-forest permutation importance (driver_rf_importance.csv),
-# cross-checked against each other the same way the annual analysis treats
-# GAM and RF as a cross-check pair. This is deliberately not the full
-# GLM/GAM/RF coefficient dump each month's run_full_analysis() already
-# writes. That detail stays on disk, unsummarised, for anyone who wants it.
-summarise_monthly_driver_dominance <- function(monthly_stats_root = "output/STATS/monthly"){
-  months <- sprintf("%02d", 1:12)
-
-  purrr::map_dfr(months, function(mm){
-    stats_dir <- file.path(monthly_stats_root, mm)
-    gam_file <- file.path(stats_dir, "driver_gam_summary.csv")
-    rf_file  <- file.path(stats_dir, "driver_rf_importance.csv")
-    if(!file.exists(gam_file) || !file.exists(rf_file)) return(NULL)
-
-    gam_top <- readr::read_csv(gam_file, show_col_types = FALSE) |>
-      dplyr::slice_max(F, n = 1, by = "zone") |>
-      dplyr::select(zone, gam_top_term = term, gam_top_F = F, gam_top_p = p)
-
-    rf_top <- readr::read_csv(rf_file, show_col_types = FALSE) |>
-      dplyr::slice_max(importance, n = 1, by = "zone") |>
-      dplyr::select(zone, rf_top_driver = driver, rf_top_importance = importance)
-
-    dplyr::full_join(gam_top, rf_top, by = "zone") |>
-      dplyr::mutate(month = as.integer(mm), .before = 1)
-  })
-}
-

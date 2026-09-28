@@ -7,7 +7,7 @@
 # =============================================================================
 
 
-import os, sys, re, glob, subprocess, json
+import os, sys, re, glob, subprocess
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -19,6 +19,7 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
+import config
 from util import (load_csv_files, order_zones, get_registry_row, registry_filename)
 from panache.plume_algorithm import (Create_the_plume_mask, delineate_plume_pipeline, create_polygon_mask,
                                      derive_masks_from_bathymetry, estimate_near_mouth_bounds)
@@ -34,12 +35,12 @@ from panache.io import load_map_data
 def build_plume_parameters(Zone):
     """
     panache's authoritative algorithm parameters, overlaid with the
-    zone-tuned near-mouth-quantile settings from
-    metadata/zone_config_dynamic_<Zone>.json -- so Figure_3_panels()/
-    Figure_3_zone_maps() detect plumes exactly as the real pipeline does.
+    zone-tuned near-mouth-quantile settings from the `panache` section of
+    metadata/riomar_config.yml (config.panache_zone_config) -- so Figure_2_methodology_panels()/
+    Figure_2_methodology_zone_maps() detect plumes exactly as the real pipeline does.
 
     near_mouth_lower_quantile/near_mouth_upper_quantile/gradient_steepness_fraction
-    are set only in that JSON, read here and overlaid last -- panache's
+    are set only there, read here and overlaid last -- panache's
     define_parameters() does not set them at all, so without this they
     silently fell back to panache's hardcoded defaults (0.25/0.75/0.9)
     instead of each zone's tuned values, which only the operational panache
@@ -47,9 +48,7 @@ def build_plume_parameters(Zone):
     """
     parameters = define_parameters(Zone)
 
-    zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
-    with open(zone_config_path) as f:
-        zone_config = json.load(f)
+    zone_config = config.panache_zone_config(Zone, 'dynamic')
     for key in ("near_mouth_lower_quantile", "near_mouth_upper_quantile", "gradient_steepness_fraction"):
         if key in zone_config:
             parameters[key] = zone_config[key]
@@ -67,10 +66,10 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     Convert a panache Create_the_plume_mask instance's SPM map and plume mask
     to a CSV for plot_methodology_worked_example_panel() (func/figure.R) to plot later. The R call
     itself is deferred to a single batched Rscript subprocess in
-    Figure_3_panels() (run_figure_3_panels.R) rather than done here
+    Figure_2_methodology_panels() (run_figure_2_methodology_panels.R) rather than done here
     in-process, since plot_methodology_worked_example_panel() now renders a high-res coastline via
     sf, which conflicts with the conda geospatial stack already loaded in
-    this process via panache -- same workaround as Figure_1().
+    this process via panache -- same workaround as Figure_1_mean_spm_map().
     """
 
     folder_where_to_save_data = os.path.join(where_to_save_the_plot, 'DATA')
@@ -224,12 +223,14 @@ def load_and_save_regional_maps_for_plot(where_to_save_the_figure, dates_for_eac
 
         coordinates_of_the_map = define_parameters(key)
 
-        zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{key}.json")
-        with open(zone_config_path) as f:
-            zone_config = json.load(f)
+        zone_config = config.panache_zone_config(key, 'dynamic')
 
+        # Only one day's granule per zone is needed here, unlike the full
+        # panache pipeline run (which reads panache.input_path, typically a
+        # faster local/external mount) -- pCloud's own copy is safe and
+        # avoids depending on that mount just to build these thumbnails.
         date_ts = pd.Timestamp(date)
-        nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date_ts)
+        nc_path = _find_sextant_nc_for_date(config.data_path('SEXTANT', 'SPM'), date_ts)
 
         SPM_map_da = load_map_data(nc_path,
                                    lon_range=tuple(coordinates_of_the_map['lon_range_of_plume_area']),
@@ -288,7 +289,7 @@ def dates_for_each_zone() :
 # =============================================================================
 
 
-def Figure_1(where_to_save_the_figure):
+def Figure_1_mean_spm_map(where_to_save_the_figure):
     save_files_for_Figure_1(where_to_save_the_figure,
                             mean_spm_path=os.path.join(proj_dir, "output", "STATS", "mean_spm_national.nc"),
                             coordinates_of_the_map={"lat_min": 42, "lat_max": 51.5, "lon_min": -6, "lon_max": 8})
@@ -306,7 +307,7 @@ def Figure_1(where_to_save_the_figure):
     # GEOS/PROJ/HDF5 builds in one process crashes R. A separate process has
     # its own library address space, so the conflict can't occur.
     subprocess.run(
-        ['Rscript', 'func/run_figure_1.R', where_to_save_the_figure],
+        ['Rscript', 'func/tools/run_figure_1.R', where_to_save_the_figure],
         cwd=proj_dir,
         check=True,
     )
@@ -330,12 +331,12 @@ def regional_zone_maps(where_to_save_the_figure, include_station_points=True):
                include_station_points=robjects.BoolVector([include_station_points]))
 
 
-def Figure_2(where_to_save_the_figure):
+def Figure_S1_validation(where_to_save_the_figure):
     # Manuscript slot "validation_scatterplot_panel" -- see
     # metadata/figure_table_registry.csv (util.get_registry_row()) for its
     # current figure number/output folder and the R function that renders it.
-    # This Python entry point's own name is an unchanging handle and is not
-    # kept in sync with the manuscript number.
+    # Entry-point names carry the current manuscript number (renamed
+    # 2026-09-28); the registry remains the source of truth if they drift.
 
     spm_scatterplot_path = os.path.join(where_to_save_the_figure, 'validation', 'scatterplot',
                                         'SEXTANT_SPM_SPM_Standard_OC5_3x3.png')
@@ -356,7 +357,7 @@ def Figure_2(where_to_save_the_figure):
                where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
+def Figure_2_methodology_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
     # Produces the A-E methodology panels
 
     # Static date for each zone to illustrate the plume detection steps
@@ -366,12 +367,14 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
 
     parameters = build_plume_parameters(Zone)
 
-    zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
-    with open(zone_config_path) as f:
-        zone_config = json.load(f)
+    zone_config = config.panache_zone_config(Zone, 'dynamic')
 
+    # Only one day's granule is needed here, unlike the full panache
+    # pipeline run (which reads panache.input_path, typically a faster
+    # local/external mount) -- pCloud's own copy is safe and avoids
+    # depending on that mount just to build this static worked example.
     date_ts = pd.Timestamp(Date)
-    nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date_ts)
+    nc_path = _find_sextant_nc_for_date(config.data_path('SEXTANT', 'SPM'), date_ts)
 
     # Crop to panache's own plume-area bbox (not regmap.py's wider
     # Basin_limits) -- every bbox used anywhere in this pipeline comes from
@@ -388,7 +391,7 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
     # bathymetry_path (not a hardcoded output/REGIONAL_MAPS path -- that was
     # never the real source of truth) is the same file panache itself
     # already computed/cached while generating this zone's Results.csv, per
-    # config.bathymetry_path in panache.runner -- see zone_config JSON.
+    # config.bathymetry_path in panache.runner -- see config.panache_zone_config().
     bathymetry_data_aligned_to_reduced_map = align_bathymetry(ds_reduced, zone_config['bathymetry_path'])
 
     (_, land_mask) = derive_masks_from_bathymetry(bathymetry_data_aligned_to_reduced_map, parameters)
@@ -397,7 +400,7 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
 
     # Panels A-E feed the plume_methodology_panel composite -- see
     # metadata/figure_table_registry.csv for its current figure number.
-    where_to_save_the_figure_3 = os.path.join(
+    where_to_save_the_figure_2 = os.path.join(
         where_to_save_the_figure, "ARTICLE", get_registry_row("plume_methodology_panel")['output_subdir'])
 
     the_plume = Create_the_plume_mask(ds_reduced,
@@ -405,15 +408,15 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
                                       land_mask,
                                       parameters,
                                       plume_name)
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_2,
               name_of_the_plot='A')
 
     the_plume.determine_SPM_threshold(dynamic_determination_of_SPM_threshold=True)
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_2,
              name_of_the_plot='B')
 
     the_plume.do_a_raw_plume_detection()
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_2,
              name_of_the_plot='C')
 
     the_plume.include_cloudy_regions()
@@ -423,18 +426,18 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
         minimal_distance_from_estuary=parameters['minimal_distance_from_estuary_for_zone_with_resuspension'][
             plume_name])
     ##
-    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_3,
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_2,
     #                    name_of_the_plot='before_shallow_water_removal')
     ##
 
     the_plume.remove_shallow_waters()
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_2,
              name_of_the_plot='D')
 
     the_plume.remove_close_river_mouth(the_plume.parameters['pixel_starting_points_close_river_mouth'])
 
     ##
-    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_3,
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_2,
     #                    name_of_the_plot='before_')
     ##
 
@@ -449,47 +452,47 @@ def Figure_3_panels(where_are_saved_panache_outputs, where_to_save_the_figure):
     the_plume.remove_shallow_waters()
 
     ##
-    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_3,
+    # the_plume.do_R_plot(where_to_save_the_plot=where_to_save_the_figure_2,
     #                    name_of_the_plot='before_shrink_widen')
     ##
 
     if not np.isin(plume_name, ['Seine']):
         the_plume.remove_post_shrink_widening()
 
-    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_3,
+    do_R_plot(the_plume, where_to_save_the_plot=where_to_save_the_figure_2,
               name_of_the_plot='E')
 
     # Run as a standalone Rscript process rather than via in-process rpy2:
     # plot_methodology_worked_example_panel() (func/figure.R) now renders a high-res coastline via
     # sf, which conflicts with the conda geospatial stack already loaded in
-    # this process via panache -- same workaround as Figure_1().
+    # this process via panache -- same workaround as Figure_1_mean_spm_map().
     subprocess.run(
-        ['Rscript', 'func/run_figure_3_panels.R', where_to_save_the_figure_3],
+        ['Rscript', 'func/tools/run_figure_2_methodology_panels.R', where_to_save_the_figure_2],
         cwd=proj_dir,
         check=True,
     )
 
 
-def Figure_3_zone_maps(where_are_saved_panache_outputs, where_to_save_the_figure):
+def Figure_2_methodology_zone_maps(where_are_saved_panache_outputs, where_to_save_the_figure):
 
     the_dates_for_each_zone = dates_for_each_zone()
 
     # Folded into the plume_methodology_panel composite
 
-    where_to_save_the_figure_3 = os.path.join(
+    where_to_save_the_figure_2 = os.path.join(
         where_to_save_the_figure, "ARTICLE", get_registry_row("plume_methodology_panel")['output_subdir'])
-    os.makedirs(os.path.join(where_to_save_the_figure_3, "DATA"), exist_ok=True)
+    os.makedirs(os.path.join(where_to_save_the_figure_2, "DATA"), exist_ok=True)
 
     for Zone, Date in the_dates_for_each_zone.items():
 
         parameters = define_parameters(Zone)
 
-        zone_config_path = os.path.join(proj_dir, "metadata", f"zone_config_dynamic_{Zone}.json")
-        with open(zone_config_path) as f:
-            zone_config = json.load(f)
+        zone_config = config.panache_zone_config(Zone, 'dynamic')
 
+        # Same one-day-per-zone reasoning as Figure_2_methodology_panels()
+        # above -- pCloud instead of panache.input_path/Toshi.
         date = pd.Timestamp(Date)
-        nc_path = _find_sextant_nc_for_date(zone_config['input_path'], date)
+        nc_path = _find_sextant_nc_for_date(config.data_path('SEXTANT', 'SPM'), date)
 
         SPM_map_da = load_map_data(nc_path,
                                    lon_range=tuple(parameters['lon_range_of_plume_area']),
@@ -520,14 +523,14 @@ def Figure_3_zone_maps(where_are_saved_panache_outputs, where_to_save_the_figure
         resuspension_threshold = next(iter(parameters['maximal_bathymetric_for_zone_with_resuspension'].values()))
         SPM_map['shallow'] = (bathymetry_map.values.flatten() > -resuspension_threshold)
 
-        SPM_map.to_csv(where_to_save_the_figure_3 + f"/DATA/{Zone}.csv")
+        SPM_map.to_csv(where_to_save_the_figure_2 + f"/DATA/{Zone}.csv")
 
     # Run as a standalone Rscript process rather than via in-process rpy2:
     # plot_methodology_zone_maps_panel() (func/figure.R) now renders a high-res coastline
     # via sf, which conflicts with the conda geospatial stack already loaded
-    # in this process via panache -- same workaround as Figure_1().
+    # in this process via panache -- same workaround as Figure_1_mean_spm_map().
     subprocess.run(
-        ['Rscript', 'func/run_figure_3_zone_maps.R', where_to_save_the_figure_3],
+        ['Rscript', 'func/tools/run_figure_2_methodology_zone_maps.R', where_to_save_the_figure_2],
         cwd=proj_dir,
         check=True,
     )
@@ -536,18 +539,18 @@ def Figure_3_zone_maps(where_are_saved_panache_outputs, where_to_save_the_figure
                        include_station_points=False)
 
 
-def Figure_3(where_to_save_the_figure):
+def Figure_2_methodology(where_to_save_the_figure):
     """
     Assembles the plume_methodology_panel figure (plume-detection
-    methodology): panels A-D from Figure_3_panels() side by side on top,
+    methodology): panels A-D from Figure_2_methodology_panels() side by side on top,
     panel e) (transect_panel.png,
-    also from Figure_3_panels()) as a full-width row in the middle, and the
-    per-zone plume maps panel from Figure_3_zone_maps() (zone_maps_panel.png,
+    also from Figure_2_methodology_panels()) as a full-width row in the middle, and the
+    per-zone plume maps panel from Figure_2_methodology_zone_maps() (zone_maps_panel.png,
     panels f-i) stacked below. All three write their intermediates straight
     into the plume_methodology_panel slot's output folder (none is a
     standalone manuscript figure itself), so this just reads them back out
-    and composites -- must be called after both Figure_3_panels() and
-    Figure_3_zone_maps(). See metadata/figure_table_registry.csv for the
+    and composites -- must be called after both Figure_2_methodology_panels() and
+    Figure_2_methodology_zone_maps(). See metadata/figure_table_registry.csv for the
     slot's current figure number.
 
     Panels A-D and e) are resized down to the zone-maps panel's native width
@@ -565,8 +568,8 @@ def Figure_3(where_to_save_the_figure):
     missing = [p for p in panel_paths + [transect_panel_path, zone_maps_path] if not os.path.exists(p)]
     if missing:
         raise FileNotFoundError(
-            "Figure_3() inputs missing: " + ", ".join(missing) +
-            " -- run Figure_3_panels() and Figure_3_zone_maps() first."
+            "Figure_2_methodology() inputs missing: " + ", ".join(missing) +
+            " -- run Figure_2_methodology_panels() and Figure_2_methodology_zone_maps() first."
         )
 
     zone_maps_panel = Image.open(zone_maps_path)
@@ -595,7 +598,7 @@ def Figure_3(where_to_save_the_figure):
     composite.save(os.path.join(figure_3_dir, registry_filename(output_subdir)))
 
 
-def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
+def Figure_3_S2_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
                            where_are_saved_plume_results_with_fixed_threshold,
                            where_to_save_the_figure):
 
@@ -669,7 +672,7 @@ def Figure_4_S1_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
     robjects.r[get_registry_row("thresholds_comparison")['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_threshold,
+def Figure_4_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold,
                                where_are_saved_plume_results_with_static_threshold,
                                where_to_save_the_figure):
     """The seasonal_boxplot_heatmap figure (sec:results_seasonal, see
@@ -681,13 +684,9 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
     All data loading (incl. the along-coast PCA projection, which needs
     func/multi.R) and plotting happens in R.
     See func/figure.R::plot_seasonal_boxplot_heatmap()
-    following the same no-Python-prep pattern already used by
-    Figure_S3_seasonal_boxplots() below. Writes a shared
-    <output_subdir>/DATA/monthly_boxplot_data.csv (both thresholds,
-    full daily-level detail, not just the medians plotted here) that the
-    updated Figure_S3_seasonal_boxplots() reads back in, so the dynamic/
-    static computation is only done once. Writes its PNG directly (a
-    single figure now, no Python-side compositing needed).
+    Also writes <output_subdir>/DATA/monthly_boxplot_data.csv (both
+    thresholds, full daily-level detail, not just the medians plotted
+    here). Writes its PNG directly (no Python-side compositing needed).
     """
     figure_R_path = os.path.join(func_dir, 'figure.R')
     robjects.r['source'](figure_R_path)
@@ -697,19 +696,7 @@ def Figure_5_seasonal_analysis(where_are_saved_plume_results_with_dynamic_thresh
         where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_S_daily_flow(where_to_save_the_figure, max_lag_daily=14):
-    """Supplementary "Sx. Lagged daily correlations" figure (fig:daily_flow):
-    daily plume area vs. river flow scatter + lagged correlation, per zone.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r[get_registry_row("daily_flow_lagged_correlation")['r_function']]
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]),
-               max_lag_daily=robjects.IntVector([max_lag_daily]))
-
-
-def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
+def Figure_8_driver_rose(where_to_save_the_figure, n_sectors=8):
     """manuscript figure: wind/wave direction-magnitude roses, coloured by
     the flow-controlled plume-area response, one row per zone. See
     metadata/figure_table_registry.csv (slot "driver_rose_diagram") for
@@ -723,7 +710,7 @@ def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
                n_sectors=robjects.IntVector([n_sectors]))
 
 
-def Figure_8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
+def Figure_S8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
     """GAM partial-dependence curves for flow, wind, wave, and current (tide
     intentionally excluded from the plot -- it stays in the underlying
     GAM/driver_stats_table stats, just not visualised), one row per zone. Refits
@@ -840,34 +827,3 @@ def Figure_X11_weekly_results(where_are_saved_X11_results_dynamic, where_are_sav
             robjects.r[r_func_name](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
         except Exception as e:
             print(f"Warning: {r_func_name} ({slot_key}) R plot failed: {e}. Skipping.")
-
-
-def Figure_S3_seasonal_boxplots(where_to_save_the_figure):
-    """
-    Migrated from manuscript/make_figures_tables.R's
-    generate_figure_s4_seasonal_thresholds() into the real pipeline, so it
-    writes straight to the seasonal_boxplots_dynamic_vs_static slot's output
-    folder (see metadata/figure_table_registry.csv) instead of via the
-    manuscript/figures/ copy step. No Python-side data prep needed -- the R
-    function reads output/panache/{dynamic,static}/{zone}/Results.csv directly.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-    robjects.r[get_registry_row("seasonal_boxplots_dynamic_vs_static")['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-
-
-# =============================================================================
-#### Deprecated functions
-# =============================================================================
-
-def Figure_8_driver_category(where_to_save_the_figure):
-    """manuscript Figure 8: flow-controlled plume-area residual vs. wave
-    height, coloured by on/off-shore wind category, one panel per zone.
-    Generalises the Rhone-only rhone_wind_wave_effect() analysis.
-    """
-    figure_R_path = os.path.join(func_dir, 'figure.R')
-    robjects.r['source'](figure_R_path)
-
-    r_function = robjects.r['Figure_8_driver_category']
-    r_function(where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
-

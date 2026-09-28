@@ -14,23 +14,28 @@ Each numbered script in [code/](code/) corresponds to a pipeline stage. Run them
 python code/0_download_data.py   # Download satellite + driver data (~hours, ~280 GB)
 python code/1_validate.py        # Satellite vs in situ match-up
 python code/2_regional_maps.py   # Create & QC regional maps
-# Step 3: plume detection via the external panache module (must be called from terminal directly).
-# Two config variants per zone -- dynamic (main results) and static (supplementary) -- 8 calls total:
-panache metadata/zone_config_dynamic_GULF_OF_LION.json
-panache metadata/zone_config_dynamic_BAY_OF_BISCAY.json
-panache metadata/zone_config_dynamic_SOUTHERN_BRITTANY.json
-panache metadata/zone_config_dynamic_BAY_OF_SEINE.json
-panache metadata/zone_config_static_GULF_OF_LION.json
-panache metadata/zone_config_static_BAY_OF_BISCAY.json
-panache metadata/zone_config_static_SOUTHERN_BRITTANY.json
-panache metadata/zone_config_static_BAY_OF_SEINE.json
+python code/3_plumes.py           # Plume detection via the external panache CLI (~60 min per zone x mode)
+# Step 3 first writes one panache JSON per zone x threshold mode (dynamic = main results,
+# static = supplementary) to output/panache/configs/ via tools/write_panache_configs.py,
+# then calls `panache <json>` 8 times. To run a single one by hand:
+#   python tools/write_panache_configs.py
+#   panache output/panache/configs/zone_config_dynamic_GULF_OF_LION.json
 python code/4_time_series.py     # X11 decomposition + driver comparisons + monthly seasonal driver analysis (~2h, see below)
 python code/5_figures.py         # Publication figures
 ```
 
-`code/4_time_series.py`'s multi-driver stage now includes `func/driver_interactions.R::run_monthly_driver_interactions_analysis()`, which reruns the full six-step GLM/GAM/regime/RF sequence independently for each of the 12 calendar months (dynamic threshold only) — this is the slow part of the stage (~90 min on a 16-core machine), not the annual dynamic/static passes that used to be all this script did.
+`code/4_time_series.py`'s multi-driver stage runs `func/driver_interactions.R::run_driver_interactions_analysis()` once (dynamic threshold): GLM comparison, per-metric GLM/GAM models and random-forest importance, with per-cell checkpoints under `output/STATS/.checkpoints/` (`overwrite = FALSE` resumes an interrupted run). The monthly rerun, zone-level GAM figures, regime GLMs and RF H-statistic were removed 2026-09-28 (dead ends with no manuscript consumer; their last CSVs stay on disk as frozen results the text cites, and the code is in git history at commit 533e42c). GLM/GAM/RF outputs are excluded from `tools/snapshot_outputs.py`'s golden-hash check (exploratory, and RF drifts by design).
 
 All scripts prepend `func/` to `sys.path` by setting `proj_dir` from `os.path.abspath('__file__')` — they must be executed from the repo root, not from inside `code/`.
+
+### Snakemake
+`Snakefile` at the repo root describes part of the pipeline as rules with declared inputs and outputs. It covers the panache runs (one wildcard rule for zone × mode), the area/seasonal trends, Fig. 5, the multi-driver GLM/GAM/RF analysis and the driver correlation matrices; `metadata/snakemake_rulegraph.svg` is its diagram. The numbered `code/*.py` scripts remain the way to run the pipeline, and the Snakefile runs nothing unless asked. Useful commands:
+- `snakemake -n`: what would run, and why.
+- `snakemake --touch -c1`: mark existing outputs as current without running.
+- `snakemake -c8`: rebuild what's out of date, running independent rules in parallel.
+- `snakemake --rulegraph | dot -Tpdf > rules.pdf`: draw the diagram.
+
+Before any real run, check that `snakemake -n` lists no `panache` jobs unless you intend to redo plume detection (about 1 h per zone × mode). Settings come from `metadata/riomar_config.yml`. Logs go to the gitignored `logs/`, and Snakemake's bookkeeping to the gitignored `.snakemake/`.
 
 ## Pipeline map (living document)
 
@@ -64,16 +69,16 @@ manuscript/google_doc_sync/sync.sh
 
 ## Data storage
 
-Large datasets are stored **outside** this repo under the pCloud data folder (`~/pCloud Drive/data/` on macOS, `~/pCloudDrive/data/` on Linux) and are never committed. Code never hardcodes this path: Python uses `func/config.py` (`config.data_root()`, `config.data_path('WIND', zone)`) and R uses `func/config.R` (`riomar_data_root()`, `riomar_data_path(...)`, sourced by `util.R`). They pick the folder by OS (falling back to the other spelling), unless `data_root` in `metadata/riomar_config.yml` or the `RIOMAR_DATA_ROOT` env var overrides it. The same YAML holds the zone list and the default satellite dict. Exception: the panache `metadata/zone_config_*.json` files still carry absolute machine-specific paths, because panache reads them directly. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.
+Large datasets are stored **outside** this repo under the pCloud data folder (`~/pCloud Drive/data/` on macOS, `~/pCloudDrive/data/` on Linux) and are never committed. Code never hardcodes this path: Python uses `func/config.py` (`config.data_root()`, `config.data_path('WIND', zone)`) and R uses `func/config.R` (`riomar_data_root()`, `riomar_data_path(...)`, sourced by `util.R`). They pick the folder by OS (falling back to the other spelling), unless `data_root` in `metadata/riomar_config.yml` or the `RIOMAR_DATA_ROOT` env var overrides it. The same YAML holds the zone list and the default satellite dict. Panache settings live in the same YAML's `panache` section (including `input_path`, the SEXTANT SPM folder panache reads — currently the external `/Volumes/Toshi` drive); `tools/write_panache_configs.py` renders them into machine-specific JSONs under the gitignored `output/panache/configs/`, and `func/figure.py` reads them via `config.panache_zone_config(zone, mode)`. Never edit the generated JSONs. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and `metadata/riomar_config.yml` are tracked.
 
 Two distinct kinds of "outside the repo" apply here, and only one of them is backed up automatically:
 
-- **Pipeline-native pCloud data** — `SEXTANT`, `WIND`, `WAVE`, `GLORYS`, `DOWNLOAD_REPORTS` under `~/pCloudDrive/data/`. `code/0_download_data.py`, `code/2_regional_maps.py`, `code/5_figures.py`, and the R side (`func/util.R`, `func/multi.R`, `func/VOG.R`, `func/compute_driver_spatial_variance.R`) read and write these paths directly — the data never lives inside the repo working tree, so it's inherently durable across machine migrations.
-- **Repo-local gitignored content** — everything else the `.gitignore` excludes (`manuscript/`, `data/EUROPE_shapefile`, `data/HydroRIVERS_v10_eu_shp`, `data/INSITU_data`, `data/RIVER_FLOW`, `data/TIDES`, `output/MATCH_UP_DATA`, `output/STATS`, `output/panache`, `figures/ARTICLE/*/DATA`, `figures/ARTICLE/gam_monthly_breakdown`) lives only in the repo working tree on whichever machine produced it. Nothing copies this automatically — a lost or wiped machine loses it (this is what happened to `data/ROFI` in the September 2026 migration; still unresolved, see memory). Back it up by hand into the pre-existing mirror at `~/pCloud Drive/Documents/OMTAB/RiOMar/`, which mirrors the repo's structure path-for-path:
+- **Pipeline-native pCloud data** — `SEXTANT`, `WIND`, `WAVE`, `GLORYS`, `DOWNLOAD_REPORTS` under `~/pCloudDrive/data/`. `code/0_download_data.py`, `code/2_regional_maps.py`, `code/5_figures.py`, and the R side (`func/util.R`, `func/multi.R`, `func/tools/VOG.R`, `func/analysis/compute_driver_spatial_variance.R`) read and write these paths directly — the data never lives inside the repo working tree, so it's inherently durable across machine migrations.
+- **Repo-local gitignored content** — everything else the `.gitignore` excludes (`manuscript/`, `data/EUROPE_shapefile`, `data/HydroRIVERS_v10_eu_shp`, `data/INSITU_data`, `data/RIVER_FLOW`, `data/TIDES`, `output/MATCH_UP_DATA`, `output/STATS`, `output/panache`, `figures/ARTICLE/*/DATA`, `figures/ARTICLE/gam_monthly_breakdown`, and the diagnostic figure folders `figures/{driver_comparison,driver_octant_trend,driver_spatial_variance,driver_x11_comparison,qc,rhone_side_analyses,validation}` + `animations/`, untracked 2026-09-28) lives only in the repo working tree on whichever machine produced it. Nothing copies this automatically — a lost or wiped machine loses it (this is what happened to `data/ROFI` in the September 2026 migration; still unresolved, see memory). Back it up by hand into the pre-existing mirror at `~/pCloud Drive/Documents/OMTAB/RiOMar/`, which mirrors the repo's structure path-for-path:
   ```bash
   rsync -au <repo_relative_path>/ "~/pCloud Drive/Documents/OMTAB/RiOMar/<repo_relative_path>/"
   ```
-  `-au` (`--archive --update`) only overwrites a pCloud file when the local copy is newer, so it's safe to re-run anytime — e.g. before a machine migration, or after a pipeline re-run that regenerates `output/`. `data/ROFI` currently has no local or pCloud copy — not yet restorable. `RIOMAR_old/` inside that same pCloud folder is an unrelated pre-reorg archive, not this mirror.
+  `-au` (`--archive --update`) only overwrites a pCloud file when the local copy is newer, so it's safe to re-run anytime — e.g. before a machine migration, or after a pipeline re-run that regenerates `output/`. `data/ROFI` currently has no local or pCloud copy — not yet restorable, but no longer needed: the ROFI analysis (`func/ROFI.R`) was removed from the pipeline 2026-09-28. `RIOMAR_old/` inside that same pCloud folder is an unrelated pre-reorg archive, not this mirror.
 
 ## Architecture
 
@@ -83,22 +88,23 @@ Four coastal zones used throughout: `GULF_OF_LION`, `BAY_OF_SEINE`, `BAY_OF_BISC
 ### func/ modules (Python)
 - [func/dl.py](func/dl.py) — FTP/CMEMS downloads via `copernicusmarine`; `Download_satellite_data`, `download_cmems_subset`, `daily_integral`
 - [func/util.py](func/util.py) — shared helpers: file discovery, parameter parsing, zone coordinates, path templating
-- [func/validate.py](func/validate.py) — placeholder, kept for git history; satellite vs in situ match-up now lives entirely in `func/validate.R` (see below)
 - [func/regmap.py](func/regmap.py) — regional map creation and QC (`create_regional_maps`, `QC_of_regional_maps`)
-- [func/plume.py](func/plume.py) — placeholder, kept for git history; plume detection is now handled entirely by the external `panache` package (`panache.plume_algorithm`, `panache.utils`); the one RiOMar-specific figure-prep helper this file used to hold (`preprocess_annual_dataset_and_compute_land_mask`) was removed from `func/figure.py` in favour of `panache.plume_algorithm.derive_masks_from_bathymetry`
 - [func/X11.py](func/X11.py) — X11 seasonal decomposition, calls R via `rpy2`; `Apply_X11_method_on_time_series`. **Frozen**: this file is intentionally excluded from renaming/refactor passes — do not edit its existing functions, even for naming consistency. New wrapper functions may be added alongside them. `func/X11.R` is not frozen.
-- [func/figure.py](func/figure.py) — all publication figures (`Figure_1`, `Figure_2`, `Figure_3`/`Figure_3_panels`/`Figure_3_zone_maps`, `Figure_4_S1_timeseries`, `Figure_5_seasonal_analysis`, `Figure_S_daily_flow`, `Figure_X11_weekly_results`, `Figure_7_driver_rose`, `Figure_8_gam_partial`, `Figure_S3_seasonal_boxplots`). `Figure_8_driver_category` is deprecated (uncalled, kept under a "Deprecated functions" heading in both `figure.py` and `figure.R` for git history)
+- [func/figure.py](func/figure.py) — all publication figures, entry points named after their current manuscript number (renamed 2026-09-28; `metadata/figure_table_registry.csv` stays the source of truth if they drift again): `Figure_1_mean_spm_map`, `Figure_2_methodology_panels`/`Figure_2_methodology_zone_maps`/`Figure_2_methodology`, `Figure_3_S2_timeseries` (Fig. 3 + Fig. S2), `Figure_4_monthly_median_heatmap`, `Figure_X11_weekly_results` (Figs. 6, 7, S3–S6), `Figure_8_driver_rose`, `Figure_S1_validation`, `Figure_S8_gam_partial`. Fig. 5 is written by `func/analysis/generate_monthly_trend_pct_heatmap.R` from `code/4_time_series.py`. Output folders `figures/ARTICLE/FIGURE_<n>/` also match the manuscript number. Figures whose manuscript slot is marked `(removed)` in `metadata/figure_table_registry.csv` have no code left in the repo — each such row's notes name the commit to recover it from
+
+### func/ layout
+Shared libraries (`util`, `multi`, `figure`, `config`, `dl`, `regmap`, `driver_interactions`, `tide`, `surface`, `validate`, `river_flow_prep`, `X11`) sit directly in `func/`. Stand-alone scripts live in `func/analysis/` (manuscript statistics, several called from `code/4_time_series.py` as `analysis/<script>`) and `func/tools/` (one-off runners and diagnostics, e.g. `run_figure_1.R`, called by `figure.py`). All are still run from the repo root. After moving files, `python tools/check_paths.py` checks that every `.R`/`.py` reference still resolves, with no data needed. `util.R`, `multi.R` and `figure.R` are thin loaders (split 2026-09-28): each `source()`s its topic files from `func/sections/` (e.g. `util_4_loading.R`, `multi_5_rhone.R`, `figure_3_timeseries.R`) in a fixed order with `local = TRUE`, so keep sourcing the loader, and edit functions in the section files. Order matters: later sections use earlier ones, and some sections run code at load time (e.g. `multi_4_surface_missing.R` writes the missing-data CSVs). `python tools/check_split.py` checks that the sections exist and that no function is defined twice. Older comments citing `util.R:<line>`/`multi.R:<line>` refer to the pre-split line numbers.
 
 ### func/ modules (R)
-Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.R`, etc. — there is no `regmap.R`, regional-map creation is Python-only). These are used for analyses that rely on R packages (e.g. base stats and all plotting) and are called from Python via `rpy2`. `func/validate.R` is the authoritative satellite-vs-in-situ match-up pipeline (writes both `output/MATCH_UP_DATA/FRANCE/summary.csv`, feeding the manuscript's `validation_summary_stats` table, and the SEXTANT/ODATIS-MR `STATISTICS/*.csv` tables feeding the `validation_scatterplot_panel` figure — see `metadata/figure_table_registry.csv` for their current numbers). `func/plume.R` — like `func/plume.py` — is a placeholder kept for git history; plume detection is now handled entirely by `panache`, and plume-result plotting lives in `func/figure.R`. (Gutted 2026-09-25 after an investigation found it still carried a dead, never-sourced duplicate of `util.R::save_plot_as_png()`/`ggplot_theme()`/`save_file_as_csv()`.)
+Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.R`, etc. — there is no `regmap.R`, regional-map creation is Python-only). These are used for analyses that rely on R packages (e.g. base stats and all plotting) and are called from Python via `rpy2`. `func/validate.R` is the authoritative satellite-vs-in-situ match-up pipeline (writes both `output/MATCH_UP_DATA/FRANCE/summary.csv`, feeding the manuscript's `validation_summary_stats` table, and the SEXTANT/ODATIS-MR `STATISTICS/*.csv` tables feeding the `validation_scatterplot_panel` figure — see `metadata/figure_table_registry.csv` for their current numbers).
 
 ### Per-river panache output
-`panache`'s `Results.csv`/`PlumeMasks.nc` carry one row/mask layer per individual river mouth within a zone, plus an `'ALL'` union-mask row/layer (the zone total). RiOMar's loaders (`util.R::load_plume_ts()`, `figure.py::_load_results()`, `compute_plume_shape.py`, etc.) default to `river == "ALL"` for all zone-level stats. A real per-river analysis layer also exists (`func/compute_river_plume_correlation.R`, `X11.py::Apply_X11_method_on_time_series_per_river()`, `metadata/river_discharge_mapping.csv`) but is intentionally not surfaced in the manuscript — all published tables/figures stay at zone level, per project convention.
+`panache`'s `Results.csv`/`PlumeMasks.nc` carry one row/mask layer per individual river mouth within a zone, plus an `'ALL'` union-mask row/layer (the zone total). RiOMar's loaders (`util.R::load_plume_ts()`, `figure.py::_load_results()`, `compute_plume_shape.py`, etc.) default to `river == "ALL"` for all zone-level stats. A real per-river analysis layer also exists (`func/analysis/compute_river_plume_correlation.R`, `X11.py::Apply_X11_method_on_time_series_per_river()`, `metadata/river_discharge_mapping.csv`) but is intentionally not surfaced in the manuscript — all published tables/figures stay at zone level, per project convention.
 
 ### metadata/
-Zone configuration JSONs consumed directly by `panache` and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
+`riomar_config.yml` (project settings, including panache's — see Data storage) and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
 
-Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), and `TODO.md` (the manuscript/pipeline to-do list). Anything under `manuscript/` that still reads these (e.g. `make_figures_tables.R`, `google_doc_sync/`) must point at `metadata/` — there are no copies left in `manuscript/`.
+Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), `TODO.md` (the manuscript/pipeline to-do list), and `make_figures_tables.R` (the figure/table/paragraph-source checklist; run `Rscript metadata/make_figures_tables.R` from the repo root — it still reads `manuscript/manuscript.tex` and `references.bib`). There are no copies left in `manuscript/` (`google_doc_sync/` never read them).
 
 ### Satellite data dict convention
 A Python dict like:
@@ -120,3 +126,13 @@ is the standard argument passed to every major pipeline function; build it with 
 
 Bug-fix history (root cause, symptom, before/after) is intentionally not kept here — it bloats a file loaded every session regardless of relevance. Each fix is commented in place at its own function; check `git log`/`git blame` on the relevant file for the full story.
 
+
+## Rules for automated changes
+
+Added 2026-09-28 after an agent deleted code and outputs the manuscript still depended on (commits 321fc22/7cedb76, rolled back in 4017af8). These apply to every Claude session, local or cloud:
+
+- **Never delete without per-item approval.** Don't delete or untrack a file, or remove a function, unless Robert has approved that exact item in writing. Present the list first (path or function name, what uses it, why it looks dead) and wait. A general instruction like "clean up dead code", or a registry row marked `(removed)`/`(orphaned)`, is not approval. Record each approved item in `metadata/approved_deletions.txt`, with the date and where the approval was given.
+- **`manuscript/` is invisible to cloud sessions,** so "I found no reference" is not evidence that nothing uses a file. Treat anything named in `metadata/paragraph_source_registry.csv` or `metadata/figure_table_registry.csv` as in use, whatever its status column says.
+- **Enforced by `tools/check_protected.py`.** The `.claude/settings.json` PreToolUse hook runs it before every `git commit`/`git push` issued through Bash, and it blocks deleted files and removed functions. Moves and renames pass: same file content at a new path, or same argument list under a new function name. Run it by hand with `python tools/check_protected.py` (uncommitted changes) or `--range A..B`. Don't bypass it (for example with `--no-verify` or by editing the hook) without Robert's say-so.
+- **Only deliver work as pull requests.** Put changes on a new branch and open a PR. Never push to `main` or to a branch Robert is running the pipeline from; he merges when no run is in progress.
+- **Prove refactors are result-neutral.** A refactor must leave `python tools/snapshot_outputs.py --check` unchanged on Robert's machine. Keep structural PRs to moves/renames, and never mix them with deletions.
