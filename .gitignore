@@ -257,3 +257,6 @@ __marimo__/
 
 # Understand-anything
 .ua/
+# Snakemake bookkeeping (run history, locks)
+.snakemake/
+logs/
