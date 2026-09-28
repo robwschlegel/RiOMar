@@ -1,8 +1,8 @@
 # func/analyse_spatiotemporal.R
 # 2026-02-23
 
-# This script will download satellite data
-# Then load it in bite sized pieces
+# This script will load satellite data in bite sized pieces
+# (downloading is done via the standalone sat_access repo, not here)
 # Then perform an time series analysis
 
 
@@ -13,9 +13,6 @@ library(tidyverse)
 library(ncdf4)
 library(gganimate)
 library(doParallel); registerDoParallel(cores = 14)
-
-# Get satellite download function
-source("~/sat_access/sat_access_script.R")
 
 # lon lat ranges
 lon_range <- c(7.03, 7.42)
@@ -61,30 +58,6 @@ load_sextant <- function(file_name, lon_range, lat_range){
 
 
 # Download data -----------------------------------------------------------
-
-# NB: Uncomment and run the following lines to download data
-
-# A few days of SEXTANT data
-# download_nc(
-#   dl_var = "SPM",
-#   dl_dates = c("2024-09-01", "2024-09-05"),
-#   output_dir = "~/Downloads/SEXTANT", # Change as desired/required
-#   overwrite = FALSE # Change to TRUE to force downloads
-# )
-
-# A few days of MODIS data, cut to a bounding box
-# download_nc(
-#   dl_var = "SPM",
-#   dl_dates = c("2008-12-12", "2008-12-31"),
-#   dl_product = "ODATIS-MR",
-#   dl_sensor = "MODIS",
-#   dl_bbox = c(3, 4, 42.5, 44),
-#   output_dir = "~/Downloads/MODIS", # Change as desired/required
-#   overwrite = TRUE # Change to TRUE to force downloads
-# )
-
-
-# Load data ---------------------------------------------------------------
 
 # All of the SEXTANT 1998 files
 # sextant_1998_dir <- dir("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/1998", pattern = ".nc", recursive = TRUE, full.names = TRUE)
