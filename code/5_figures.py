@@ -8,7 +8,7 @@
 #### Modules
 # =============================================================================
 
-import os, sys
+import os, sys, subprocess
 import matplotlib as mpl
 
 proj_dir = os.path.dirname( os.path.abspath('__file__') )
@@ -75,6 +75,20 @@ Figure_8_driver_rose(where_to_save_the_figure = "figures")
 
 # validation_scatterplot_panel (Fig. S1)
 Figure_S1_validation(where_to_save_the_figure = "figures")
+
+# x11_driver_correlation_heatmap (Fig. S7): Pearson r between plume area's
+# X11 seasonal/interannual component and each driver's own component, per
+# zone. Self-contained -- reads its own registry row for the output path,
+# and regenerates output/panache/dynamic/<Zone>/X11_ANALYSIS/<driver>/*_WEEKLY.csv
+# (func/compute_x11_driver_signals.py) itself if missing. A plain top-level
+# script (unlike the other R figure code here, which defines functions
+# sourced then called), so run via Rscript subprocess exactly as its own
+# header documents -- was previously only ever run by hand, not wired into
+# any code/ stage (see metadata/figure_table_registry.csv).
+subprocess.run(
+    ['Rscript', 'func/generate_x11_driver_correlation_heatmap.R'],
+    cwd=proj_dir, check=True,
+)
 
 # gam_partial_effects (Fig. S8): GAM partial-dependence curves
 Figure_S8_gam_partial(where_to_save_the_figure = "figures")
