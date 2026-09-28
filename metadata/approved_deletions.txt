@@ -1,0 +1,6 @@
+# Deletions Robert has explicitly approved, one repo path or function name per
+# line (text after '#' is a comment -- put the date and where the approval was
+# given there). tools/check_protected.py blocks any other deleted file or
+# removed function. An agent may only add a line here after Robert has
+# approved that exact item in writing; a general "clean up dead code" is not
+# approval. See CLAUDE.md, "Rules for automated changes".
