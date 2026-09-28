@@ -17,6 +17,8 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
+import config
+
 import util, regmap
 from regmap import create_regional_maps, QC_of_regional_maps
 
@@ -24,7 +26,7 @@ from regmap import create_regional_maps, QC_of_regional_maps
 mpl.use('agg')
 
 # The zones for mapping
-zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY']
+zones_list = config.zones()
 
 
 # =============================================================================
@@ -32,37 +34,25 @@ zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTAN
 # =============================================================================
 
 # All years of Chl a data
-sextant_chla_all = {'Data_sources':['SEXTANT'],
-                    'Sensor_names':["merged"],
-                    'Satellite_variables':['CHLA'],
-                    'Atmospheric_corrections':['Standard'],
-                    'Temporal_resolution':['DAILY'],
-                    'start_day':'1998/01/01',
-                    'end_day':'2025/12/31'}
+sextant_chla_all = config.satellite_dict('CHLA')
 for zone in zones_list:
     create_regional_maps(sextant_chla_all,
                          Zones = [zone],
                          overwrite_existing_regional_maps = True, # For the moment this must be set to True as it does not detect the correct files
                          save_map_plots_of_which_time_frequency = {'DAILY' : True, 'WEEKLY' : True, 'MONTHLY' : True, 'ANNUAL' : True},
                          nb_of_cores_to_use = 14,
-                         where_are_saved_satellite_data = "../pCloudDrive/data",
+                         where_are_saved_satellite_data = config.data_root(),
                          where_to_save_regional_maps = "output/REGIONAL_MAPS")
 
 # All years of SPM data
-sextant_spm_all = {'Data_sources':['SEXTANT'],
-                    'Sensor_names':["merged"],
-                    'Satellite_variables':['SPM'],
-                    'Atmospheric_corrections':['Standard'],
-                    'Temporal_resolution':['DAILY'],
-                    'start_day':'1998/01/01',
-                    'end_day':'2025/12/31'}
+sextant_spm_all = config.satellite_dict('SPM')
 for zone in zones_list:
     create_regional_maps(sextant_spm_all,
                          Zones = [zone],
                          overwrite_existing_regional_maps = True, # For the moment this must be set to True as it does not detect the correct files
                          save_map_plots_of_which_time_frequency = {'DAILY' : True, 'WEEKLY' : True, 'MONTHLY' : True, 'ANNUAL' : True},
                          nb_of_cores_to_use = 14,
-                         where_are_saved_satellite_data = "../pCloudDrive/data",
+                         where_are_saved_satellite_data = config.data_root(),
                          where_to_save_regional_maps = "output/REGIONAL_MAPS")
     
 

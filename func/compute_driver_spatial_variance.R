@@ -42,7 +42,7 @@ load_driver_spatial <- function(driver_name, meta){
   lat_range <- c(zone_box$lat_min, zone_box$lat_max)
 
   if(driver_name == "wind"){
-    wind_files <- dir(paste0("~/pCloudDrive/data/WIND/", meta$zone), pattern = "_daily_", full.names = TRUE)
+    wind_files <- dir(riomar_data_path("WIND", meta$zone), pattern = "_daily_", full.names = TRUE)
     df <- purrr::map_dfr(wind_files, function(file_name){
       pix <- .nc_read_box(file_name, c("eastward_wind", "northward_wind"), lon_range, lat_range) |>
         dplyr::rename(u = eastward_wind, v = northward_wind)
@@ -56,7 +56,7 @@ load_driver_spatial <- function(driver_name, meta){
     df$direction <- vec$direction
 
   } else if(driver_name == "current"){
-    dir_name <- path.expand(paste0("~/pCloudDrive/data/GLORYS/", meta$zone))
+    dir_name <- riomar_data_path("GLORYS", meta$zone)
     df <- dplyr::bind_rows(
       .nc_read_box(file.path(dir_name, "glorys_199301_202412.nc"), c("uo", "vo"), lon_range, lat_range),
       .nc_read_box(file.path(dir_name, "glorys_uo_vo_202501_202512.nc"), c("uo", "vo"), lon_range, lat_range)
@@ -66,7 +66,7 @@ load_driver_spatial <- function(driver_name, meta){
     df$direction <- vec$direction
 
   } else if(driver_name == "wave"){
-    wave_files <- dir(paste0("~/pCloudDrive/data/WAVE/", meta$zone), pattern = "_daily_", full.names = TRUE)
+    wave_files <- dir(riomar_data_path("WAVE", meta$zone), pattern = "_daily_", full.names = TRUE)
     df <- purrr::map_dfr(wave_files, function(file_name){
       nc <- nc_open(file_name)
       has_wave_dir <- "VMDR" %in% names(nc$var)

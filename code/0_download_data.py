@@ -17,6 +17,8 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
+import config
+
 # Use 2 fewer cores than available, so the machine stays usable during long runs
 nb_of_cores_to_use = max(1, os.cpu_count() - 2)
 
@@ -30,7 +32,7 @@ mpl.use('agg') # Prevent showing plot in the Plot panel (this saves RAM)
 # mpl.use('module://matplotlib_inline.backend_inline')
 
 # The zones for downloading
-zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY']
+zones_list = config.zones()
 
 
 # =============================================================================
@@ -40,17 +42,11 @@ zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTAN
 # Download all Chl a data from 1998 to 2025
 # NB: This takes a few hours and uses ~280 GB of disk spaces
 # NB: Several days of data are missing
-sextant_chla_all = {'Data_sources':['SEXTANT'],
-                    'Sensor_names':["merged"],
-                    'Satellite_variables':['CHLA'],
-                    'Atmospheric_corrections':['Standard'],
-                    'Temporal_resolution':['DAILY'],
-                    'start_day':'1998/01/01',
-                    'end_day':'2025/12/31'}
+sextant_chla_all = config.satellite_dict('CHLA')
 Download_satellite_data(sextant_chla_all,
                         nb_of_cores_to_use = nb_of_cores_to_use,
                         overwrite_existing_satellite_files = False,
-                        where_to_save_satellite_data = '../pCloudDrive/data')
+                        where_to_save_satellite_data = config.data_root())
 
 
 # =============================================================================
@@ -60,17 +56,11 @@ Download_satellite_data(sextant_chla_all,
 # Download all SPM data from 1998 to 2025
 # NB: This takes a few hours and uses ~280 GB of disk spaces
 # NB: Several days of data are missing
-sextant_spm_all = {'Data_sources':['SEXTANT'],
-                   'Sensor_names':["merged"],
-                   'Satellite_variables':['SPM'],
-                   'Atmospheric_corrections':['Standard'],
-                   'Temporal_resolution':['DAILY'],
-                   'start_day':'1998/01/01',
-                   'end_day':'2025/12/31'}
+sextant_spm_all = config.satellite_dict('SPM')
 Download_satellite_data(sextant_spm_all,
                         nb_of_cores_to_use = nb_of_cores_to_use,
                         overwrite_existing_satellite_files = False,
-                        where_to_save_satellite_data = '../pCloudDrive/data')
+                        where_to_save_satellite_data = config.data_root())
 
 
 # =============================================================================
@@ -84,7 +74,7 @@ for zone in zones_list:
         'cmems_obs-wind_glo_phy_my_l4_0.25deg_PT1H',
         ['eastward_wind', 'northward_wind'],
         '1998-01-01T00:00:00', '2008-01-01T00:00:00', # Remember to get one extra hour to cover the integral up to 2007-12-31 23:00
-        f'../pCloudDrive/data/WIND/{zone}'
+        config.data_path('WIND', zone)
     )
 # The recent WIND data (2008-2024) at 0.125° resolution
 for zone in zones_list:
@@ -93,7 +83,7 @@ for zone in zones_list:
         'cmems_obs-wind_glo_phy_my_l4_0.125deg_PT1H',
         ['eastward_wind', 'northward_wind'],
         '2008-01-01T00:00:00', '2025-01-01T00:00:00',
-        f'../pCloudDrive/data/WIND/{zone}'
+        config.data_path('WIND', zone)
     )
 # The near-real-time data (2024-2025)
 for zone in zones_list:
@@ -102,7 +92,7 @@ for zone in zones_list:
         'cmems_obs-wind_glo_phy_nrt_l4_0.125deg_PT1H',
         ['eastward_wind', 'northward_wind'],
         '2025-01-01T00:00:00', '2026-01-01T00:00:00',
-        f'../pCloudDrive/data/WIND/{zone}'
+        config.data_path('WIND', zone)
     )
 
 
@@ -135,7 +125,7 @@ for zone in zones_list[1:4]:
         'cmems_mod_ibi_wav_my_0.027deg_PT1H-i',
         ['VHM0', 'VMDR'],
         '1998-01-01T00:00:00', '2026-01-01T00:00:00', # Remember to get one extra hour to cover the integral up to 2025-12-31 23:00
-        f'../pCloudDrive/data/WAVE/{zone}'
+        config.data_path('WAVE', zone)
     )
 
 # The Mediterranean WAVE data at 0.042° resolution
@@ -145,7 +135,7 @@ for zone in zones_list[0:1]:
         'cmems_mod_med_wav_my_4.2km_PT1H-i',
         ['VHM0', 'VMDR'],
         '1998-01-01T00:00:00', '2026-01-01T00:00:00', # Remember to get one extra hour to cover the integral up to 2025-12-31 23:00
-        f'../pCloudDrive/data/WAVE/{zone}'
+        config.data_path('WAVE', zone)
     )
 
 
@@ -154,11 +144,11 @@ for zone in zones_list[0:1]:
 # =============================================================================
 
 for zone in zones_list:
-    daily_integral(f'../pCloudDrive/data/WIND/{zone}',
+    daily_integral(config.data_path('WIND', zone),
                    overwrite = False) # Change to True if running for the first time
 
 for zone in zones_list:
-    daily_integral(f'../pCloudDrive/data/WAVE/{zone}',
+    daily_integral(config.data_path('WAVE', zone),
                    overwrite = False) # Change to True if running for the first time
 
 
@@ -174,7 +164,7 @@ for zone in zones_list:
         'cmems_mod_glo_phy_my_0.083deg_P1D-m',
         ['uo', 'vo', 'zos', 'thetao', 'bottomT', 'mlotst', 'so'],
         '1998-01-01T00:00:00', '2024-12-31T00:00:00',
-        f'../pCloudDrive/data/GLORYS/{zone}'
+        config.data_path('GLORYS', zone)
     )
 
 # The recent GLORYS data (2024-2025)
@@ -185,7 +175,7 @@ for zone in zones_list:
         'cmems_mod_glo_phy_anfc_0.083deg_P1D-m',
         ['zos', 'mlotst', 'tob'], # Sea surface height [zos], mixed layer depth [mlotst], bottom temperature [tob]
         '2025-01-01T00:00:00', '2025-12-31T00:00:00',
-        f'../pCloudDrive/data/GLORYS/{zone}'
+        config.data_path('GLORYS', zone)
     )
 for zone in zones_list:
     download_cmems_subset(
@@ -193,7 +183,7 @@ for zone in zones_list:
         'cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m',
         ['uo', 'vo'], # Surface currents (eastward [uo] and northward [vo])
         '2025-01-01T00:00:00', '2025-12-31T00:00:00',
-        f'../pCloudDrive/data/GLORYS/{zone}'
+        config.data_path('GLORYS', zone)
     )
 for zone in zones_list:
     download_cmems_subset(
@@ -201,7 +191,7 @@ for zone in zones_list:
         'cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m',
         ['so'], # Salinity [so]
         '2025-01-01T00:00:00', '2025-12-31T00:00:00',
-        f'../pCloudDrive/data/GLORYS/{zone}'
+        config.data_path('GLORYS', zone)
     )
 for zone in zones_list:
     download_cmems_subset(
@@ -209,7 +199,7 @@ for zone in zones_list:
         'cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m',
         ['thetao'], # Temperature [thetao]
         '2025-01-01T00:00:00', '2025-12-31T00:00:00',
-        f'../pCloudDrive/data/GLORYS/{zone}'
+        config.data_path('GLORYS', zone)
     )
 
 
@@ -222,7 +212,7 @@ for year in range(1998, 2026):
     Plot_and_Save_the_map(
         sextant_chla_all,
         nb_of_cores_to_use = nb_of_cores_to_use,
-        where_are_saved_satellite_data = '../pCloudDrive/data',
+        where_are_saved_satellite_data = config.data_root(),
         start_day_of_maps_to_plot = f'{year}/01/01',
         end_day_of_maps_to_plot = f'{year}/12/31'
     )
@@ -233,7 +223,7 @@ for year in range(1998, 2026):
     Plot_and_Save_the_map(
         sextant_spm_all,
         nb_of_cores_to_use = nb_of_cores_to_use,
-        where_are_saved_satellite_data = '../pCloudDrive/data',
+        where_are_saved_satellite_data = config.data_root(),
         start_day_of_maps_to_plot = f'{year}/01/01',
         end_day_of_maps_to_plot = f'{year}/12/31'
     )

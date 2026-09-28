@@ -4,6 +4,9 @@
 
 # Meta-data ---------------------------------------------------------------
 
+# Project-wide settings (data root, zones...) from metadata/riomar_config.yml
+source("func/config.R")
+
 # Canonical zone order -- north to south
 ZONE_ORDER <- c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION")
 
@@ -353,7 +356,7 @@ write_pixel_coords <- function(sat_name, var_name_full){
       var_name_stub <- "CHL"
       sat_var <- "analysed_chl_a"
     }
-    nc_file_base <- paste0("~/pCloudDrive/data/SEXTANT/",var_name_full,
+    nc_file_base <- paste0(riomar_data_path("SEXTANT"), "/", var_name_full,
       "/merged/Standard/DAILY/1998/01/01/19980101-EUR-L4-",var_name_stub,"-ATL-v01-fv01-OI.nc")
   } else if(sat_name == "MODIS"){
     nc_file_base <- paste0("ODATIS-MR/FRANCE/MODIS/L3m_20200101__FRANCE_03_MOD_",var_name_full,"_DAY_00.nc")
@@ -495,7 +498,7 @@ process_pixels <- function(sat_name, var_name){
   
   # Get file pathways
   if(sat_name == "SEXTANT"){
-    files_path <- file.path("~/pCloudDrive/data/SEXTANT",var_name)
+    files_path <- riomar_data_path("SEXTANT", var_name)
     var_name_file <- ifelse(var_name == "SPM", "SPIM", ifelse(var_name == "CHLA", "CHL"))
   } else {
     files_path <- file.path("/media/calanus/HDD2TB/home/calanus/data/ODATIS-MR", sat_name, zone_name)
@@ -916,7 +919,7 @@ load_wave <- function(file_name, lon_range, lat_range){
 
 # Load GLORYS surface current (eastward/northward velocity) data for a zone
 load_surface_current <- function(zone_name, lon_range, lat_range){
-  dir_name <- path.expand(paste0("~/pCloudDrive/data/GLORYS/", zone_name))
+  dir_name <- riomar_data_path("GLORYS", zone_name)
   current_df <- dplyr::bind_rows(
     .load_current_sub(file.path(dir_name, "glorys_199301_202412.nc"), lon_range, lat_range),
     .load_current_sub(file.path(dir_name, "glorys_uo_vo_202501_202512.nc"), lon_range, lat_range)

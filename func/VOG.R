@@ -9,6 +9,7 @@
 library(tidyverse)
 library(sf)
 library(furrr)
+source("func/config.R")
 # library(doParallel)
 
 # Set cores for use below
@@ -31,7 +32,7 @@ extract_csv <- function(file_name, polygon_sf){
   file_date_day <- format(file_date, "%d")
   file_date_month <- format(file_date, "%m")
   file_date_year <- format(file_date, "%Y")
-  sextant_file <- paste0("~/pCloudDrive/data/SEXTANT/SPM/merged/Standard/DAILY/",
+  sextant_file <- paste0(riomar_data_path("SEXTANT", "SPM", "merged", "Standard", "DAILY"), "/",
                          file_date_year, "/", file_date_month, "/", file_date_day, "/", 
                          file_date_flat, "-EUR-L4-SPIM-ATL-v01-fv01-OI.nc")
   

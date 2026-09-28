@@ -176,7 +176,7 @@ def do_R_plot(the_plume, where_to_save_the_plot, name_of_the_plot):
     df.to_csv( os.path.join(folder_where_to_save_data, f"{name_of_the_plot}.csv") )
 
 
-def save_files_for_Figure_1(where_are_saved_satellite_data, where_to_save_the_figure,
+def save_files_for_Figure_1(where_to_save_the_figure,
                             mean_spm_path, coordinates_of_the_map) :
 
     folder_where_to_save_Figure_1_data = os.path.join(where_to_save_the_figure, 'ARTICLE', 'FIGURE_1', 'DATA')
@@ -288,9 +288,8 @@ def dates_for_each_zone() :
 # =============================================================================
 
 
-def Figure_1(where_are_saved_satellite_data, where_to_save_the_figure):
-    save_files_for_Figure_1(where_are_saved_satellite_data,
-                            where_to_save_the_figure,
+def Figure_1(where_to_save_the_figure):
+    save_files_for_Figure_1(where_to_save_the_figure,
                             mean_spm_path=os.path.join(proj_dir, "output", "STATS", "mean_spm_national.nc"),
                             coordinates_of_the_map={"lat_min": 42, "lat_max": 51.5, "lon_min": -6, "lon_max": 8})
 

@@ -1,0 +1,27 @@
+# Project-wide settings shared by the Python (func/config.py) and R
+# (func/config.R) sides of the pipeline. Edit here instead of in code/ or func/.
+
+# Root of the large, untracked datasets (SEXTANT, WIND, WAVE, GLORYS,
+# DOWNLOAD_REPORTS). Leave as null to auto-detect the pCloud folder:
+#   macOS -> ~/pCloud Drive/data,  Linux/other -> ~/pCloudDrive/data
+# (whichever of the two exists wins if the OS default is missing).
+# The RIOMAR_DATA_ROOT environment variable overrides both.
+data_root: null
+
+# The four study zones, in the pipeline's default processing order.
+zones:
+  - GULF_OF_LION
+  - BAY_OF_SEINE
+  - BAY_OF_BISCAY
+  - SOUTHERN_BRITTANY
+
+# Default satellite product; config.satellite_dict('SPM' | 'CHLA') adds the
+# Satellite_variables entry. Dates stay quoted strings (YYYY/MM/DD), as
+# util.define_parameters expects.
+satellite:
+  Data_sources: [SEXTANT]
+  Sensor_names: [merged]
+  Atmospheric_corrections: [Standard]
+  Temporal_resolution: [DAILY]
+  start_day: "1998/01/01"
+  end_day: "2025/12/31"

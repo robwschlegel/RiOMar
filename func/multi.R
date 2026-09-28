@@ -169,7 +169,7 @@ load_driver <- function(driver_name, meta){
     zone_box <- dplyr::filter(zones_bbox, zone == meta$zone)
     lon_range <- c(zone_box$lon_min, zone_box$lon_max)
     lat_range <- c(zone_box$lat_min, zone_box$lat_max)
-    wind_files <- dir(paste0("~/pCloudDrive/data/WIND/", meta$zone), pattern = "_daily_", full.names = TRUE)
+    wind_files <- dir(riomar_data_path("WIND", meta$zone), pattern = "_daily_", full.names = TRUE)
     df_wind <- purrr::map_dfr(wind_files, load_wind_sub, lon_range, lat_range) |>
       wind_add_direction(meta$zone)
     df <- df_wind |> dplyr::select(date, value = wind_spd, wind_dir, direction, u, v)
@@ -194,7 +194,7 @@ load_driver <- function(driver_name, meta){
     zone_box <- dplyr::filter(zones_bbox, zone == meta$zone)
     lon_range <- c(zone_box$lon_min, zone_box$lon_max)
     lat_range <- c(zone_box$lat_min, zone_box$lat_max)
-    wave_files <- dir(paste0("~/pCloudDrive/data/WAVE/", meta$zone), pattern = "_daily_", full.names = TRUE)
+    wave_files <- dir(riomar_data_path("WAVE", meta$zone), pattern = "_daily_", full.names = TRUE)
     df_wave <- purrr::map_dfr(wave_files, load_wave, lon_range, lat_range)
     df <- df_wave |> dplyr::select(date, value = wave_height, wave_dir)
   }
@@ -866,7 +866,7 @@ surface_plot_daily_maps <- function(zone_name){
 # Get missing dates of
 if(!file.exists("output/STATS/missing_SPM.csv") | !file.exists("output/STATS/missing_chla.csv")){
   message("Computing missing SEXTANT files...")
-  SPM_files_NA <- data.frame(file_name = dir("~/pCloudDrive/data/SEXTANT/SPM/", pattern = ".nc", recursive = TRUE)) |>
+  SPM_files_NA <- data.frame(file_name = dir(riomar_data_path("SEXTANT", "SPM"), pattern = ".nc", recursive = TRUE)) |>
     mutate(base_name = basename(file_name)) |>
     separate(base_name, "-", extra = "drop") |>
     dplyr::rename(date = `-`) |>
@@ -874,7 +874,7 @@ if(!file.exists("output/STATS/missing_SPM.csv") | !file.exists("output/STATS/mis
     complete(date = seq(min(date), max(date), by = "day"), fill = list(value = NA)) |>
     filter(is.na(file_name))
   write_csv(SPM_files_NA, "output/STATS/missing_SPM.csv")
-  chla_files_NA <- data.frame(file_name = dir("~/pCloudDrive/data/SEXTANT/CHLA/", pattern = ".nc", recursive = TRUE)) |>
+  chla_files_NA <- data.frame(file_name = dir(riomar_data_path("SEXTANT", "CHLA"), pattern = ".nc", recursive = TRUE)) |>
     mutate(base_name = basename(file_name)) |>
     separate(base_name, "-", extra = "drop") |>
     dplyr::rename(date = `-`) |>

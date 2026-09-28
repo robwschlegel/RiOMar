@@ -64,7 +64,7 @@ manuscript/google_doc_sync/sync.sh
 
 ## Data storage
 
-Large datasets are stored **outside** this repo under `~/pCloudDrive/data/` and are never committed. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.
+Large datasets are stored **outside** this repo under the pCloud data folder (`~/pCloud Drive/data/` on macOS, `~/pCloudDrive/data/` on Linux) and are never committed. Code never hardcodes this path: Python uses `func/config.py` (`config.data_root()`, `config.data_path('WIND', zone)`) and R uses `func/config.R` (`riomar_data_root()`, `riomar_data_path(...)`, sourced by `util.R`). They pick the folder by OS (falling back to the other spelling), unless `data_root` in `metadata/riomar_config.yml` or the `RIOMAR_DATA_ROOT` env var overrides it. The same YAML holds the zone list and the default satellite dict. Exception: the panache `metadata/zone_config_*.json` files still carry absolute machine-specific paths, because panache reads them directly. The `.gitignore` also excludes most of `output/` and `data/SEXTANT`, `data/INSITU_data`, etc. Only shapefiles, metadata CSVs, and zone config JSONs are tracked.
 
 Two distinct kinds of "outside the repo" apply here, and only one of them is backed up automatically:
 
@@ -107,7 +107,7 @@ A Python dict like:
  'Atmospheric_corrections': ['Standard'], 'Temporal_resolution': ['DAILY'],
  'start_day': '1998/01/01', 'end_day': '2025/12/31'}
 ```
-is the standard argument passed to every major pipeline function. `util.define_parameters` converts it into a named-tuple `info` object.
+is the standard argument passed to every major pipeline function; build it with `config.satellite_dict('SPM')` / `('CHLA')` rather than retyping it. `util.define_parameters` converts it into a named-tuple `info` object.
 
 ### Multiprocessing
 `dl.py` and `regmap.py` use `multiprocess` (not the stdlib `multiprocessing`). The start method is forced to `'spawn'` for macOS compatibility — do not change this.

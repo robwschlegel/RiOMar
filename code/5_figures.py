@@ -28,8 +28,7 @@ mpl.use('agg')
 # ### Main figures (dynamic threshold)
 # =============================================================================
 
-Figure_1(where_are_saved_satellite_data = "../pCloudDrive/data",
-         where_to_save_the_figure = "figures")
+Figure_1(where_to_save_the_figure = "figures")
 
 Figure_2(where_to_save_the_figure = "figures")
 

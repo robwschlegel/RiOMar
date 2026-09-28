@@ -18,8 +18,9 @@
 # Setup -------------------------------------------------------------------
 
 library(tidyverse)
+source("func/config.R")
 
-zones_list <- c("GULF_OF_LION", "BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY")
+zones_list <- riomar_zones()
 
 
 # Record-extension methods -------------------------------------------------

@@ -18,22 +18,18 @@ proj_dir = os.path.dirname( os.path.abspath('__file__') )
 func_dir = os.path.join( proj_dir, 'func' )
 sys.path.append( func_dir )
 
+import config
+
 from X11 import Apply_X11_method_on_time_series, Apply_X11_method_on_time_series_per_river
 
 # Set matplotlib backend to prevent plots from displaying
 mpl.use('agg')
 
 # The zones for mapping
-zones_list = ['GULF_OF_LION', 'BAY_OF_SEINE', 'BAY_OF_BISCAY', 'SOUTHERN_BRITTANY']
+zones_list = config.zones()
 
 # Basic arguments to be used throughout the script
-sextant_spm_all = {'Data_sources':['SEXTANT'],
-                   'Sensor_names':["merged"],
-                   'Satellite_variables':['SPM'],
-                   'Atmospheric_corrections':['Standard'],
-                   'Temporal_resolution':['DAILY'],
-                   'start_day':'1998/01/01',
-                   'end_day':'2025/12/31'}
+sextant_spm_all = config.satellite_dict('SPM')
 
 
 # =============================================================================
