@@ -1,0 +1,5 @@
+linters: linters_with_defaults(
+    defaults = list(),
+    object_usage_linter()
+  )
+encoding: "UTF-8"

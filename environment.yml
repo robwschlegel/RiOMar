@@ -1,0 +1,41 @@
+# Conda environment for the Python side of the RiOMar pipeline.
+#
+# Create:  conda env create -f environment.yml
+# Update:  conda env update -f environment.yml --prune
+#
+# This file lists what the code in code/ and func/ imports, deliberately
+# without version pins. To record the exact versions that produced the
+# published results, run on the reference machine:
+#   conda env export --from-history > environment.lock.yml
+# (R packages are tracked separately -- see DESCRIPTION / renv.lock.)
+name: riomar
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  # Core data stack
+  - numpy
+  - pandas
+  - scipy
+  - xarray
+  - netcdf4
+  - geopandas
+  - scikit-image
+  - pillow
+  - matplotlib
+  - pyyaml          # reads metadata/riomar_config.yml
+  - requests
+  # Parallelism (dl.py, regmap.py use multiprocess, not stdlib multiprocessing)
+  - multiprocess
+  # Python <-> R bridge (X11.py, figure.py, 4_time_series.py)
+  - rpy2
+  # Data access
+  - copernicusmarine
+  # Pipeline orchestration + linting
+  - snakemake-minimal
+  - ruff
+  - pip
+  - pip:
+      # Plume detection (step 3). TODO(Robert): replace with the install
+      # source you actually use, e.g. git+https://github.com/<owner>/panache
+      - panache

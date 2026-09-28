@@ -1,0 +1,46 @@
+Package: RiOMar
+Title: River plume analysis along the French coast
+Version: 0.0.0.9000
+Description: Not an installable R package. This file lists the R packages the
+    RiOMar pipeline (func/*.R, and R code called from Python via rpy2) depends
+    on, so that renv can snapshot them. On the reference machine, run once:
+        renv::init(settings = list(snapshot.type = "explicit"))
+    which records exact versions in renv.lock; later, renv::snapshot() after
+    installing/updating packages. On a new machine: renv::restore().
+License: file LICENSE
+Imports:
+    broom,
+    cowplot,
+    data.table,
+    doParallel,
+    furrr,
+    future,
+    geosphere,
+    ggExtra,
+    gganimate,
+    ggnewscale,
+    ggpubr,
+    gratia,
+    gt,
+    hms,
+    iml,
+    lmtest,
+    magick,
+    maps,
+    mgcv,
+    ncdf4,
+    patchwork,
+    plyr,
+    quantreg,
+    ranger,
+    raster,
+    sandwich,
+    scales,
+    seasonal,
+    sf,
+    tidync,
+    tidyverse,
+    viridis,
+    xml2,
+    yaml,
+    zoo
