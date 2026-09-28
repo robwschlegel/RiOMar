@@ -103,7 +103,8 @@ subprocess.run(
 # func/analysis/compute_plume_shape.py); read by func/figure.R's compactness panels
 # and func/analysis/compute_shape_alongcoast_trend.R.
 sys.path.append(os.path.join(func_dir, 'analysis'))
-import compute_plume_shape  # noqa: F401, E402
+import compute_plume_shape  # noqa: E402
+compute_plume_shape.main()
 
 
 # =============================================================================
