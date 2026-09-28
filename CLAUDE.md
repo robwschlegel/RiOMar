@@ -28,8 +28,14 @@ python code/5_figures.py         # Publication figures
 
 All scripts prepend `func/` to `sys.path` by setting `proj_dir` from `os.path.abspath('__file__')` — they must be executed from the repo root, not from inside `code/`.
 
-### Snakemake (in progress)
-`Snakefile` at the repo root is being built up step by step to describe the same pipeline as rules, with declared inputs and outputs. It runs nothing unless asked. `snakemake -n` dry-runs it and `snakemake -n --summary` shows what's out of date. The numbered `code/*.py` scripts remain the way to run the pipeline until the Snakefile covers it. Its settings come from `metadata/riomar_config.yml`. Logs go to the gitignored `logs/`, and Snakemake's bookkeeping to the gitignored `.snakemake/`.
+### Snakemake
+`Snakefile` at the repo root describes part of the pipeline as rules with declared inputs and outputs. It covers the panache runs (one wildcard rule for zone × mode), the area/seasonal trends, Fig. 5, the multi-driver GLM/GAM/RF analysis and the driver correlation matrices; `metadata/snakemake_rulegraph.svg` is its diagram. The numbered `code/*.py` scripts remain the way to run the pipeline, and the Snakefile runs nothing unless asked. Useful commands:
+- `snakemake -n`: what would run, and why.
+- `snakemake --touch -c1`: mark existing outputs as current without running.
+- `snakemake -c8`: rebuild what's out of date, running independent rules in parallel.
+- `snakemake --rulegraph | dot -Tpdf > rules.pdf`: draw the diagram.
+
+Before any real run, check that `snakemake -n` lists no `panache` jobs unless you intend to redo plume detection (about 1 h per zone × mode). Settings come from `metadata/riomar_config.yml`. Logs go to the gitignored `logs/`, and Snakemake's bookkeeping to the gitignored `.snakemake/`.
 
 ## Pipeline map (living document)
 
