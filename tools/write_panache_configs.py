@@ -29,25 +29,31 @@ def config_path(zone, mode):
     return os.path.join(CONFIG_DIR, f'zone_config_{mode}_{zone}.json')
 
 
-def write_all(proj_dir_for_paths=proj_dir):
+def write_one(zone, mode, proj_dir_for_paths=proj_dir):
     os.makedirs(CONFIG_DIR, exist_ok=True)
-    paths = []
-    for mode in config.PANACHE_MODES:
-        for zone in config.zones():
-            path = config_path(zone, mode)
-            with open(path, 'w') as f:
-                json.dump(config.panache_zone_config(zone, mode, proj_dir_for_paths), f, indent=2)
-                f.write('\n')
-            paths.append(path)
-    return paths
+    path = config_path(zone, mode)
+    with open(path, 'w') as f:
+        json.dump(config.panache_zone_config(zone, mode, proj_dir_for_paths), f, indent=2)
+        f.write('\n')
+    return path
+
+
+def write_all(proj_dir_for_paths=proj_dir):
+    return [write_one(zone, mode, proj_dir_for_paths)
+            for mode in config.PANACHE_MODES for zone in config.zones()]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--proj-dir', default=proj_dir,
                         help='repo root to write into the JSON paths (default: this checkout)')
+    parser.add_argument('--zone', help='write only this zone (requires --mode); used by the Snakefile')
+    parser.add_argument('--mode', choices=config.PANACHE_MODES, help='write only this threshold mode')
     args = parser.parse_args()
-    for path in write_all(args.proj_dir):
+    if bool(args.zone) != bool(args.mode):
+        parser.error('--zone and --mode go together')
+    paths = [write_one(args.zone, args.mode, args.proj_dir)] if args.zone else write_all(args.proj_dir)
+    for path in paths:
         print(os.path.relpath(path, proj_dir))
 
 

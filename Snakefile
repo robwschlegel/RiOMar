@@ -26,6 +26,7 @@
 # Settings ------------------------------------------------------------------
 
 import csv
+import json
 import glob  # a Snakefile is Python plus rule blocks, so ordinary Python works here
 
 # The same YAML the Python/R code reads (func/config.py, func/config.R):
@@ -33,6 +34,13 @@ import glob  # a Snakefile is Python plus rule blocks, so ordinary Python works 
 configfile: "metadata/riomar_config.yml"
 
 ZONES = config["zones"]
+PANACHE_MODES = ["dynamic", "static"]
+
+# Wildcards ({zone}, {mode}) may only take these values, so a path like
+# output/panache/dynamic/typo/Results.csv can't match a rule by accident.
+wildcard_constraints:
+    zone = "|".join(ZONES),
+    mode = "|".join(PANACHE_MODES),
 
 # Shared R code that most analysis scripts source(). util.R/multi.R are loaders
 # for their func/sections/ parts, so the parts are listed too -- editing any
@@ -59,6 +67,11 @@ def registry_figure(slot_key):
 rule all:
     input:
         "output/STATS/area_trend_summary.csv",
+        # cited directly in the manuscript text, so final outputs too (a file
+        # that is only an intermediate isn't rebuilt when missing if everything
+        # downstream of it is up to date)
+        "output/STATS/monthly_trend_summary.csv",
+        "output/STATS/monthly_trend_compact_summary.csv",
         registry_figure("monthly_trend_pct_heatmap"),
 
 
@@ -135,3 +148,42 @@ rule monthly_trend_heatmap:
         "logs/monthly_trend_heatmap.log",
     shell:
         "Rscript {input.script} > {log} 2>&1"
+
+
+# Step 3: wildcards -----------------------------------------------------------
+# One rule stands for all 8 panache runs (4 zones x 2 threshold modes).
+# {zone} and {mode} are wildcards: when another rule needs, say,
+# output/panache/static/BAY_OF_SEINE/Results.csv, Snakemake matches it against
+# this rule's output pattern, fills in zone=BAY_OF_SEINE and mode=static, and
+# uses those values in the input path and command. This replaces the loop in
+# code/3_plumes.py.
+#
+# SAFETY (panache takes ~1 h per zone x mode): a panache job reruns only
+# when its own Results.csv/PlumeMasks.nc are missing, or -- once Snakemake
+# has built them itself -- when that zone x mode's panache settings in
+# metadata/riomar_config.yml change (the `params` below; Snakemake records
+# them). Each job writes its own JSON config as part of its command instead
+# of depending on a shared config file, so editing unrelated YAML settings,
+# or one missing output, never cascades into all 8 runs. The SEXTANT input on
+# the external drive is not declared. Always check that `snakemake -n` lists
+# no panache jobs before running anything, unless you mean to rerun detection.
+
+rule panache:
+    input:
+        writer = ancient("tools/write_panache_configs.py"),
+    params:
+        # this zone x mode's settings; a change here marks the run out of date
+        settings = lambda wc: json.dumps(
+            {**config["panache"][wc.mode], **config["panache"]["common"],
+             "input_path": config["panache"]["input_path"]}, sort_keys=True),
+    output:
+        results = "output/panache/{mode}/{zone}/Results.csv",
+        masks = "output/panache/{mode}/{zone}/PlumeMasks.nc",
+    # panache itself uses nb_cores cores per run; declaring them here stops
+    # `snakemake -c8` from starting 8 runs at once (8 x 8 cores)
+    threads: config["panache"]["common"]["nb_cores"]
+    log:
+        "logs/panache_{mode}_{zone}.log",
+    shell:
+        "python {input.writer} --zone {wildcards.zone} --mode {wildcards.mode} > {log} 2>&1"
+        " && panache output/panache/configs/zone_config_{wildcards.mode}_{wildcards.zone}.json >> {log} 2>&1"
