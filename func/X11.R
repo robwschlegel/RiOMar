@@ -114,7 +114,7 @@ make_the_plot <- function(X11_data, type_of_signal) {
 # Rollback (2026-09-23) of the Aug-11 driver-vs-plume X11 migration's Python
 # plotting (func/X11.py::plot_driver_x11_dual_axis(), called from
 # func/compute_driver_x11_figures.py) -- Python stays limited to the X11
-# *calculation* (still func/compute_x11_driver_signals.py, which persists
+# *calculation* (still func/analysis/compute_x11_driver_signals.py, which persists
 # each driver's weekly Seasonal_signal/Interannual_signal to CSV); this is
 # the R replacement for the *plotting* half, matching make_the_plot()'s
 # house style (dual-axis, scaled second axis, r annotation) rather than

@@ -903,14 +903,14 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
       df_mass <- load_plume_ts(meta$zone, plume_dir = plume_dir, metric_col = mass_col, outlier_max = NULL) |>
         dplyr::transmute(date, variable = "SPM_mass", value = plume_area)  # already tonnes
 
-      # func/compute_plume_shape.py must be run (now wired into
+      # func/analysis/compute_plume_shape.py must be run (now wired into
       # code/4_time_series.py) before this figure -- compactness is a
       # required panel, not an optional one, so a missing file is a hard
       # error rather than a silently dropped panel.
       shape_path <- paste0(plume_dir, "/", meta$zone, "/PlumeShape.csv")
       if(!file.exists(shape_path)){
         stop("plot_seasonal_boxplot_heatmap: missing ", shape_path,
-             " -- run func/compute_plume_shape.py before regenerating this figure.")
+             " -- run func/analysis/compute_plume_shape.py before regenerating this figure.")
       }
       df_shape <- read_csv(shape_path, show_col_types = FALSE) |>
         dplyr::mutate(date = as.Date(date)) |>
@@ -962,7 +962,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
   # median plus IQR/range) is still in monthly_boxplot_data.csv (written
   # above), and the per-month linear trend (as opposed to the median shown
   # here) is in the monthly_trend_pct_heatmap slot's figure
-  # (func/generate_monthly_trend_pct_heatmap.R) for anyone who needs it.
+  # (func/analysis/generate_monthly_trend_pct_heatmap.R) for anyone who needs it.
   heat_stats <- long_data |>
     dplyr::filter(threshold == "dynamic") |>
     dplyr::summarise(month_median = stats::median(value, na.rm = TRUE), .by = c(zone, variable, month)) |>
@@ -976,7 +976,7 @@ plot_seasonal_boxplot_heatmap <- function(where_are_saved_plume_results_with_dyn
   # all-time typical day). Co-authors flagged the original purple/orange
   # scale as still reading too close to the blue/red diverging scale used by
   # the monthly_trend_pct_heatmap slot's %-change-per-year figure
-  # (func/generate_monthly_trend_pct_heatmap.R) -- both are a cool colour
+  # (func/analysis/generate_monthly_trend_pct_heatmap.R) -- both are a cool colour
   # against a warm colour, so the two heatmaps were visually conflated at a
   # glance even though the hues differ. Switched to ColorBrewer's PRGn
   # (purple-green), a colourblind-safe diverging palette (verified

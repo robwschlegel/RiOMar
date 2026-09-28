@@ -100,9 +100,10 @@ subprocess.run(
 # =============================================================================
 
 # Derives PlumeShape.csv per zone/threshold from panache's PlumeMasks.nc (see
-# func/compute_plume_shape.py); read by func/figure.R's compactness panels
-# and func/compute_shape_alongcoast_trend.R.
-import compute_plume_shape  # noqa: F401
+# func/analysis/compute_plume_shape.py); read by func/figure.R's compactness panels
+# and func/analysis/compute_shape_alongcoast_trend.R.
+sys.path.append(os.path.join(func_dir, 'analysis'))
+import compute_plume_shape  # noqa: F401, E402
 
 
 # =============================================================================
@@ -120,19 +121,19 @@ import compute_plume_shape  # noqa: F401
 # reason as driver_interactions.R itself, above. The others don't load
 # ranger, so they stay on rpy2.
 stats_scripts = [
-    'compute_area_trend.R',
-    'compute_mass_spm_trend.R',
-    'compute_shape_alongcoast_trend.R',
-    'compute_driver_correlation_trend.R',
-    'compute_seasonal_trend.R',
-    'generate_monthly_trend_pct_heatmap.R',
-    'compute_direction_octant_trend.R',
+    'analysis/compute_area_trend.R',
+    'analysis/compute_mass_spm_trend.R',
+    'analysis/compute_shape_alongcoast_trend.R',
+    'analysis/compute_driver_correlation_trend.R',
+    'analysis/compute_seasonal_trend.R',
+    'analysis/generate_monthly_trend_pct_heatmap.R',
+    'analysis/compute_direction_octant_trend.R',
 ]
 for script in stats_scripts:
     robjects.r['source'](os.path.join(func_dir, script))
 
 subprocess.run(
-    ['Rscript', os.path.join(func_dir, 'compute_driver_correlation_matrices.R')],
+    ['Rscript', os.path.join(func_dir, 'analysis', 'compute_driver_correlation_matrices.R')],
     cwd=proj_dir, check=True
 )
 
