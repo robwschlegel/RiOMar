@@ -343,11 +343,13 @@ def load_and_extract_key_data(nc_file, info, where_to_save_data_extended, do_the
     map_ini = map_ini.sortby('lat')
     map_ini = map_ini.sortby('lon')
     
-    # Get coordinates for the site
-    site_coordinates = site_coordinates(info.Zone)
+    # Get coordinates for the site. NB: must not be named `site_coordinates` --
+    # assigning to the function's own name makes it local to this function,
+    # so the call on the right-hand side raised UnboundLocalError.
+    zone_coordinates = site_coordinates(info.Zone)
 
     # Extract data for the Basin zone
-    Basin_data = extract_key_data(map_ini, info, zone_limits = site_coordinates['Basin_limits'])
+    Basin_data = extract_key_data(map_ini, info, zone_limits = zone_coordinates['Basin_limits'])
              
     if Basin_data['n'] == 0 : 
         return "All Basin data are NAN"
