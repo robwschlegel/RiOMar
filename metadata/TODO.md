@@ -137,3 +137,14 @@ Robert removed the dedicated tide-gauge table (formerly `tab:tide`) — its cont
 
 Both were fixed: `figure.py` now globs each exact zone directory rather than `'*'` (verified: exactly 1248 rows/zone, zero duplicates, post-fix); all six panache-stats/driver-stats/monthly-trends table scripts were rerun, along with `compute_plume_shape.py` and `compute_direction_gam_significance.R`; the panache-stats and driver-stats tables (all 40 `\tocheck{XXX}` cells finally filled) and the monthly-trends table were fully re-transcribed; the Supplementary full-detail monthly-trends table was regenerated via `generate_table_s_monthly_trends.R` and pasted in wholesale. The panache rerun changed real findings, not just numbers — e.g. SPM mass at the Bay of Biscay is no longer a significant decline, centroid drift becomes significant at 3 zones instead of 1, and the "current speed declines at 3 zones" claim reverses entirely (now only the Gulf of Lion shows a significant driver trend, across wind/tide/current) — so the Results §3.3, Discussion §4.1, Abstract, and Conclusion prose were all rewritten to match, not just the tables. The Supplementary ROFI cross-check `\tocheck{}` (see removed Discussion item below) was resolved using real trend magnitudes pulled from `martinez_almoyna_temporal_2025` via Zotero (no PDF/fulltext was in-repo, so these were fetched fresh from the paper itself, not fabricated). Manuscript recompiles cleanly, 74 pages.
 
+# Co-author feedback #2 10-01-2026
+
+- Text for figure 1 is too small. Better if it is white on dark background. Double check all spelling and that proper names are in French.
+- Figure 2 the text labels in the top row need to be bigger with more spacing from plotting area. The axis text is too small for panel e) and the axis titles are too big.
+- Change headings to 'Multi-driver' with liaison
+- Add uncertainties to means and 9r% CI for tendencies for table 1.
+- Consider moving Figure 4 into supplementary.
+- Need to explain why the SPM mass signal in the winter for Southern Brittany in Figure 4 is so much higher than everything else.
+- For Figure 5 add a legend that explains that the dashed line around grid cells means they are significant. Increase the size of the axis text.
+- Need to explain why the percentage change of the centroid in Figure 5 is so much higher for Southern Brittany.
+- For Figure S8 consider restraining the x-axis to only the part of the results where the SE is not multiples greater than the signal itself.
