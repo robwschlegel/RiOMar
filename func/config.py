@@ -73,6 +73,17 @@ def satellite_dict(variable):
 PANACHE_MODES = ('dynamic', 'static')
 
 
+def sextant_spm_path():
+    """
+    Folder of daily SEXTANT SPM .nc files: the RIOMAR_SEXTANT_SPM_PATH env
+    var, else panache.input_path in the YAML, else <data_root>/SEXTANT/SPM/.
+    """
+    input_path = os.environ.get('RIOMAR_SEXTANT_SPM_PATH') or load_config()['panache'].get('input_path')
+    if not input_path:
+        input_path = data_path('SEXTANT', 'SPM') + os.sep
+    return input_path
+
+
 def panache_zone_config(zone, mode, proj_dir=proj_dir):
     """
     The panache settings for one zone and threshold mode ('dynamic' or
@@ -83,9 +94,7 @@ def panache_zone_config(zone, mode, proj_dir=proj_dir):
     if mode not in PANACHE_MODES:
         raise ValueError(f"mode must be one of {PANACHE_MODES}, got {mode!r}")
     panache = load_config()['panache']
-    input_path = os.environ.get('RIOMAR_SEXTANT_SPM_PATH') or panache.get('input_path')
-    if not input_path:
-        input_path = data_path('SEXTANT', 'SPM') + os.sep
+    input_path = sextant_spm_path()
     output_dir = os.path.join(proj_dir, 'output', 'panache', mode, zone)
     return {'zone': zone,
             'input_path': input_path,

@@ -23,16 +23,21 @@ import numpy as np
 import xarray as xr
 
 proj_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, os.path.join(proj_dir, 'func'))
+import config
 
-# Local copy on the Toshi drive (flat, no year/month/day subfolders) --
-# avoids reading the full ~95-minute, ~10,100-file archive over pCloud's
-# flaky virtual filesystem.
-DATA_DIR = "/Volumes/Toshi/data/SEXTANT/SPM"
+# Same SEXTANT SPM folder panache reads (panache.input_path in
+# metadata/riomar_config.yml, typically the local Toshi copy -- avoids
+# reading the full ~95-minute, ~10,100-file archive over pCloud's flaky
+# virtual filesystem).
+DATA_DIR = config.sextant_spm_path()
 OUTPUT_PATH = os.path.join(proj_dir, "output", "STATS", "mean_spm_national.nc")
 
 
 def national_mean_spm(data_dir=DATA_DIR, output_path=OUTPUT_PATH):
-    files = sorted(glob.glob(os.path.join(data_dir, "*.nc")))
+    # Recursive: the folder is flat on the Toshi drive but nested
+    # (merged/Standard/DAILY/YYYY/MM/DD/) on pCloud.
+    files = sorted(glob.glob(os.path.join(data_dir, "**", "*.nc"), recursive=True))
     print(f"Found {len(files)} daily SPM files under {data_dir}")
     if len(files) == 0:
         raise FileNotFoundError(f"No .nc files found under {data_dir}")
