@@ -139,12 +139,8 @@ Both were fixed: `figure.py` now globs each exact zone directory rather than `'*
 
 # Co-author feedback #2 10-01-2026
 
-- Text for figure 1 is too small. Better if it is white on dark background. Double check all spelling and that proper names are in French.
-- Figure 2 the text labels in the top row need to be bigger with more spacing from plotting area. The axis text is too small for panel e) and the axis titles are too big.
-- Change headings to 'Multi-driver' with liaison
-- Add uncertainties to means and 9r% CI for tendencies for table 1.
-- Consider moving Figure 4 into supplementary.
-- Need to explain why the SPM mass signal in the winter for Southern Brittany in Figure 4 is so much higher than everything else.
-- For Figure 5 add a legend that explains that the dashed line around grid cells means they are significant. Increase the size of the axis text.
-- Need to explain why the percentage change of the centroid in Figure 5 is so much higher for Southern Brittany.
-- For Figure S8 consider restraining the x-axis to only the part of the results where the SE is not multiples greater than the signal itself.
+Status 2026-10-07: items done this round are removed; the full item-by-item record (with DD's PDF comments) is in `manuscript/coauthor_round3_responses.md`.
+
+- Add uncertainties to means for Table 1. 95% CIs on the trends are done; the means keep their SD row (the SE of a ~10,000-day mean is negligible) unless Robert wants otherwise.
+- Consider moving Figure 4 into supplementary. Agreed (DD also asked); deferred until after the second co-author's comments (Fri 2026-10-09) so figure numbers change once.
+- Fig. 5 centroid now expressed as % of SD per year (was % of mean, which inflated Southern Brittany); recheck the §3.2 "largest percentage changes" claim against the regenerated figure.
