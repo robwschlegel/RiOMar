@@ -22,6 +22,12 @@
 # relative to the raw slope for those two zones, making the heatmap colour
 # contradict the actual trend direction.
 #
+# Along-coast drift is the exception (2026-10, co-author round 3): its mean is
+# a position on an axis whose origin is arbitrary (the primary river mouth),
+# so dividing by it inflated Southern Brittany's percentages (mean +7.6 km)
+# for no physical reason. Its slope is instead expressed as a percentage of
+# the zone's SD of along-coast position per year.
+#
 # The mean is recomputed here from the same source loaders
 # (load_plume_ts()/load_driver()/PlumeShape.csv/compute_alongcoast_ts())
 # compute_seasonal_trend.R used to produce the slopes, rather than read from
@@ -44,7 +50,7 @@ variable_display <- c(
   plume_area    = "Plume area (km²)",
   SPM_mass      = "SPM mass (t)",
   compactness   = "Compactness",
-  alongcoast_km = "Along-coast drift (km)",
+  alongcoast_km = "Along-coast drift (% of SD)",
   flow          = "River flow (m³ s⁻¹)",
   wind          = "Wind speed (m s⁻¹)",
   tide          = "Tidal range (m)",
@@ -85,7 +91,8 @@ overall_mean <- purrr::pmap_dfr(zone_meta, function(...){
   dplyr::bind_rows(df_area, df_mass, df_shape, df_coast, df_drivers) |>
     dplyr::mutate(zone = meta$zone, .before = 1)
 }) |>
-  dplyr::summarise(mean_value = mean(value, na.rm = TRUE), .by = c(zone, variable))
+  dplyr::summarise(mean_value = mean(value, na.rm = TRUE), sd_value = sd(value, na.rm = TRUE),
+                   .by = c(zone, variable))
 
 # "Southern Brittany" abbreviated to "S. Brittany" for this axis label only
 # (not zone_title() itself, which other figures/tables still use
@@ -96,7 +103,7 @@ zone_labels[zone_labels == "Southern Brittany"] <- "S. Brittany"
 trend <- readr::read_csv("output/STATS/monthly_trend_summary.csv", show_col_types = FALSE) |>
   dplyr::filter(threshold == "dynamic", weight_choice == "ar") |>
   dplyr::left_join(overall_mean, by = c("zone", "variable")) |>
-  dplyr::mutate(pct_per_year = 100 * (slope * YR) / abs(mean_value),
+  dplyr::mutate(pct_per_year = 100 * (slope * YR) / ifelse(variable == "alongcoast_km", sd_value, abs(mean_value)),
                 # geom_tile's discrete y-axis places the first factor level at the
                 # bottom, so levels are reversed from ZONE_ORDER here to read
                 # north (Bay of Seine) at top -> south (Gulf of Lion) at bottom,
@@ -109,14 +116,16 @@ trend <- readr::read_csv("output/STATS/monthly_trend_summary.csv", show_col_type
 
 p_heatmap <- ggplot(trend, aes(x = month, y = zone, fill = pct_per_year)) +
   geom_tile(colour = "white", linewidth = 0.4) +
-  geom_tile(data = dplyr::filter(trend, slope_p < 0.05), fill = NA, colour = "black",
-           linewidth = 0.7, linetype = "dashed") +
+  geom_tile(data = dplyr::filter(trend, slope_p < 0.05), aes(linetype = "Significant (p < 0.05)"),
+            fill = NA, colour = "black", linewidth = 0.7) +
+  scale_linetype_manual(name = NULL, values = c("Significant (p < 0.05)" = "dashed"),
+                        guide = guide_legend(override.aes = list(fill = NA), order = 2)) +
   facet_wrap(~variable, ncol = 3) +
-  scale_fill_gradient2(name = "% change\nper year", low = "steelblue4", mid = "white", high = "firebrick3", midpoint = 0) +
+  scale_fill_gradient2(name = "% change\nper year", guide = guide_colourbar(order = 1), low = "steelblue4", mid = "white", high = "firebrick3", midpoint = 0) +
   labs(x = NULL, y = NULL) +
   theme_bw(base_size = 13) +
-  theme(strip.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1, size = 9),
-       axis.text.y = element_text(size = 10), panel.grid = element_blank())
+  theme(strip.text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+       axis.text.y = element_text(size = 13), panel.grid = element_blank())
 
 output_subdir <- get_registry_row("monthly_trend_pct_heatmap")$output_subdir
 main_folder <- file.path("figures", "ARTICLE", output_subdir)

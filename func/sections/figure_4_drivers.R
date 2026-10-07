@@ -111,7 +111,12 @@ plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "outp
       "); the fixed 4-column grid assumes every zone does.")
 
     purrr::map(drivers_to_show, function(d){
-      curve <- gam_partial_effect(gam_model, d, df)
+      # Clipped to the driver's 2nd-98th percentile of observed values: the
+      # sparse tails beyond it carry SE bands several times the effect itself
+      # (co-author meeting 2026-10-01), which set the y-range for nothing.
+      x_lim <- stats::quantile(df[[d]], c(0.02, 0.98), na.rm = TRUE)
+      curve <- gam_partial_effect(gam_model, d, df) |>
+        dplyr::filter(x >= x_lim[[1]], x <= x_lim[[2]])
       ggplot(curve, aes(x = x, y = fit)) +
         geom_ribbon(aes(ymin = fit - 2 * se, ymax = fit + 2 * se), fill = "grey80", alpha = 0.5) +
         geom_line(colour = "black", linewidth = 1) +
