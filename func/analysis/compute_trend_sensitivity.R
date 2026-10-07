@@ -7,6 +7,15 @@
 #      de-seasoned river flow at its best lag (driver_correlation_trend_summary.csv),
 #      then the trend fit to the residuals, i.e. the part of the plume trend
 #      that a linear dependence on flow does not account for.
+#   4. HAC window sensitivity: p-values of the de-seasoned trend with fixed
+#      30/90/365-day Newey-West windows instead of the automatic bandwidth
+#      (~4 days on these daily series), which may understate long-memory
+#      autocorrelation.
+#   5. years to detect: the record length needed to detect the trend with 90%
+#      probability at the 5% level, after Weatherhead et al. (1998) and Sutton
+#      et al. (2022), with their AR(1) noise term replaced by the trend's own
+#      daily HAC standard error: T = N * (3.3 * SE / |slope|)^(2/3), where N is
+#      the record length in years. Given for the automatic and 365-day SE.
 #   3. seasonal timing: day of year at which the climatological seasonal
 #      cycle of plume area, river flow and wave height first rises above its
 #      annual mean in autumn, and the day of its maximum (X11 seasonal signal
@@ -22,14 +31,28 @@ flow_lags <- read_csv("output/STATS/driver_correlation_trend_summary.csv", show_
   dplyr::filter(driver == "flow") |>
   dplyr::distinct(zone, lag_days)
 
+# Newey-West SE and p-value of the slope at fixed windows (in days, as the
+# series is daily); same OLS fit as fit_wls_hac_trend(), whose AR(1) weights
+# are a single constant
+nw_window <- function(value, date, lags = c(30, 90, 365)){
+  m <- lm(value ~ date)
+  out <- purrr::map(lags, function(L){
+    se <- sqrt(sandwich::NeweyWest(m, lag = L, prewhite = FALSE)[2, 2])
+    c(se = se, p = 2 * stats::pnorm(-abs(coef(m)[[2]] / se)))
+  })
+  stats::setNames(unlist(out), paste0(rep(c("se_lag", "p_lag"), length(lags)), rep(lags, each = 2)))
+}
+
 # Trend summary row for one series, fit both raw and de-seasoned
 trend_pair <- function(value, date){
   value_adj <- deseason_doy(value, date)
   dplyr::bind_rows(
     fit_wls_hac_trend("ar", value, date) |> dplyr::mutate(series = "raw"),
-    fit_wls_hac_trend("ar", value_adj, date) |> dplyr::mutate(series = "deseasoned")
+    fit_wls_hac_trend("ar", value_adj, date) |> dplyr::mutate(series = "deseasoned",
+                                                                !!!as.list(nw_window(value_adj, date)))
   ) |>
-    dplyr::mutate(mean_value = mean(value_adj, na.rm = TRUE))
+    dplyr::mutate(mean_value = mean(value_adj, na.rm = TRUE),
+                  record_years = as.numeric(diff(range(date))) / YR)
 }
 
 sensitivity <- purrr::pmap_dfr(zone_meta, function(...){
@@ -85,9 +108,12 @@ sensitivity_summary <- sensitivity |>
   dplyr::mutate(slope_annualised = slope * YR,
                 slope_se_annualised = slope_se * YR,
                 pct_per_year = 100 * slope_annualised / abs(mean_value),
-                pct_over_record = pct_per_year * (as.numeric(diff(range(as.Date(c("1998-01-01", "2025-12-31"))))) / YR)) |>
+                pct_over_record = pct_per_year * (as.numeric(diff(range(as.Date(c("1998-01-01", "2025-12-31"))))) / YR),
+                tdt_years = record_years * (3.3 * slope_se / abs(slope))^(2/3),
+                tdt_years_lag365 = record_years * (3.3 * se_lag365 / abs(slope))^(2/3)) |>
   dplyr::select(zone, mouth_name, metric, series, n, mean_value, slope_annualised, slope_se_annualised,
-                slope_p, pct_per_year, pct_over_record, flow_beta, flow_lag_days)
+                slope_p, pct_per_year, pct_over_record, flow_beta, flow_lag_days,
+                p_lag30, p_lag90, p_lag365, record_years, tdt_years, tdt_years_lag365)
 
 readr::write_csv(sensitivity_summary, "output/STATS/trend_sensitivity_summary.csv")
 print(sensitivity_summary, n = Inf, width = Inf)
