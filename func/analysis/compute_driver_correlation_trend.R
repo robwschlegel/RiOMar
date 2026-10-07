@@ -29,12 +29,15 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
     lagged_value <- dplyr::lag(df$value, peak$lag)
     peak_test <- cor.test(df$plume_area, lagged_value)
 
-    trend <- fit_wls_hac_trend("ar", df$value, df$date)
-
     # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
     # matching the same convention the panache_stats_table's generators
     # already use (func/analysis/compute_area_trend.R etc.), added 2026-08-11 per metadata/TODO.md.
     value_adj <- deseason_doy(df$value, df$date)
+
+    # Trend fit to the de-seasoned series, as for the plume trends and as
+    # sec:linear_trends states (2026-10-07: was fit to the raw df$value, so
+    # driver and plume trends were not on the same footing).
+    trend <- fit_wls_hac_trend("ar", value_adj, df$date)
 
     tibble::tibble(zone = meta$zone, driver = driver_name, driver_label = driver_label,
                    n = nrow(df), mean_value = mean(value_adj, na.rm = TRUE), sd_value = sd(value_adj, na.rm = TRUE),
