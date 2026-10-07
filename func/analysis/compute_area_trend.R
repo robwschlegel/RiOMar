@@ -22,7 +22,11 @@ area_stats <- purrr::pmap_dfr(zone_meta, function(...){
                  mean_area_km2 = mean(area_adj, na.rm = TRUE),
                  sd_area_km2 = sd(area_adj, na.rm = TRUE),
                  n = trend$n, intercept = trend$intercept, slope = trend$slope,
-                 slope_annualised = trend$slope_annualised, slope_p = trend$slope_p)
+                 slope_annualised = trend$slope_annualised, slope_p = trend$slope_p,
+                 # HAC standard error and 95% CI of the annualised slope (Table 1)
+                 slope_se_annualised = trend$slope_se * 365.25,
+                 ci95_lower = slope_annualised - 1.96 * slope_se_annualised,
+                 ci95_upper = slope_annualised + 1.96 * slope_se_annualised)
 })
 
 readr::write_csv(area_stats, "output/STATS/area_trend_summary.csv")

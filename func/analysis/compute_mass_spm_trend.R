@@ -23,7 +23,12 @@ mass_trends_summary <- mass_trends |>
   dplyr::filter(variable == "plume", weight_choice == "ar") |>
   dplyr::mutate(slope_annualised_t_yr = slope_annualised,   # already tonnes
                 slope_t = slope,                            # already tonnes, per native time unit
-                intercept_t = intercept) |>                 # already tonnes, for the plume_area_timeseries figure's geom_abline trend line
-  dplyr::select(zone, mouth_name, timestep, n, mean_mass_t, sd_mass_t, intercept_t, slope_t, slope_annualised_t_yr, slope_p)
+                intercept_t = intercept,                    # already tonnes, for the plume_area_timeseries figure's geom_abline trend line
+                # HAC standard error and 95% CI of the annualised slope (Table 1)
+                slope_se_annualised_t_yr = slope_se * 365.25,
+                ci95_lower = slope_annualised_t_yr - 1.96 * slope_se_annualised_t_yr,
+                ci95_upper = slope_annualised_t_yr + 1.96 * slope_se_annualised_t_yr) |>
+  dplyr::select(zone, mouth_name, timestep, n, mean_mass_t, sd_mass_t, intercept_t, slope_t, slope_annualised_t_yr, slope_p,
+                slope_se_annualised_t_yr, ci95_lower, ci95_upper)
 
 readr::write_csv(mass_trends_summary, "output/STATS/mass_SPM_trend_summary.csv")

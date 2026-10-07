@@ -62,38 +62,42 @@ Figure_1 <- function(where_to_save_the_figure) {
   # Charente/Sevre: the named river the manuscript treats as the zone's main
   # discharge series throughout.
   zone_river_mouths <- tibble::tribble(
-    ~zone,               ~river,         ~lat,   ~lon,    ~primary,
-    "BAY_OF_SEINE",       "Seine",        49.43,  0.145,  TRUE,
-    "SOUTHERN_BRITTANY",  "Loire",        47.24, -2.2,    TRUE,
-    "SOUTHERN_BRITTANY",  "Vilaine",      47.48, -2.55,   FALSE,
-    "BAY_OF_BISCAY",      "Gironde",      45.61, -1.14,   TRUE,
-    "BAY_OF_BISCAY",      "Charente",     45.98, -1.15,   FALSE,
-    "BAY_OF_BISCAY",      "Sevre",        46.26, -1.2,    FALSE,
-    "GULF_OF_LION",       "Grand\nRhône",  43.32,  4.85,  TRUE,
-    "GULF_OF_LION",       "Petit\nRhône",  43.45,  4.39,  FALSE
+    ~zone,               ~river,         ~label,                ~lat,   ~lon,    ~primary,
+    "BAY_OF_SEINE",       "Seine",        "Seine",               49.43,  0.145,  TRUE,
+    "SOUTHERN_BRITTANY",  "Loire",        "Loire",               47.24, -2.2,    TRUE,
+    "SOUTHERN_BRITTANY",  "Vilaine",      "Vilaine",             47.48, -2.55,   FALSE,
+    "BAY_OF_BISCAY",      "Gironde",      "Gironde",             45.61, -1.14,   TRUE,
+    "BAY_OF_BISCAY",      "Charente",     "Charente",            45.98, -1.15,   FALSE,
+    "BAY_OF_BISCAY",      "Sevre",        "Sèvre Niortaise",     46.26, -1.2,    FALSE,
+    "GULF_OF_LION",       "Grand\nRhône", "Grand\nRhône",        43.32,  4.85,  TRUE,
+    "GULF_OF_LION",       "Petit\nRhône", "Petit\nRhône",        43.45,  4.39,  FALSE
   )
 
   # One geom_label() call per river (not vectorised per zone) so each
   # label's position can be tuned individually against the actual coastline
   # geometry, rather than sharing a single per-zone offset.
   mouth <- function(river_name) dplyr::filter(zone_river_mouths, river == river_name)
+  # White text on a dark fill for every label (co-author meeting, 2026-10-01),
+  # so labels read against both the dark offshore and bright turbid SPM.
+  # `colour` is kept in the call signature so the per-river calls below are
+  # unchanged, but no longer sets the text colour.
   river_label_style <- function(river_name, primary, colour, ...){
-    geom_label(data = mouth(river_name), aes(x = lon, y = lat, label = river),
-              fontface = if(primary) "bold" else "plain", size = if(primary) 11 else 9,
-              colour = colour, fill = if(colour == "white") "black" else "white", alpha = 0.4, ...)
+    geom_label(data = mouth(river_name), aes(x = lon, y = lat, label = label),
+              fontface = if(primary) "bold" else "plain", size = if(primary) 14 else 12,
+              colour = "white", fill = scales::alpha("black", 0.65), label.size = 0, ...)
   }
 
   river_labels_by_zone <- list(
     BAY_OF_SEINE = list(
-      river_label_style("Seine", primary = TRUE, colour = "white", hjust = 0, nudge_x = 0.0, nudge_y = 0.12)
+      river_label_style("Seine", primary = TRUE, colour = "white", hjust = 1, nudge_x = -0.04, nudge_y = 0.10)
     ),
     SOUTHERN_BRITTANY = list(
-      river_label_style("Loire", primary = TRUE, colour = "white", hjust = 0, nudge_x = 0.08, nudge_y = 0.00),
-      river_label_style("Vilaine", primary = FALSE, colour = "white", hjust = 0, nudge_x = 0.08, nudge_y = 0.05)
+      river_label_style("Loire", primary = TRUE, colour = "white", hjust = 1, nudge_x = -0.08, nudge_y = -0.04),
+      river_label_style("Vilaine", primary = FALSE, colour = "white", hjust = 1, nudge_x = -0.08, nudge_y = 0.05)
     ),
     BAY_OF_BISCAY = list(
       river_label_style("Gironde", primary = TRUE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = -0.02),
-      river_label_style("Charente", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = 0.11),
+      river_label_style("Charente", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = 0.02),
       river_label_style("Sevre", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = 0.05)
     ),
     GULF_OF_LION = list(
@@ -112,7 +116,7 @@ Figure_1 <- function(where_to_save_the_figure) {
       ggtitle(zone_title(zone_name)) +
       theme_void() +
       theme(legend.position = "none",
-            plot.title = element_text(size = 28, face = "bold", hjust = 0.5,
+            plot.title = element_text(size = 34, face = "bold", hjust = 0.5,
                                       colour = "black", margin = margin(b = 4)),
             plot.margin = margin(t = 8, r = 6, b = 6, l = 6),
             plot.background = element_rect(fill = "white", colour = "red", linewidth = 1.8))
@@ -277,9 +281,11 @@ plot_methodology_worked_example_panel <- function(where_to_save_the_figure, name
           axis.ticks.x = element_blank(),
           axis.text.y = element_blank(),
           axis.ticks.y = element_blank(),
-          plot.tag = element_text(size = 60, face = "bold"),
-          plot.tag.position = c(0.02, 0.98),
-          plot.margin = margin(t = 40, r = 10, b = 10, l = 10))
+          # Tag in its own space above the map rather than over its corner
+          # (co-author meeting 2026-10-01: larger, with more spacing)
+          plot.tag = element_text(size = 75, face = "bold", margin = margin(b = 15)),
+          plot.tag.position = "topleft",
+          plot.margin = margin(t = 10, r = 10, b = 10, l = 10))
 
   if (name_of_the_plot == "B") {
     points_used_for_finding_SPM_threshold <- read_csv(file.path(where_to_save_the_figure,
@@ -381,7 +387,10 @@ plot_methodology_transect_panel <- function(where_to_save_the_figure) {
           legend.background = element_rect(fill = "white", colour = "grey70"),
           legend.text = element_text(size = 24), legend.title = element_text(size = 24),
           text = element_text(size = 20, colour = "black"),
-          axis.text = element_text(size = 18, colour = "black"))
+          # Larger tick labels, smaller axis titles (co-author meeting 2026-10-01)
+          axis.text = element_text(size = 28, colour = "black"),
+          axis.title = element_text(size = 30, colour = "black"),
+          plot.margin = margin(t = 5, r = 30, b = 5, l = 5))  # room for the last x tick label
 
   save_plot_as_png(the_plot, "transect_panel", width = 24, height = 7.2, path = where_to_save_the_figure)
 

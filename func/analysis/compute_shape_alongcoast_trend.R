@@ -41,8 +41,13 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
 })
 
 results_summary <- results |>
-  dplyr::mutate(slope_annualised = slope * 365.25) |>
-  dplyr::select(mouth_name, metric, n, mean_adj, sd_adj, slope, slope_annualised, slope_p)
+  dplyr::mutate(slope_annualised = slope * 365.25,
+                # HAC standard error and 95% CI of the annualised slope (Table 1)
+                slope_se_annualised = slope_se * 365.25,
+                ci95_lower = slope_annualised - 1.96 * slope_se_annualised,
+                ci95_upper = slope_annualised + 1.96 * slope_se_annualised) |>
+  dplyr::select(mouth_name, metric, n, mean_adj, sd_adj, slope, slope_annualised, slope_p,
+                slope_se_annualised, ci95_lower, ci95_upper)
 
 readr::write_csv(results_summary, "output/STATS/shape_alongcoast_trend_summary.csv")
 print(results_summary, n = Inf)

@@ -124,13 +124,13 @@ create_the_basic_map <- function(map_df, var_name,
   
   if (str_detect(var_name, 'chl|CHL')) {
     title = "Chl-a"
-    unit = "mg m³"
+    unit = "mg m⁻³"
     if (legend_limits |> is.null()) {legend_limits <- c(1e-1, 5e0)} 
   }
   
   if (str_detect(var_name, 'tsm|SPM|TSM|plume')) {
     title = "SPM"
-    unit = "g m³"
+    unit = "g m⁻³"
     # legend_limits <- map_df$analysed_spim[which(map_df$plume)] |> quantile(probs = c(0.1, 0.9), na.rm = TRUE)
     if (legend_limits |> is.null()) {legend_limits <- c(1e-1, 5e0)} 
   }
