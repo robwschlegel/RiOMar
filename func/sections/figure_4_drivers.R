@@ -19,8 +19,9 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
     # df_flow three times).
     df_flow <- combine_plume_driver("flow", meta) |> dplyr::select(date, plume_area, flow = value)
 
-    summaries <- purrr::map(c("wind", "wave", "current"), compute_driver_rose_summary,
-                            meta = meta, n_sectors = n_sectors, df_flow = df_flow) |>
+    summaries <- purrr::map(c("wind", "wave", "current"), function(d)
+                              compute_driver_rose_summary(d, meta = meta, n_sectors = n_sectors, df_flow = df_flow) |>
+                                dplyr::mutate(zone = meta$zone, driver = d, .before = 1)) |>
       purrr::keep(~ nrow(.x) > 0)
 
     # Shared, symmetric colour scale across this zone's wind/wave/current
@@ -46,8 +47,14 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
             legend.key.size = unit(1.1, "cm"))
     colorbar <- ggpubr::as_ggplot(cowplot::get_legend(legend_plot))
 
-    list(panels = panels, colorbar = colorbar)
+    list(panels = panels, colorbar = colorbar, summaries = dplyr::bind_rows(summaries))
   })
+
+  # Per-sector day share and mean flow-controlled residual behind every rose,
+  # so the text can cite them (written alongside the figure, as other figures' DATA/)
+  if (!dir.exists(file.path(main_folder, "DATA"))) dir.create(file.path(main_folder, "DATA"))
+  readr::write_csv(dplyr::bind_rows(purrr::map(zone_results, "summaries")),
+                   file.path(main_folder, "DATA", "rose_sector_summary.csv"))
 
   plotlist <- purrr::map(zone_results, ~ list(.x$panels$wind, .x$panels$wave, .x$panels$current)) |> purrr::flatten()
 
@@ -61,8 +68,11 @@ plot_driver_rose_diagram <- function(where_to_save_the_figure, n_sectors = 8){
   colorbars <- ggpubr::ggarrange(plotlist = purrr::map(zone_results, "colorbar"), ncol = 1, nrow = nrow(zone_meta))
   row_and_panel_grid <- ggpubr::ggarrange(row_labels, colorbars, panel_grid, ncol = 3, widths = c(0.04, 0.13, 1))
 
-  col_labels <- ggpubr::ggarrange(plotlist = purrr::map(c("wind", "wave", "current"),
-                                                        ~ ggpubr::text_grob(dplyr::filter(driver_display, driver_name == .x)$driver_label, face = "bold", size = 18)),
+  # The roses show direction, not magnitude, so the columns are titled by
+  # direction (driver_display's labels are the speed/height ones, and their
+  # superscript minus also rendered as a missing glyph here).
+  col_labels <- ggpubr::ggarrange(plotlist = purrr::map(c("Wind direction", "Wave direction", "Current direction"),
+                                                        ~ ggpubr::text_grob(.x, face = "bold", size = 18)),
                                   ncol = 3, nrow = 1)
   col_labels_row <- ggpubr::ggarrange(ggpubr::text_grob(""), col_labels, ncol = 2, widths = c(0.17, 1))
 

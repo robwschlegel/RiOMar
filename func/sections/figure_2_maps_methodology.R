@@ -7,24 +7,15 @@ Figure_1 <- function(where_to_save_the_figure) {
   main_folder_of_Figure_1 <- file.path(where_to_save_the_figure, "ARTICLE", "FIGURE_1")
 
   SPM_map <- file.path(main_folder_of_Figure_1, "DATA", "SPM_map.csv") |> read_csv()
-  insitu_stations <- file.path(main_folder_of_Figure_1, "DATA", "Stations_position.csv") |> read_csv()
 
   RIOMAR_limits <- zones_bbox |> dplyr::rename(Zone = zone)
 
-  basic_map <- create_the_basic_map(map_df = SPM_map, var_name = 'SPM', in_situ_fixed_station = insitu_stations,
+  # SOMLIT/REPHY stations no longer drawn (co-author round 3, L. Terrats): the
+  # in situ validation they support is in the Supplement only.
+  basic_map <- create_the_basic_map(map_df = SPM_map, var_name = 'SPM',
                                     log_scale = FALSE, legend_limits = c(0.1, 10), high_res_coast = TRUE)
 
-  points_for_the_legend <- data.frame(SOURCE = c('SOMLIT', 'REPHY'),
-                                      longitude = c(0,0),
-                                      latitude = c(0,0))
-
   national_map <- basic_map +
-    geom_point(data = insitu_stations |> filter(SOURCE == 'REPHY'),
-               aes(x = LONGITUDE, y = LATITUDE),
-               fill = "red", color = "black", size = 4, shape = 24, stroke = 1) +
-    geom_point(data = insitu_stations |> filter(SOURCE == 'SOMLIT'),
-               aes(x = LONGITUDE, y = LATITUDE),
-               fill = "red", color = "black", size = 10, shape = 21, stroke = 2) +
     geom_rect(data = RIOMAR_limits, aes(xmin = lon_min, xmax = lon_max, ymin = lat_min, ymax = lat_max),
               fill = "transparent", color = "red", linetype = "dashed", size = 2) +
 
@@ -36,21 +27,7 @@ Figure_1 <- function(where_to_save_the_figure) {
     annotate("text", x = 6.6, y = 42.6, label = "Mediterranean\nSea",
              colour = "white", fontface = "italic", size = 15, hjust = 0.5) +
 
-    geom_point(data = points_for_the_legend, aes(x = longitude, y = latitude, shape = SOURCE), size = 0.1) +
-
-    scale_shape_manual(values = c('SOMLIT' = 21, "REPHY" = 24), breaks=c('SOMLIT', 'REPHY'),
-                       labels = c(paste('SOMLIT (n=', length(which(insitu_stations$SOURCE == "SOMLIT")), ")", sep = ""),
-                                  paste('REPHY (n=', length(which(insitu_stations$SOURCE == "REPHY")), ")", sep = ""))) +
-    guides(
-      shape = guide_legend(keyheight = unit(0.3, "cm"), byrow = TRUE,
-                           override.aes = list(size = c(10, 4),
-                                               shape = c(21,24),
-                                               fill = c("red", "red"),
-                                               color = c('black', 'black'),
-                                               stroke = c(2, 1)),
-                           order = 1),
-      fill = guide_colorbar(barwidth = 30, barheight = 2)) +
-    labs(shape = "In-situ stations") +
+    guides(fill = guide_colorbar(barwidth = 30, barheight = 2)) +
     theme(legend.position = "bottom",
           legend.title.position = "top",
           legend.title = element_text(angle = 0, hjust = 0.5),
@@ -111,7 +88,7 @@ Figure_1 <- function(where_to_save_the_figure) {
     mouths <- zone_river_mouths |> dplyr::filter(zone == zone_name)
 
     create_the_basic_map(zone_SPM, 'SPM', log_scale = FALSE, legend_limits = c(0.1, 10), high_res_coast = TRUE) +
-      geom_point(data = mouths, aes(x = lon, y = lat), shape = 4, colour = "red", size = 4, stroke = 2) +
+      geom_point(data = mouths, aes(x = lon, y = lat), shape = 4, colour = "red", size = 8, stroke = 3.5) +
       river_labels_by_zone[[zone_name]] +
       ggtitle(zone_title(zone_name)) +
       theme_void() +
