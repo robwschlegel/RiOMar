@@ -139,8 +139,4 @@ Both were fixed: `figure.py` now globs each exact zone directory rather than `'*
 
 # Co-author feedback #2 10-01-2026
 
-Status 2026-10-07: items done this round are removed; the full item-by-item record (with DD's PDF comments) is in `manuscript/coauthor_round3_responses.md`.
-
-- Add uncertainties to means for Table 1. 95% CIs on the trends are done; the means keep their SD row (the SE of a ~10,000-day mean is negligible) unless Robert wants otherwise.
-- Consider moving Figure 4 into supplementary. Agreed (DD also asked); deferred until after the second co-author's comments (Fri 2026-10-09) so figure numbers change once.
-- Fig. 5 centroid now expressed as % of SD per year (was % of mean, which inflated Southern Brittany); recheck the §3.2 "largest percentage changes" claim against the regenerated figure.
+Status 2026-10-10: all items actioned (Fig. 4 moved to Supplementary S9; centroid claim rechecked against the regenerated Fig. 4, formerly Fig. 5). The item-by-item record, including D. Doxaran's and L. Terrats's comments, is in `manuscript/coauthor_round3_responses.md`.
