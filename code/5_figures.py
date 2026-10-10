@@ -17,8 +17,8 @@ sys.path.append( func_dir )
 
 import util, figure
 from figure import (Figure_1_mean_spm_map, Figure_2_methodology_panels, Figure_2_methodology_zone_maps,
-                    Figure_2_methodology, Figure_3_S2_timeseries, Figure_4_monthly_median_heatmap,
-                    Figure_X11_weekly_results, Figure_8_driver_rose,
+                    Figure_2_methodology, Figure_3_S2_timeseries, Figure_S9_monthly_median_heatmap,
+                    Figure_X11_weekly_results, Figure_7_driver_rose,
                     Figure_S1_validation, Figure_S8_gam_partial)
 
 # Set matplotlib backend to prevent plots from displaying
@@ -54,7 +54,7 @@ Figure_3_S2_timeseries(where_are_saved_plume_results_with_dynamic_threshold = "o
 # seasonal_boxplot_heatmap (Fig. 4): heatmap of each month's median plume
 # property/driver value as a ratio to the zone's 1998-2025 median. Per-month
 # trends are computed separately by func/analysis/compute_seasonal_trend.R.
-Figure_4_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
+Figure_S9_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold = "output/panache/dynamic",
                                 where_are_saved_plume_results_with_static_threshold = "output/panache/static",
                                 where_to_save_the_figure = "figures")
 
@@ -66,7 +66,7 @@ Figure_X11_weekly_results(where_are_saved_X11_results_dynamic = "output/panache/
                           where_to_save_the_figure = "figures")
 
 # driver_rose_diagram (Fig. 8): wind/wave/current direction roses
-Figure_8_driver_rose(where_to_save_the_figure = "figures")
+Figure_7_driver_rose(where_to_save_the_figure = "figures")
 
 
 # =============================================================================

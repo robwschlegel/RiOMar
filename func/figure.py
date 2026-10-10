@@ -672,7 +672,7 @@ def Figure_3_S2_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
     robjects.r[get_registry_row("thresholds_comparison")['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_4_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold,
+def Figure_S9_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold,
                                where_are_saved_plume_results_with_static_threshold,
                                where_to_save_the_figure):
     """The seasonal_boxplot_heatmap figure (sec:results_seasonal, see
@@ -696,7 +696,7 @@ def Figure_4_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_t
         where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_8_driver_rose(where_to_save_the_figure, n_sectors=8):
+def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
     """manuscript figure: wind/wave direction-magnitude roses, coloured by
     the flow-controlled plume-area response, one row per zone. See
     metadata/figure_table_registry.csv (slot "driver_rose_diagram") for
