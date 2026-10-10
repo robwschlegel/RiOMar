@@ -46,16 +46,17 @@ YR <- 365.25
 mass_col <- "mass_SPM_in_the_plume_area_in_t"  # tonnes, see compute_mass_spm_trend.R
 drivers <- c("flow", "wind", "tide", "wave", "current")
 
+# Panel letters a)-i) in facet order, so the text can cite individual panels
 variable_display <- c(
-  plume_area    = "Plume area (km²)",
-  SPM_mass      = "SPM mass (t)",
-  compactness   = "Compactness",
-  alongcoast_km = "Along-coast drift (% of SD)",
-  flow          = "River flow (m³ s⁻¹)",
-  wind          = "Wind speed (m s⁻¹)",
-  tide          = "Tidal range (m)",
-  wave          = "Wave height (m)",
-  current       = "Current speed (m s⁻¹)"
+  plume_area    = "a) Plume area (km²)",
+  SPM_mass      = "b) SPM mass (t)",
+  compactness   = "c) Compactness",
+  alongcoast_km = "d) Along-coast drift (% of SD)",
+  flow          = "e) River flow (m³ s⁻¹)",
+  wind          = "f) Wind speed (m s⁻¹)",
+  tide          = "g) Tidal range (m)",
+  wave          = "h) Wave height (m)",
+  current       = "i) Current speed (m s⁻¹)"
 )
 
 plume_dir <- "output/panache/dynamic"

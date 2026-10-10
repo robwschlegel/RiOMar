@@ -24,15 +24,20 @@ results <- purrr::pmap_dfr(zone_meta, function(...){
   purrr::imap_dfr(drivers, function(driver_label, driver_name){
     df <- combine_plume_driver(driver_name, meta)
 
-    cor_df <- driver_plume_correlation(df, max_lag_daily = MAX_LAG_DAILY) |> dplyr::filter(timestep == "daily")
-    peak <- cor_df |> dplyr::slice_max(cor, n = 1)
-    lagged_value <- dplyr::lag(df$value, peak$lag)
-    peak_test <- cor.test(df$plume_area, lagged_value)
-
     # mean/SD on the de-seasoned daily series (deseason_doy(), func/multi.R),
     # matching the same convention the panache_stats_table's generators
     # already use (func/analysis/compute_area_trend.R etc.), added 2026-08-11 per metadata/TODO.md.
     value_adj <- deseason_doy(df$value, df$date)
+
+    # Best-lag correlation between the de-seasoned driver and de-seasoned plume
+    # area (2026-10-10: was the raw series, whose r mostly reflected the
+    # seasonal cycle the two share; the X11 seasonal correlations already
+    # cover that, so these measure day-to-day anomaly coupling instead)
+    df_adj <- dplyr::mutate(df, value = value_adj, plume_area = deseason_doy(plume_area, date))
+    cor_df <- driver_plume_correlation(df_adj, max_lag_daily = MAX_LAG_DAILY) |> dplyr::filter(timestep == "daily")
+    peak <- cor_df |> dplyr::slice_max(cor, n = 1)
+    lagged_value <- dplyr::lag(df_adj$value, peak$lag)
+    peak_test <- cor.test(df_adj$plume_area, lagged_value)
 
     # Trend fit to the de-seasoned series, as for the plume trends and as
     # sec:linear_trends states (2026-10-07: was fit to the raw df$value, so
