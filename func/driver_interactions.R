@@ -45,7 +45,7 @@ if(!dir.exists("func")) stop("func/driver_interactions.R must be sourced with th
 
 library(tidyverse)
 library(mgcv)       # fit_gam(): used by the per-metric models step and by
-                    # func/figure.R's Figure S8 (gam_partial_effects)
+                    # func/figure.R's Figure S9 (gam_partial_effects)
 library(ranger)
 
 # Run multi-driver analyses and load project common functions

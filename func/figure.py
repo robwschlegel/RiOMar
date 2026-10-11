@@ -672,7 +672,7 @@ def Figure_3_S2_timeseries(where_are_saved_plume_results_with_dynamic_threshold,
     robjects.r[get_registry_row("thresholds_comparison")['r_function']](where_to_save_the_figure=robjects.StrVector([where_to_save_the_figure]))
 
 
-def Figure_S9_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold,
+def Figure_S6_monthly_median_heatmap(where_are_saved_plume_results_with_dynamic_threshold,
                                where_are_saved_plume_results_with_static_threshold,
                                where_to_save_the_figure):
     """The seasonal_boxplot_heatmap figure (sec:results_seasonal, see
@@ -710,7 +710,7 @@ def Figure_7_driver_rose(where_to_save_the_figure, n_sectors=8):
                n_sectors=robjects.IntVector([n_sectors]))
 
 
-def Figure_S8_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
+def Figure_S9_gam_partial(where_to_save_the_figure, stats_dir="output/STATS"):
     """GAM partial-dependence curves for flow, wind, wave, and current (tide
     intentionally excluded from the plot -- it stays in the underlying
     GAM/driver_stats_table stats, just not visualised), one row per zone. Refits
