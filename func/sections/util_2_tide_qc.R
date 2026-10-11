@@ -155,7 +155,15 @@ qc_tide_days <- function(df_tide, station){
   spike_thresh <- quantile(daily_max_rate$max_rate, 0.999, na.rm = TRUE)
 
   days <- unique(as.Date(df_tide$t))
-  future::plan(future::multisession, workers = parallel::detectCores() - 4)
+  # RIOMAR_TIDE_QC_WORKERS=1 runs the days sequentially in this process
+  # (same result; for low-memory machines, where the multisession workers
+  # have exhausted RAM). Default unchanged.
+  workers <- as.integer(Sys.getenv("RIOMAR_TIDE_QC_WORKERS", parallel::detectCores() - 4))
+  if(workers <= 1){
+    return(purrr::map_dfr(days, .tide_day_qc, t_all = df_tide$t, y_all = df_tide$tide,
+                          station = station, spike_thresh = spike_thresh))
+  }
+  future::plan(future::multisession, workers = workers)
   out <- furrr::future_map_dfr(days, .tide_day_qc, t_all = df_tide$t, y_all = df_tide$tide,
                                station = station, spike_thresh = spike_thresh,
                                .options = furrr::furrr_options(seed = TRUE))
@@ -170,8 +178,18 @@ qc_tide_days <- function(df_tide, station){
 # rows -- sparse high/low-water-only readings interleaved a few minutes off
 # the hourly grid. These are dropped so the sub-daily curve QC'd above sits
 # on a clean, evenly-sampled hourly grid.
+# Only files whose "# Station :" header names this folder's gauge are read:
+# data/TIDES/PORT-BLOC/ also holds Saint-Nazaire files (37_*.txt), which
+# used to fill every Port-Bloc gap (all of 1998-1999, much of 2000-2001,
+# 2010 and 2016) and produced a spurious Gironde tidal-range decline.
 .load_tide_raw <- function(dir_name){
   tide_files <- dir(dir_name, pattern = ".txt", full.names = TRUE)
+  file_station <- vapply(tide_files, function(f) trimws(sub("^# Station :", "", readLines(f, n = 1))), character(1))
+  if(any(file_station != basename(dir_name))){
+    message(".load_tide_raw: skipping ", sum(file_station != basename(dir_name)), " file(s) in ", dir_name,
+            " from other stations (", paste(unique(file_station[file_station != basename(dir_name)]), collapse = ", "), ")")
+  }
+  tide_files <- tide_files[file_station == basename(dir_name)]
   suppressMessages(
     df_tide <- map_dfr(tide_files, read_delim, col_names = c("t", "tide", "source"), skip = 14, delim = ";", col_select = c("t", "tide", "source"))
   )
