@@ -86,7 +86,11 @@ build_driver_matrix <- function(zone_name, plume_dir = "output/panache/dynamic")
                   wind_dir_cat = compass_octant(wind_dir),
                   wave_dir_cat = compass_octant(wave_dir),
                   current_dir_cat = compass_octant(current_dir)) |>
-    zoo::na.trim()
+    # Trim to the plume record only, not to every driver's: a gap at one end
+    # of a single driver (e.g. Port-Bloc's tide record starting in April 2000,
+    # Marseille's in late 1998) must not cut the other drivers' days. Models
+    # still drop incomplete rows themselves (tidyr::drop_na() below).
+    dplyr::filter(dplyr::between(dplyr::row_number(), min(which(!is.na(plume_area))), max(which(!is.na(plume_area)))))
 }
 
 # Names of the driver columns available for each zone.

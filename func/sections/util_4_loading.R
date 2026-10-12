@@ -164,9 +164,15 @@ load_tide_gauge <- function(dir_name){
 }
 
 # Read one or more variables from a NetCDF file, cropped to a lon/lat box, as
-# a long (lon, lat, date, <var>...) tibble
+# a long (lon, lat, date, <var>...) tibble. The file is read chunk_days time
+# steps at a time and `reduce` (e.g. a per-date summarise) is applied to each
+# chunk before the chunks are bound, so only one chunk of the full
+# lon x lat x date grid is held in memory: the multi-decade daily wave files
+# otherwise peak at several GB. Any reduce that works date by date gives the
+# same result as reducing the whole grid at once.
 .nc_read_box <- function(file_name, var_names, lon_range, lat_range,
-                         lon_var = "longitude", lat_var = "latitude", time_var = "time"){
+                         lon_var = "longitude", lat_var = "latitude", time_var = "time",
+                         reduce = identity, chunk_days = 366){
   nc <- nc_open(file_name)
   on.exit(nc_close(nc))
 
@@ -176,27 +182,31 @@ load_tide_gauge <- function(dir_name){
   lat_idx <- which(lat >= lat_range[1] & lat <= lat_range[2])
   date <- .nc_time_to_date(nc, time_var)
 
-  grid <- expand.grid(lon = lon[lon_idx], lat = lat[lat_idx], date = date)
+  purrr::map_dfr(seq(1, length(date), by = chunk_days), function(t0){
+    t_idx <- t0:min(t0 + chunk_days - 1, length(date))
+    grid <- expand.grid(lon = lon[lon_idx], lat = lat[lat_idx], date = date[t_idx])
 
-  for(v in var_names){
-    n_dims <- length(nc$var[[v]]$dim)
-    if(n_dims < 3) stop("Unexpected variable dimensionality (", n_dims, "D) for ", v, " in ", file_name)
-    n_middle <- n_dims - 3  # any dims between lat and time (e.g. GLORYS's single-level depth)
-    start <- c(min(lon_idx), min(lat_idx), rep(1, n_middle), 1)
-    count <- c(length(lon_idx), length(lat_idx), rep(1, n_middle), -1)
-    arr <- ncvar_get(nc, v, start = start, count = count)
-    grid[[v]] <- as.vector(arr)
-  }
+    for(v in var_names){
+      n_dims <- length(nc$var[[v]]$dim)
+      if(n_dims < 3) stop("Unexpected variable dimensionality (", n_dims, "D) for ", v, " in ", file_name)
+      n_middle <- n_dims - 3  # any dims between lat and time (e.g. GLORYS's single-level depth)
+      start <- c(min(lon_idx), min(lat_idx), rep(1, n_middle), t0)
+      count <- c(length(lon_idx), length(lat_idx), rep(1, n_middle), length(t_idx))
+      arr <- ncvar_get(nc, v, start = start, count = count)
+      grid[[v]] <- as.vector(arr)
+    }
 
-  tibble::as_tibble(grid)
+    reduce(tibble::as_tibble(grid))
+  })
 }
 
 # Load wind data
 load_wind_sub <- function(file_name, lon_range, lat_range){
-  wind_df <- .nc_read_box(file_name, c("eastward_wind", "northward_wind"), lon_range, lat_range) |>
-    dplyr::rename(u = eastward_wind, v = northward_wind) |>
-    dplyr::select(date, lon, lat, u, v) |>
-    dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
+  wind_df <- .nc_read_box(file_name, c("eastward_wind", "northward_wind"), lon_range, lat_range,
+                          reduce = function(df) df |>
+                            dplyr::rename(u = eastward_wind, v = northward_wind) |>
+                            dplyr::select(date, lon, lat, u, v) |>
+                            dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date"))
 
   # Remove final day of data
   ## it is an artefact from creating daily integrals from hourly data
@@ -217,15 +227,17 @@ load_wave <- function(file_name, lon_range, lat_range){
   nc_close(nc)
 
   var_names <- if(has_wave_dir) c("VHM0", "VMDR") else "VHM0"
-  wave_df_raw <- .nc_read_box(file_name, var_names, lon_range, lat_range) |>
-    dplyr::rename(wave_height = VHM0)
-  if(has_wave_dir) wave_df_raw <- dplyr::rename(wave_df_raw, wave_dir = VMDR) else wave_df_raw$wave_dir <- NA_real_
+  reduce_wave <- function(df){
+    df <- dplyr::rename(df, wave_height = VHM0)
+    if(has_wave_dir) df <- dplyr::rename(df, wave_dir = VMDR) else df$wave_dir <- NA_real_
+    df |>
+      dplyr::select(date, lon, lat, wave_height, wave_dir) |>
+      dplyr::summarise(wave_height = mean(wave_height, na.rm = TRUE),
+                       wave_dir_x = mean(sin(wave_dir * pi / 180), na.rm = TRUE),
+                       wave_dir_y = mean(cos(wave_dir * pi / 180), na.rm = TRUE), .by = "date")
+  }
 
-  wave_df <- wave_df_raw |>
-    dplyr::select(date, lon, lat, wave_height, wave_dir) |>
-    dplyr::summarise(wave_height = mean(wave_height, na.rm = TRUE),
-                     wave_dir_x = mean(sin(wave_dir * pi / 180), na.rm = TRUE),
-                     wave_dir_y = mean(cos(wave_dir * pi / 180), na.rm = TRUE), .by = "date") |>
+  wave_df <- .nc_read_box(file_name, var_names, lon_range, lat_range, reduce = reduce_wave) |>
     dplyr::mutate(wave_height = round(wave_height, 2),
                   wave_dir = if(has_wave_dir) round(atan2(wave_dir_x, wave_dir_y) * (180 / pi)) %% 360 else NA_real_) |>
     dplyr::select(date, wave_height, wave_dir)
@@ -239,10 +251,11 @@ load_wave <- function(file_name, lon_range, lat_range){
 
 # Load one GLORYS file's surface currents (uo/vo), reduced to the zone/box daily mean.
 .load_current_sub <- function(file_name, lon_range, lat_range){
-  .nc_read_box(file_name, c("uo", "vo"), lon_range, lat_range) |>
-    dplyr::rename(u = uo, v = vo) |>
-    dplyr::select(date, lon, lat, u, v) |>
-    dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date")
+  .nc_read_box(file_name, c("uo", "vo"), lon_range, lat_range,
+               reduce = function(df) df |>
+                 dplyr::rename(u = uo, v = vo) |>
+                 dplyr::select(date, lon, lat, u, v) |>
+                 dplyr::summarise(u = mean(u, na.rm = TRUE), v = mean(v, na.rm = TRUE), .by = "date"))
 }
 
 # Load GLORYS surface current (eastward/northward velocity) data for a zone
