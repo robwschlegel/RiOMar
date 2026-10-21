@@ -46,8 +46,8 @@ Figure_1 <- function(where_to_save_the_figure) {
     "BAY_OF_BISCAY",      "Gironde",      "Gironde",             45.61, -1.14,   TRUE,
     "BAY_OF_BISCAY",      "Charente",     "Charente",            45.98, -1.15,   FALSE,
     "BAY_OF_BISCAY",      "Sevre",        "Sèvre Niortaise",     46.26, -1.2,    FALSE,
-    "GULF_OF_LION",       "Grand\nRhône", "Grand\nRhône",        43.32,  4.85,  TRUE,
-    "GULF_OF_LION",       "Petit\nRhône", "Petit\nRhône",        43.45,  4.39,  FALSE
+    "GULF_OF_LION",       "Grand\nRhône", "Grand Rhône",         43.32,  4.85,  TRUE,
+    "GULF_OF_LION",       "Petit\nRhône", "Petit Rhône",         43.45,  4.39,  FALSE
   )
 
   # One geom_label() call per river (not vectorised per zone) so each
@@ -78,8 +78,8 @@ Figure_1 <- function(where_to_save_the_figure) {
       river_label_style("Sevre", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = 0.05)
     ),
     GULF_OF_LION = list(
-      river_label_style("Grand\nRhône", primary = TRUE, colour = "black", hjust = 0, nudge_x = -0.08, nudge_y = -0.50),
-      river_label_style("Petit\nRhône", primary = FALSE, colour = "black", hjust = 0, nudge_x = -0.14, nudge_y = -0.48)
+      river_label_style("Grand\nRhône", primary = TRUE, colour = "black", hjust = 1, nudge_x = 0.62, nudge_y = -0.37),
+      river_label_style("Petit\nRhône", primary = FALSE, colour = "black", hjust = 0, nudge_x = -0.66, nudge_y = -0.20)
     )
   )
 
