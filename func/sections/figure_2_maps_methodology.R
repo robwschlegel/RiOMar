@@ -78,8 +78,8 @@ Figure_1 <- function(where_to_save_the_figure) {
       river_label_style("Sevre", primary = FALSE, colour = "black", hjust = 1, nudge_x = -0.10, nudge_y = 0.05)
     ),
     GULF_OF_LION = list(
-      river_label_style("Grand\nRhône", primary = TRUE, colour = "black", hjust = 0, nudge_x = -0.08, nudge_y = -0.22),
-      river_label_style("Petit\nRhône", primary = FALSE, colour = "black", hjust = 0, nudge_x = -0.14, nudge_y = -0.20)
+      river_label_style("Grand\nRhône", primary = TRUE, colour = "black", hjust = 0, nudge_x = -0.08, nudge_y = -0.50),
+      river_label_style("Petit\nRhône", primary = FALSE, colour = "black", hjust = 0, nudge_x = -0.14, nudge_y = -0.48)
     )
   )
 
