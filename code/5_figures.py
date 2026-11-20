@@ -93,3 +93,18 @@ subprocess.run(
 # gam_partial_effects (Fig. S9): GAM partial-dependence curves
 Figure_S9_gam_partial(where_to_save_the_figure = "figures")
 
+
+# =============================================================================
+# ### Not in the manuscript
+# =============================================================================
+
+# rofi_succession + rofi_lagged_correlation (removed slots): flow/plume/ROFI
+# succession and lagged correlation for the three zones with ROFI data
+# (data/ROFI). Writes figures/rofi_comparison/ and
+# output/STATS/rofi_plume_lagged_correlation.csv.
+subprocess.run(
+    ['Rscript', '-e',
+     'source("func/analysis/compute_rofi_plume_comparison.R"); run_rofi_plume_succession()'],
+    cwd=proj_dir, check=True,
+)
+
