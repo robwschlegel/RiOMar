@@ -27,8 +27,6 @@ dependencies:
   - requests
   # Parallelism (dl.py, regmap.py use multiprocess, not stdlib multiprocessing)
   - multiprocess
-  # Python <-> R bridge (X11.py, figure.py, 4_time_series.py)
-  - rpy2
   # Data access
   - copernicusmarine
   # Linting
@@ -39,3 +37,8 @@ dependencies:
       # Pipeline orchestration (Snakefile). From pip, not conda: the conda
       # package lives on the bioconda channel, which this env doesn't use.
       - snakemake
+      # Python <-> R bridge (X11.py, figure.py, 4_time_series.py). From pip,
+      # not conda: conda-forge's rpy2 pulls in its own r-base, which has none
+      # of the system R's packages. pip's rpy2 uses the R found on PATH (or
+      # R_HOME), so install R first and keep r-base out of this env.
+      - rpy2
