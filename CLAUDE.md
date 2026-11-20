@@ -24,6 +24,12 @@ python code/4_time_series.py     # X11 decomposition + driver comparisons + mont
 python code/5_figures.py         # Publication figures
 ```
 
+### Setting up the environment
+- **Python:** `conda env create -f environment.yml`, then `conda activate riomar`. Miniforge installs into the home folder, so it needs no admin rights.
+- **R:** the packages listed in `DESCRIPTION`, installed into the system R. No `renv.lock` exists yet.
+- **rpy2:** install it with pip against the system R, not from conda: `R_HOME=$(R RHOME) pip install rpy2` inside the env. conda-forge's `rpy2` brings its own `r-base` (4.5.3 as of 2026-11), which has none of the system R's packages and is the likely source of the PROJ/GEOS mismatch seen under rpy2. `environment.yml` still lists `rpy2` under conda, so for now build from a copy without that line.
+- **Data root without pCloud:** set `RIOMAR_DATA_ROOT` (see Data storage) in both `~/.zshrc` and `~/.Renviron`, so R sessions not started from a shell also see it.
+
 `code/4_time_series.py`'s multi-driver stage runs `func/driver_interactions.R::run_driver_interactions_analysis()` once (dynamic threshold): GLM comparison, per-metric GLM/GAM models and random-forest importance, with per-cell checkpoints under `output/STATS/.checkpoints/` (`overwrite = FALSE` resumes an interrupted run). The monthly rerun, zone-level GAM figures, regime GLMs and RF H-statistic were removed 2026-09-28 (dead ends with no manuscript consumer; their last CSVs stay on disk as frozen results the text cites, and the code is in git history at commit 533e42c). GLM/GAM/RF outputs are excluded from `tools/snapshot_outputs.py`'s golden-hash check (exploratory, and RF drifts by design).
 
 All scripts prepend `func/` to `sys.path` by setting `proj_dir` from `os.path.abspath('__file__')` — they must be executed from the repo root, not from inside `code/`.
