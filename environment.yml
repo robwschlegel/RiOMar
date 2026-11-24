@@ -29,6 +29,11 @@ dependencies:
   - multiprocess
   # Data access
   - copernicusmarine
+  # Manuscript tooling: pandoc builds the Google Doc docx
+  # (manuscript/google_doc_sync/sync.sh); poppler provides pdftotext for
+  # checking figure/table numbering in the compiled PDF.
+  - pandoc
+  - poppler
   # Linting
   - ruff
   - pip
