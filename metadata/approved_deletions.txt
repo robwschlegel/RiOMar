@@ -4,3 +4,8 @@
 # removed function. An agent may only add a line here after Robert has
 # approved that exact item in writing; a general "clean up dead code" is not
 # approval. See CLAUDE.md, "Rules for automated changes".
+manuscript/TODO.md  # 2026-11-24, approved by Robert in Claude Code session ("clean up the stale manuscript/ files"); gitignored stale 25 Sep copy, live file is metadata/TODO.md
+manuscript/figure_table_registry.csv  # 2026-11-24, same approval; stale copy of metadata/figure_table_registry.csv
+manuscript/paragraph_source_registry.csv  # 2026-11-24, same approval; stale copy of metadata/paragraph_source_registry.csv
+manuscript/make_figures_tables.R  # 2026-11-24, same approval; stale copy of metadata/make_figures_tables.R
+manuscript/TODO_files/  # 2026-11-24, approved by Robert in Claude Code session ("yes" to removing it); rendering leftovers from the deleted manuscript/TODO.md
