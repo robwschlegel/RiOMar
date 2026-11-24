@@ -31,8 +31,10 @@ dependencies:
   - copernicusmarine
   # Manuscript tooling: pandoc builds the Google Doc docx
   # (manuscript/google_doc_sync/sync.sh); poppler provides pdftotext for
-  # checking figure/table numbering in the compiled PDF.
-  - pandoc
+  # checking figure/table numbering in the compiled PDF. pandoc is pinned:
+  # build_docx.py's XML post-processing breaks on 3.14 (bookmark names and
+  # styles.xml layout changed); 3.1.3 reproduces the 12 Oct 2026 docx exactly.
+  - pandoc=3.1.3
   - poppler
   # Linting
   - ruff
