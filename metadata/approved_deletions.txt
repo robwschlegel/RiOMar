@@ -9,3 +9,15 @@ manuscript/figure_table_registry.csv  # 2026-11-24, same approval; stale copy of
 manuscript/paragraph_source_registry.csv  # 2026-11-24, same approval; stale copy of metadata/paragraph_source_registry.csv
 manuscript/make_figures_tables.R  # 2026-11-24, same approval; stale copy of metadata/make_figures_tables.R
 manuscript/TODO_files/  # 2026-11-24, approved by Robert in Claude Code session ("yes" to removing it); rendering leftovers from the deleted manuscript/TODO.md
+# 2026-11-24, approved by Robert in Claude Code session (folder audit, items 1-11 except 9's .tex files); all gitignored:
+output/FIXED_THRESHOLD/  # pre-panache plume detection, unused
+figures/ARTICLE/gam_monthly_breakdown/  # figures from the monthly GAM analysis removed 2026-09-28
+data/RIVER_FLOW/EASTERN_CHANNEL/  # not a study zone, never loaded
+manuscript/roadmap_files/  # Quarto rendering leftovers
+manuscript/google_doc_sync/build/x/  # stray unzipped docx from 12 Oct debugging
+manuscript/coauthor_round3_responses_v3.aux  # LaTeX byproduct (also .fdb_latexmk, .fls, .log, .out)
+manuscript/manuscript_fresh.txt  # 28 Sep text dump, unreferenced
+manuscript/Spectral.bib  # not used by manuscript.tex
+manuscript/manuscript_20260825.pdf  # old snapshot PDFs (also 20260904, 20260910, 20260923); .tex snapshots kept
+manuscript/roadmap.md  # Sep notes superseded by artifacts/TODO (also pipeline-handoff.html, track-changes.md, upstream-data-bugs.md, driver_interactions_review.md, co_author_message.md)
+figures/qc/  # tide and chunked-read QC plots, regenerable
