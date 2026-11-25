@@ -21,3 +21,6 @@ manuscript/Spectral.bib  # not used by manuscript.tex
 manuscript/manuscript_20260825.pdf  # old snapshot PDFs (also 20260904, 20260910, 20260923); .tex snapshots kept
 manuscript/roadmap.md  # Sep notes superseded by artifacts/TODO (also pipeline-handoff.html, track-changes.md, upstream-data-bugs.md, driver_interactions_review.md, co_author_message.md)
 figures/qc/  # tide and chunked-read QC plots, regenerable
+# 2026-11-25, approved by Robert in Claude Code session ("The validation_tables function was deprecated ... All instances of it can be removed from the codebase, and the dependencies removed as well. Including all use of gtsave."):
+func/sections/util_7_tables.R  # only held validation_tables(); its output (gt table HTML/PNG) was unused
+validation_tables  # the function itself; both call sites were already commented out

@@ -16,7 +16,6 @@ library(ncdf4)
 library(sf) # Used for complex shape files
 library(scales) # For better plot labels
 library(ggExtra) # For histogram border plots
-library(gt) # For fancy tables
 library(geosphere) # For pixel distances
 
 # The shared functions
@@ -367,7 +366,4 @@ write_csv(zone_small_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table
 zone_all_stats_top <- zone_all_stats |> 
   filter(site == "ALL", season == "ALL")
 
-# Fancy tables
-# NB: No longer needed and has a lot of dependencies
-# validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
 
