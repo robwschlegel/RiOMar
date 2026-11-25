@@ -310,7 +310,7 @@ plot_x11_interannual_river_flow <- function(where_to_save_the_figure){
   save_plot_as_png(annotate_figure(
                      stack_x11_component(zone_plots, "Interannual"),
                      left = text_grob("Plume area (km²)", rot = 90, size = 30, color = "brown"),
-                     right = text_grob("River flow (m³ s⁻¹)", rot = -90, size = 30, color = "blue")),
+                     right = text_grob(expression(River~flow~(m^3~s^{-1})), rot = -90, size = 30, color = "blue")),  # plotmath: U+207B renders as a box on this device
                    registry_basename(output_subdir), width = 20, height = 16, path = main_folder)
 }
 

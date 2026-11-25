@@ -101,8 +101,10 @@ plot_gam_partial_effects <- function(where_to_save_the_figure, stats_dir = "outp
   main_folder <- file.path(where_to_save_the_figure, "ARTICLE", output_subdir)
   if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
 
-  driver_labels <- c(flow = "River flow (m³ s⁻¹)", wind_spd = "Wind speed (m s⁻¹)",
-                     wave_height = "Wave height (m)", current = "Current speed (m s⁻¹)")
+  # plotmath, not literal U+207B superscript minus, which this device's font
+  # intermittently lacks (rendered as a box in Fig. S9, 2026-11-25)
+  driver_labels <- list(flow = expression(River~flow~(m^3~s^{-1})), wind_spd = expression(Wind~speed~(m~s^{-1})),
+                        wave_height = "Wave height (m)", current = expression(Current~speed~(m~s^{-1})))
   n_drivers <- length(driver_labels)
 
   # No per-panel titles/axis titles here -- a title on only the first column

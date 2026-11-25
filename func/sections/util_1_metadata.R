@@ -29,7 +29,7 @@ zones_bbox <- panache_zone_metadata |>
   mutate(zone_pretty = factor(zone,
                               levels = ZONE_ORDER,
                               labels = c("Bay of Seine", "S. Brittany",
-                                         "Gironde shelf", "Rhône shelf")), .after = "zone") |>
+                                         "Gironde plume region", "Rhône plume region")), .after = "zone") |>
   dplyr::arrange(match(zone, ZONE_ORDER))
 
 # Create FRANCE bounding box with same structure as zones_bbox

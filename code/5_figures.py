@@ -94,13 +94,10 @@ subprocess.run(
 Figure_S9_gam_partial(where_to_save_the_figure = "figures")
 
 
-# =============================================================================
-# ### Not in the manuscript
-# =============================================================================
-
-# rofi_succession + rofi_lagged_correlation (removed slots): flow/plume/ROFI
-# succession and lagged correlation for the three zones with ROFI data
-# (data/ROFI). Writes figures/rofi_comparison/ and
+# rofi_succession + rofi_lagged_correlation (Figs. S10, S11; back in the
+# manuscript 2026-11-25): flow/plume/ROFI succession and lagged correlation for
+# the three zones with ROFI data (data/ROFI). Writes the registry's
+# figures/ARTICLE/FIGURE_S10/ and FIGURE_S11/, and
 # output/STATS/rofi_plume_lagged_correlation.csv.
 subprocess.run(
     ['Rscript', '-e',

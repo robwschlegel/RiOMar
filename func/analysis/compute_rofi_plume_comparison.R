@@ -2,10 +2,11 @@
 # The analyses used to compare ROFI to plume size.
 #
 # Restored 2026-11-20 from the former ROFI.R and util.R::load_ROFI() (last
-# present in commit 533e42c), once the ROFI files were recovered into data/ROFI/. Not part of
-# the manuscript (its two figures were dropped by meeting decision, 2026-09),
-# so the outputs go to the diagnostic folder figures/rofi_comparison/ rather
-# than a numbered figures/ARTICLE/ folder. ROFI is read here directly with
+# present in commit 533e42c), once the ROFI files were recovered into data/ROFI/.
+# Back in the manuscript as of 2026-11-25 (co-author meeting 2026-11-20): its two
+# figures are the last supplementary figures, and their output folders come from
+# metadata/figure_table_registry.csv (slots rofi_succession and
+# rofi_lagged_correlation) like every other manuscript figure. ROFI is read here directly with
 # load_ROFI(), not through multi.R's load_driver(): ROFI is downstream of
 # river flow, not a driver of plume size, so it has no load_driver() option.
 #
@@ -35,7 +36,6 @@ source("func/multi.R")
 #      further before dropping below the SPM threshold) is not tested because
 #      this project has no in-river SPM concentration time series, only discharge.
 
-rofi_out_dir <- "figures/rofi_comparison"
 
 # Load ROFI surface NetcDF (hourly ROFI_surface in km^2 -> daily mean)
 load_ROFI <- function(file_name){
@@ -195,9 +195,13 @@ plot_flow_plume_rofi_succession <- function(){
     left = ggpubr::text_grob("Plume area / ROFI extent (km²)", rot = 90, size = 14),
     right = ggpubr::text_grob("River flow (m³ s⁻¹)", rot = -90, size = 14, color = "blue"))
 
-  # Registry slot "rofi_succession" (removed from the manuscript) -- see metadata/figure_table_registry.csv
-  if (!dir.exists(rofi_out_dir)) dir.create(rofi_out_dir, recursive = TRUE)
-  ggsave(filename = file.path(rofi_out_dir, "flow_plume_rofi_succession.png"), plot = full_plot, width = 12, height = 10, dpi = 300)
+  # Registry slot "rofi_succession" -- see metadata/figure_table_registry.csv.
+  # bg = "white": the composite has no background of its own, and the black
+  # shared left-axis title was invisible on the transparent default.
+  output_subdir <- get_registry_row("rofi_succession")$output_subdir
+  out_dir <- file.path("figures/ARTICLE", output_subdir)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  ggsave(filename = file.path(out_dir, registry_filename(output_subdir)), plot = full_plot, width = 12, height = 10, dpi = 300, bg = "white")
   invisible(full_plot)
 }
 
@@ -236,14 +240,15 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
     geom_point(data = df_peak, colour = "firebrick", size = 2) +
     geom_text(data = df_peak, aes(label = paste0(lag, "d")), vjust = -1, size = 3, colour = "firebrick") +
     facet_grid(zone ~ pair_label) +
-    labs(x = "Lag (days)", y = "Correlation (r)",
-         title = "Lagged correlation between river flow, plume area and ROFI extent",
-         subtitle = "Daily resolution; estuary excluded from plume area; red = lag of maximum r") +
+    labs(x = "Lag (days)", y = "Correlation (r)") +
     theme_bw()
 
-  # Registry slot "rofi_lagged_correlation" (removed from the manuscript) -- see metadata/figure_table_registry.csv
-  if (!dir.exists(rofi_out_dir)) dir.create(rofi_out_dir, recursive = TRUE)
-  ggsave(filename = file.path(rofi_out_dir, "rofi_plume_lagged_correlation.png"), plot = pl, width = 12, height = 9, dpi = 300)
+  # Registry slot "rofi_lagged_correlation" -- see metadata/figure_table_registry.csv
+  # (the title/subtitle moved into the manuscript caption)
+  output_subdir <- get_registry_row("rofi_lagged_correlation")$output_subdir
+  out_dir <- file.path("figures/ARTICLE", output_subdir)
+  if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+  ggsave(filename = file.path(out_dir, registry_filename(output_subdir)), plot = pl, width = 12, height = 9, dpi = 300, bg = "white")
   invisible(pl)
 }
 
@@ -254,11 +259,14 @@ plot_rofi_plume_lagged_correlation <- function(cor_stats){
 run_rofi_plume_succession <- function(){
   rofi_zones <- order_zones(c("BAY_OF_SEINE", "BAY_OF_BISCAY", "SOUTHERN_BRITTANY"))
   pairs <- tibble::tribble(
-    ~x_col,       ~y_col,  ~pair_label,
-    "plume_area", "flow",  "Plume vs flow",
-    "plume_area", "rofi",  "Plume vs ROFI",
-    "rofi",       "flow",  "ROFI vs flow"
+    ~x_col,       ~y_col,       ~pair_label,
+    "flow",       "plume_area", "Flow leads plume",
+    "plume_area", "rofi",       "Plume leads ROFI",
+    "flow",       "rofi",       "Flow leads ROFI"
   )
+  # x_col leads y_col (lagged_correlation() correlates x(t - lag) with y(t)).
+  # Until 2026-11-25 the two flow pairs had flow as y_col, which only tested
+  # plume/ROFI *leading* flow, never the physically expected direction.
 
   cor_stats <- purrr::map_dfr(rofi_zones, function(zone_name){
     purrr::pmap_dfr(pairs, function(x_col, y_col, pair_label){
