@@ -11,4 +11,3 @@ source("func/sections/util_3_pixels.R", local = TRUE)  # Satellite pixel extract
 source("func/sections/util_4_loading.R", local = TRUE)  # Data loading (plume, river flow, drivers) (was lines 673-934)
 source("func/sections/util_5_statistics.R", local = TRUE)  # Statistics helpers (was lines 935-1047)
 source("func/sections/util_6_plotting.R", local = TRUE)  # Plotting helpers (was lines 1048-1807)
-source("func/sections/util_7_tables.R", local = TRUE)  # Table helpers (was lines 1808-1873)

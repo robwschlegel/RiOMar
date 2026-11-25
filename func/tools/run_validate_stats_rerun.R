@@ -35,7 +35,6 @@ library(tidyverse)
 library(furrr)
 library(scales)
 library(ggExtra)
-library(gt)
 source("func/util.R")
 
 # --- Load in situ (validate.R's "Load in situ" section, unchanged logic, no sf) ---
@@ -129,7 +128,5 @@ write_csv(zone_all_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_g
 zone_small_stats_global <- zone_small_stats |> filter(zone == "GLOBAL", source == "ALL", site == "ALL", season == "ALL") |>
   arrange(Error) |> mutate(Error = round(Error), Bias = round(Bias))
 write_csv(zone_small_stats_global, "output/MATCH_UP_DATA/FRANCE/STATISTICS/table_global_small.csv")
-
-validation_tables("output/MATCH_UP_DATA/FRANCE/STATISTICS/", "SEXTANT")
 
 message("Done: validation stats + tables refreshed with current zone labels.")
