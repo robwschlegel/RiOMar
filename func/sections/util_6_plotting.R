@@ -5,10 +5,10 @@ make_pretty_title <- function(df){
   df <- df |> 
     mutate(plot_title = case_when(zone == "BAY_OF_SEINE" ~ "Bay of Seine",
                                   zone == "SOUTHERN_BRITTANY" ~ "Southern Brittany",
-                                  zone == "BAY_OF_BISCAY" ~ "Gironde shelf",
-                                  zone == "GULF_OF_LION" ~ "Rhône shelf"), .after = "zone") |>
+                                  zone == "BAY_OF_BISCAY" ~ "Gironde plume region",
+                                  zone == "GULF_OF_LION" ~ "Rhône plume region"), .after = "zone") |>
     mutate(plot_title = factor(plot_title, levels = c("Bay of Seine", "Southern Brittany",
-                                                      "Gironde shelf", "Rhône shelf")))
+                                                      "Gironde plume region", "Rhône plume region")))
   return(df)
 }
 
@@ -270,8 +270,8 @@ colours_of_stations <- function(){
   #                  'GULF OF LION' = viridis::rocket(n = 1, begin = 0.80,end = 0.80))
   colour_values = c('Bay of Seine' = viridis::mako(n = 1, begin = 0.8,end = 0.8),
                     'S. Brittany' = viridis::viridis(n = 1, begin = 0.9,end = 0.9),
-                    'Gironde shelf' = viridis::plasma(n = 1, begin = 0.05,end = 0.05),
-                    'Rhône shelf' = viridis::rocket(n = 1, begin = 0.80,end = 0.80))
+                    'Gironde plume region' = viridis::plasma(n = 1, begin = 0.05,end = 0.05),
+                    'Rhône plume region' = viridis::rocket(n = 1, begin = 0.80,end = 0.80))
   
   return(colour_values)
 }
@@ -288,7 +288,7 @@ validation_lm_plots <- function(var_combi, sat_name, median_base, df, df_stats){
            name = gsub("insitu", "in situ", name)) |> 
     mutate(zone_pretty = factor(zone,
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                                labels = c("Bay of Seine", "S. Brittany", "Gironde shelf", "Rhône shelf")))
+                                labels = c("Bay of Seine", "S. Brittany", "Gironde plume region", "Rhône plume region")))
   
   # Get y-axis label and units
   if(df_var_sub$variable[1] == "TEMP"){
@@ -317,7 +317,7 @@ validation_lm_plots <- function(var_combi, sat_name, median_base, df, df_stats){
     mutate(y = max(y_lim)-2) |> 
     mutate(zone_pretty = factor(zone,
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                                labels = c("Bay of Seine", "S. Brittany", "Gironde shelf", "Rhône shelf")))
+                                labels = c("Bay of Seine", "S. Brittany", "Gironde plume region", "Rhône plume region")))
   
   # Create title and subtitle
   var_name_sat <- df_var_sub$variable_sat[1]
@@ -370,7 +370,7 @@ validation_plots <- function(var_combi, sat_name, median_base, match_up_df, matc
     filter(variable_combi == var_combi) |>
     mutate(zone_pretty = factor(zone,
                                 levels = c("BAY_OF_SEINE", "SOUTHERN_BRITTANY", "BAY_OF_BISCAY", "GULF_OF_LION"),
-                                labels = c("Bay of Seine", "S. Brittany", "Gironde shelf", "Rhône shelf")))
+                                labels = c("Bay of Seine", "S. Brittany", "Gironde plume region", "Rhône plume region")))
   match_up_stats_var <- match_up_stats |> 
     filter(variable_combi == var_combi,
            zone == "GLOBAL",

@@ -24,8 +24,8 @@ library(readr)
 zone_display <- c(
   "BAY_OF_SEINE"      = "Bay of Seine",
   "SOUTHERN_BRITTANY" = "Southern Brittany",
-  "BAY_OF_BISCAY"     = "Gironde shelf",
-  "GULF_OF_LION"       = "Rhône shelf"
+  "BAY_OF_BISCAY"     = "Gironde plume region",
+  "GULF_OF_LION"       = "Rhône plume region"
 )
 
 zone_table <- read_csv("output/MATCH_UP_DATA/FRANCE/STATISTICS/table_all.csv", show_col_types = FALSE) |> 

@@ -111,9 +111,9 @@ get_zone_meta <- function(mouth_name = NULL, zone_name = NULL){
 # Human-facing zone display name (e.g. "BAY_OF_SEINE" -> "Bay of Seine")
 zone_display_names <- c(
   BAY_OF_SEINE      = "Bay of Seine",
-  BAY_OF_BISCAY     = "Gironde shelf",
+  BAY_OF_BISCAY     = "Gironde plume region",
   SOUTHERN_BRITTANY = "Southern Brittany",
-  GULF_OF_LION      = "Rhône shelf"
+  GULF_OF_LION      = "Rhône plume region"
 )
 zone_title <- function(zone_name){
   zone_name <- as.character(zone_name)

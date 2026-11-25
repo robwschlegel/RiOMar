@@ -124,13 +124,13 @@ create_the_basic_map <- function(map_df, var_name,
   
   if (str_detect(var_name, 'chl|CHL')) {
     title = "Chl-a"
-    unit = "mg m⁻³"
+    unit = "mg~m^{-3}"  # plotmath: the literal U+207B superscript minus is missing from this font
     if (legend_limits |> is.null()) {legend_limits <- c(1e-1, 5e0)} 
   }
   
   if (str_detect(var_name, 'tsm|SPM|TSM|plume')) {
     title = "SPM"
-    unit = "g m⁻³"
+    unit = "g~m^{-3}"  # plotmath, as above
     # legend_limits <- map_df$analysed_spim[which(map_df$plume)] |> quantile(probs = c(0.1, 0.9), na.rm = TRUE)
     if (legend_limits |> is.null()) {legend_limits <- c(1e-1, 5e0)} 
   }
@@ -141,7 +141,7 @@ create_the_basic_map <- function(map_df, var_name,
     geom_raster(data = map_df, aes(x = lon, y = lat, fill = analysed_spim), interpolate = FALSE) + 
     scale_fill_viridis_c(na.value = "transparent", option = "viridis", trans = if(log_scale) "log10" else "identity",
                          limits = c(legend_limits[1], legend_limits[2]), oob = scales::squish,
-                         n.breaks = 5, name = paste(title, " (", unit, ")", sep = "")) +
+                         n.breaks = 5, name = parse(text = paste0('"', title, ' ("*', unit, '*")"'))[[1]]) +
     guides(fill = guide_colourbar(title.position = "right"))
   
   if (var_name == 'plume') {
@@ -227,7 +227,7 @@ plot_x11_river_and_plume <- function(X11_data, type_of_signal, show_axis_titles 
     scale_y_continuous(name = if(show_axis_titles) "Plume area (km²)" else NULL,
                        breaks = three_ticks_away_from_limits(),
                        sec.axis = sec_axis(transform = ~ {. - scaling_factor$adjust} / scaling_factor$diff,
-                                           name = if(show_axis_titles) "River flow (m³ s⁻¹)" else NULL,
+                                           name = if(show_axis_titles) expression(River~flow~(m^3~s^{-1})) else NULL,  # plotmath, see figure_3_timeseries.R
                                            breaks = three_ticks_away_from_limits())) +
 
     labs(title = paste(type_of_signal, "signal")) +
