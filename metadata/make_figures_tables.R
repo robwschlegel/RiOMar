@@ -52,6 +52,13 @@ func_dir <- file.path(proj_dir, "func")
 source(file.path(func_dir, "figure.R"))
 
 manuscript_tex_path <- file.path(manuscript_dir, "manuscript.tex")
+# The Supplement moved to its own file on 2026-11-26 (the journal takes it
+# separately); label and snippet checks search both files.
+supplementary_tex_path <- file.path(manuscript_dir, "supplementary.tex")
+read_tex_lines <- function() {
+  paths <- c(manuscript_tex_path, supplementary_tex_path)
+  unlist(lapply(paths[file.exists(paths)], readLines, warn = FALSE))
+}
 references_bib_path <- file.path(manuscript_dir, "references.bib")
 
 # Where the real pipeline (code/5_figures.py / code/4_time_series.py ->
@@ -91,10 +98,10 @@ check_figure_exists <- function(label, path, newer_than = NULL) {
 # multiple lines or an unusual macro won't be caught.
 check_manuscript_tex_path <- function(tex_label, expected_relpath) {
   if (!file.exists(manuscript_tex_path)) return(invisible(NA))
-  tex_lines <- readLines(manuscript_tex_path, warn = FALSE)
+  tex_lines <- read_tex_lines()
   label_line <- grep(paste0("\\\\label\\{", tex_label, "\\}"), tex_lines, fixed = FALSE)
   if (length(label_line) == 0) {
-    message("  [tex] no \\label{", tex_label, "} found in manuscript.tex")
+    message("  [tex] no \\label{", tex_label, "} found in manuscript.tex or supplementary.tex")
     return(invisible(FALSE))
   }
   # \label{} normally follows its \includegraphics/\figplaceholder within the
@@ -163,7 +170,7 @@ check_registry_row <- function(row) {
 # current text (or removal, if the claim itself is gone).
 check_paragraph_snippet <- function(snippet) {
   if (!file.exists(manuscript_tex_path)) return(invisible(NA))
-  tex_text <- paste(readLines(manuscript_tex_path, warn = FALSE), collapse = "\n")
+  tex_text <- paste(read_tex_lines(), collapse = "\n")
   grepl(snippet, tex_text, fixed = TRUE)
 }
 

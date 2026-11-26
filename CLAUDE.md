@@ -61,11 +61,11 @@ This document is a strong source of material for the manuscript's Discussion and
 
 ## Target journal
 
-The manuscript (`manuscript/manuscript.tex`) targets *Remote Sensing of Environment* (Elsevier). Guide for authors: https://www.sciencedirect.com/journal/remote-sensing-of-environment/publish/guide-for-authors. Consult it (or fetch it fresh, since Elsevier updates these pages) before drafting end-matter/boilerplate sections (CRediT, Declaration of competing interest, Data availability, Declaration of Generative AI use, Funding, Acknowledgements) or checking structural requirements (word limits, reference style, appendix numbering). Note: Research Articles are capped at 15,000 words including references and figure captions (Review Articles get 20,000) — the 20,000-word figure in `manuscript.tex`'s header comment is the wrong article type's limit and should be corrected.
+The manuscript (`manuscript/manuscript.tex`, with its Supplement in `manuscript/supplementary.tex` since 2026-11-26; the two cross-reference each other via `xr-hyper`, so compile `supplementary.tex` first) targets *Remote Sensing of Environment* (Elsevier). Guide for authors: https://www.sciencedirect.com/journal/remote-sensing-of-environment/publish/guide-for-authors. Consult it (or fetch it fresh, since Elsevier updates these pages) before drafting end-matter/boilerplate sections (CRediT, Declaration of competing interest, Data availability, Declaration of Generative AI use, Funding, Acknowledgements) or checking structural requirements (word limits, reference style, appendix numbering). Note: Research Articles are capped at 15,000 words including references and figure captions.
 
 ## Google Doc sync (co-author review copy)
 
-`manuscript.tex` is mirrored into a Google Doc for co-author comments/editing, in place (same URL, same open comment threads survive each push). To push the current `.tex` to the Doc:
+`manuscript.tex` (plus `supplementary.tex`, appended after the references by `build_docx.py`) is mirrored into a Google Doc for co-author comments/editing, in place (same URL, same open comment threads survive each push). To push the current `.tex` to the Doc:
 
 ```bash
 manuscript/google_doc_sync/sync.sh
@@ -110,7 +110,7 @@ Parallel R implementations exist for most modules (`util.R`, `validate.R`, `X11.
 ### metadata/
 `riomar_config.yml` (project settings, including panache's — see Data storage) and zone-pixel CSVs (one per sensor × variable × atmospheric correction combination) used for plume pixel extraction.
 
-Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), `TODO.md` (the manuscript/pipeline to-do list), and `make_figures_tables.R` (the figure/table/paragraph-source checklist; run `Rscript metadata/make_figures_tables.R` from the repo root — it still reads `manuscript/manuscript.tex` and `references.bib`). There are no copies left in `manuscript/` (`google_doc_sync/` never read them).
+Also tracked here (moved out of the gitignored `manuscript/` on 2026-09-28 so a fresh clone can run the pipeline): `figure_table_registry.csv` (slot → current figure/table number, output folder, rendering function; read by `util.py::get_registry_row()` and `util.R`), `paragraph_source_registry.csv` (read by `util.R`), `TODO.md` (the manuscript/pipeline to-do list), and `make_figures_tables.R` (the figure/table/paragraph-source checklist; run `Rscript metadata/make_figures_tables.R` from the repo root — it still reads `manuscript/manuscript.tex`, `manuscript/supplementary.tex` and `references.bib`). There are no copies left in `manuscript/` (`google_doc_sync/` never read them).
 
 ### Satellite data dict convention
 A Python dict like:
